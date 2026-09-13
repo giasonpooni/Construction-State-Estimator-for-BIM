@@ -125,13 +125,13 @@ def build_artifacts(work: Path) -> dict[str, Path]:
     response = work / "response.json"
     response.write_text(json.dumps(handle_request(request), indent=1))
 
-    workbench, report, ledger_html = (
-        work / "workbench.html",
+    console, report, ledger_html = (
+        work / "console.html",
         work / "report.html",
         work / "ledger.html",
     )
     for command in (
-        f'gat workbench "{model}" -o "{workbench}" --variations 3 --ledger "{ledger}"',
+        f'gat console gat/demo/model.ifc -o "{console}" --variations 3 --ledger "{ledger}"',
         f'gat report "{response}" --html -o "{report}"',
         f'gat ledger "{ledger}" --html -o "{ledger_html}"',
     ):
@@ -159,7 +159,7 @@ def build_artifacts(work: Path) -> dict[str, Path]:
     closed_html.write_text(terminal_page("gat — three ways to not pass", closed))
 
     return {
-        "workbench": workbench,
+        "console": console,
         "report": report,
         "ledger": ledger_html,
         "term_start": start_html,
@@ -229,9 +229,9 @@ def capture(pages: dict[str, Path], chrome: str) -> None:
     shots = [
         ("term_start", "cli-inspect.png", 980, 600, True, None, 1000),
         ("term_decide", "cli-decision.png", 980, 600, True, None, 1000),
-        ("workbench", "workbench-structure.png", 1500, 940, False, None, 2500),
-        ("workbench", "workbench-graph.png", 1500, 940, False, "GRAPH", 2500),
-        ("workbench", "workbench-state.png", 1500, 940, False, "STATE", 2500),
+        ("console", "console-field.png", 1500, 940, False, None, 2500),
+        ("console", "console-relations.png", 1500, 940, False, "RELATIONS", 2500),
+        ("console", "console-belief.png", 1500, 940, False, "BELIEF", 2500),
         ("report", "report-verdict.png", 1100, 900, False, None, 1200),
         ("ledger", "ledger.png", 1100, 900, True, None, 1200),
         ("term_closed", "cli-fail-closed.png", 1020, 430, True, None, 1000),
@@ -249,7 +249,9 @@ def capture(pages: dict[str, Path], chrome: str) -> None:
             page.goto(pages[key].as_uri())
             page.wait_for_timeout(wait)
             if click:
-                page.get_by_text(click, exact=False).first.click()
+                # The readout name appears in the panel body too; only the tab
+                # switches the instrument.
+                page.get_by_role("tab", name=click).click()
                 page.wait_for_timeout(1800)
             page.screenshot(path=str(IMAGES / name), full_page=full)
             page.close()

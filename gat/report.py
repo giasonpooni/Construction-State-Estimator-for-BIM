@@ -77,6 +77,11 @@ CHANGE_DISPOSITIONS = frozenset({"ADMISSIBLE", "BLOCKED"})
 
 READ_ONLY_FOOTER = "Read-only: no BIM state was changed."
 NON_AUTHORIZING_FOOTER = "This report does not authorize any action."
+#: The same sentence for the instrument surface class, where "report" would be
+#: the wrong noun. The claim is identical; only what is speaking differs.
+NON_AUTHORIZING_INSTRUMENT_FOOTER = (
+    "This instrument does not authorize any action."
+)
 RECOMMENDATION_FOOTER = (
     "Recommendation only; professional approval is still required."
 )

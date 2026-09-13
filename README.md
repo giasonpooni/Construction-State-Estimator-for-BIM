@@ -115,29 +115,38 @@ Exit codes follow: `0` clean, `1` a finding, `2` input GAT will not accept.
 Four offline, self-contained HTML surfaces. No server, no network, no
 telemetry — each is a single file you can email to an engineer.
 
-### `gat workbench` — one instrument, eight projection modes
+### `gat console` — one specimen, six readouts
 
 ```bash
-gat workbench gat/demo/model.ifc -o workbench.html --variations 3 --ledger ledger.json
+gat console gat/demo/model.ifc -o console.html --variations 3 --ledger ledger.json
 ```
 
-![the Notation Workbench, STRUCTURE mode](docs/images/workbench-structure.png)
+![the GAT Console, FIELD readout](docs/images/console-field.png)
 
-STRUCTURE renders the belief itself: each element is a Gaussian, and the
-sample selector redraws the building under a different realization of the
-same posterior. The uncertainty envelope slider is in sigmas, not pixels.
+Laid out the way instruments are: the **specimen** and its identity at the
+top, where you can always see what is loaded; a **function selector** where
+every position reads something and an unlit lamp means nothing is bound yet;
+and a **reading** at the bottom. FIELD renders the belief itself — each
+element is a Gaussian, and the sample selector redraws the building under a
+different realization of the same posterior. The uncertainty envelope slider
+is in sigmas, not pixels.
 
-![the Notation Workbench, GRAPH mode](docs/images/workbench-graph.png)
+![the GAT Console, RELATIONS readout](docs/images/console-relations.png)
 
-GRAPH shows the typed IFC relationship graph the belief is coupled through —
-and states plainly that *position and distance on this canvas are not
-evidence*. Every mode carries that discipline.
+RELATIONS shows the typed IFC relationship graph the belief is coupled
+through — and states plainly that *position and distance on this canvas are
+not evidence*. Every readout carries that discipline.
 
-![the Notation Workbench, STATE mode](docs/images/workbench-state.png)
+![the GAT Console, BELIEF readout](docs/images/console-belief.png)
 
-STATE is the world's identity: entity count, raw versus derived quantities,
-constraints, the adapter and unit context, and `source_sha256` — the digest
-of the model's **bytes**, which is what the world is named after.
+BELIEF is `N(mu, Sigma)` per entity: every quantity's mean and sigma, raw or
+derived, with the IFC record it came from.
+
+The footer carries what the instrument **does not** measure — geographic
+position, geodetic reality, time — as a standing declaration. An earlier
+shell carried two of those as permanently unavailable modes on the selector;
+a knob that never turns teaches an operator to distrust the ones that do.
+See [`docs/readout-spec-v1.md`](docs/readout-spec-v1.md).
 
 ### `gat report` — a decision, and why
 

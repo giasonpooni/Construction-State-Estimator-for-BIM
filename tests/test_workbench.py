@@ -1,4 +1,10 @@
-"""The Notation Workbench: eight modes, one identity, honest availability."""
+"""The GAT Console: six readouts, one specimen, one identity.
+
+The shell used to wear another project's identity -- a projection triad and
+two selector positions reserved for libraries it does not contain. These
+tests pin the instrument it is instead, including that the foreign names do
+not come back.
+"""
 
 from __future__ import annotations
 
@@ -23,16 +29,17 @@ from gat.workbench import (
     AVAILABLE,
     EMPTY,
     MESSAGE_FORMAT,
-    MODES,
-    PROJECTION_SPEC_VERSION,
-    UNAVAILABLE,
-    WORKBENCH_FORMAT,
-    export_workbench_html,
+    NOT_MEASURED,
+    READOUTS,
+    READOUT_SPEC_VERSION,
+    EMPTY,
+    CONSOLE_FORMAT,
+    export_console_html,
     graph_payload,
-    projection_specs,
-    render_workbench_html,
+    readout_specs,
+    render_console_html,
     state_payload,
-    workbench_payload,
+    console_payload,
 )
 
 
@@ -94,7 +101,7 @@ def build_ledger(tmp: str) -> str:
     return path
 
 
-class ProjectionSpecTests(unittest.TestCase):
+class ReadoutSpecTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.world = GatSession.load_ifc(MODEL).world
@@ -102,38 +109,57 @@ class ProjectionSpecTests(unittest.TestCase):
     def specs(self, **bound):
         flags = {"decision_bound": False, "ledger_bound": False, "audit_bound": False}
         flags.update(bound)
-        return projection_specs(self.world, **flags)
+        return readout_specs(self.world, **flags)
 
-    def test_modes_follow_the_synthesis_order(self) -> None:
+    def test_readouts_follow_the_order_an_operator_works_through(self) -> None:
         self.assertEqual(
-            MODES,
-            ("MAP", "GLOBE", "STRUCTURE", "GRAPH", "STATE", "TIME", "EVIDENCE", "COMPLEXITY"),
+            READOUTS,
+            ("FIELD", "RELATIONS", "BELIEF", "LOG", "DECISION", "INTAKE"),
         )
-        self.assertEqual(tuple(spec.mode for spec in self.specs()), MODES)
+        self.assertEqual(tuple(spec.readout for spec in self.specs()), READOUTS)
 
-    def test_geodetic_modes_are_unavailable_with_their_reason(self) -> None:
-        by_mode = {spec.mode: spec for spec in self.specs()}
-        for mode in ("MAP", "GLOBE"):
-            self.assertEqual(by_mode[mode].availability, UNAVAILABLE)
-            self.assertIn("IfcSite", by_mode[mode].reason)
-            self.assertIn("coordinate", by_mode[mode].reason)
-        self.assertTrue(by_mode["GLOBE"].surface_class.startswith("connected instrument"))
-        self.assertIn("network", by_mode["GLOBE"].reason)
+    def test_no_readout_names_a_third_party_product(self) -> None:
+        """The instrument is described by what it reads, not by whose library
+        would sit there."""
+        for spec in self.specs():
+            with self.subTest(readout=spec.readout):
+                for foreign in ("kepler", "Cesium", "Three.js"):
+                    self.assertNotIn(foreign, spec.instrument)
+                    self.assertNotIn(foreign, spec.source)
+
+    def test_limits_are_declared_once_not_as_dead_selector_positions(self) -> None:
+        """An earlier shell carried MAP and GLOBE as permanently unavailable
+        readouts. They were another product's silhouette, and a selector with
+        knobs that never turn teaches an operator to distrust the ones that do."""
+        self.assertNotIn("MAP", READOUTS)
+        self.assertNotIn("GLOBE", READOUTS)
+        limits = dict(NOT_MEASURED)
+        self.assertIn("IfcSite", limits["geographic position"])
+        self.assertIn("network", limits["geodetic reality"])
+        self.assertIn("time series", limits["time"])
+
+    def test_every_readout_on_the_selector_can_actually_read(self) -> None:
+        for spec in self.specs():
+            with self.subTest(readout=spec.readout):
+                self.assertIn(spec.availability, (AVAILABLE, EMPTY))
+                if spec.availability == EMPTY:
+                    # EMPTY means nothing is bound yet, and says how to bind it.
+                    self.assertTrue(spec.reason)
 
     def test_unbound_modes_are_empty_and_say_what_fills_them(self) -> None:
-        by_mode = {spec.mode: spec for spec in self.specs()}
-        for mode in ("STRUCTURE", "GRAPH", "STATE"):
+        by_mode = {spec.readout: spec for spec in self.specs()}
+        for mode in ("FIELD", "RELATIONS", "BELIEF"):
             self.assertEqual(by_mode[mode].availability, AVAILABLE)
-        self.assertEqual(by_mode["TIME"].availability, EMPTY)
-        self.assertIn("--ledger", by_mode["TIME"].reason)
-        self.assertEqual(by_mode["EVIDENCE"].availability, EMPTY)
-        self.assertIn("--decision", by_mode["EVIDENCE"].reason)
-        self.assertEqual(by_mode["COMPLEXITY"].availability, EMPTY)
+        self.assertEqual(by_mode["LOG"].availability, EMPTY)
+        self.assertIn("--ledger", by_mode["LOG"].reason)
+        self.assertEqual(by_mode["DECISION"].availability, EMPTY)
+        self.assertIn("--decision", by_mode["DECISION"].reason)
+        self.assertEqual(by_mode["INTAKE"].availability, EMPTY)
         bound = {
-            spec.mode: spec
+            spec.readout: spec
             for spec in self.specs(decision_bound=True, ledger_bound=True, audit_bound=True)
         }
-        for mode in ("TIME", "EVIDENCE", "COMPLEXITY"):
+        for mode in ("LOG", "DECISION", "INTAKE"):
             self.assertEqual(bound[mode].availability, AVAILABLE)
             self.assertEqual(bound[mode].reason, "")
 
@@ -141,21 +167,21 @@ class ProjectionSpecTests(unittest.TestCase):
         for spec in self.specs(decision_bound=True, ledger_bound=True, audit_bound=True):
             for field in ("source", "transformation", "meaning", "loss", "identity",
                           "frame", "time"):
-                self.assertTrue(getattr(spec, field), f"{spec.mode}.{field}")
-        by_mode = {spec.mode: spec for spec in self.specs()}
-        self.assertIn("marginals only", by_mode["STATE"].loss)
-        self.assertIn("carry no information", by_mode["GRAPH"].loss)
-        self.assertIn("no geodetic frame", by_mode["STRUCTURE"].frame)
+                self.assertTrue(getattr(spec, field), f"{spec.readout}.{field}")
+        by_mode = {spec.readout: spec for spec in self.specs()}
+        self.assertIn("marginals only", by_mode["BELIEF"].loss)
+        self.assertIn("carry no information", by_mode["RELATIONS"].loss)
+        self.assertIn("no geodetic frame", by_mode["FIELD"].frame)
 
     def test_spec_dict_declares_version_and_no_mutation(self) -> None:
         record = self.specs()[0].to_dict()
-        self.assertEqual(record["version"], PROJECTION_SPEC_VERSION)
-        self.assertIs(record["mutates_source"], False)
+        self.assertEqual(record["version"], READOUT_SPEC_VERSION)
+        self.assertIs(record["mutates_specimen"], False)
         self.assertEqual(
             set(record),
-            {"version", "mode", "seat", "question", "surface_class", "source",
-             "transformation", "meaning", "loss", "identity", "frame", "time",
-             "availability", "reason", "mutates_source"},
+            {"version", "readout", "instrument", "question", "surface_class",
+             "source", "transformation", "meaning", "loss", "identity", "frame",
+             "time", "availability", "reason", "mutates_specimen"},
         )
 
 
@@ -249,7 +275,7 @@ class WorkbenchDocumentTests(unittest.TestCase):
         cls.audit = decode_response(audit_ifc_file(MODEL).to_dict())
         cls.tmp = tempfile.TemporaryDirectory()
         cls.ledger = decode_ledger(build_ledger(cls.tmp.name))
-        cls.payload = workbench_payload(
+        cls.payload = console_payload(
             cls.world,
             model_name="model.ifc",
             n=2,
@@ -258,7 +284,7 @@ class WorkbenchDocumentTests(unittest.TestCase):
             ledger=cls.ledger,
             audit=cls.audit,
         )
-        cls.html = render_workbench_html(
+        cls.html = render_console_html(
             cls.payload,
             decision_report=cls.decision_report,
             ledger=cls.ledger,
@@ -270,7 +296,7 @@ class WorkbenchDocumentTests(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_payload_is_deterministic_and_complete(self) -> None:
-        again = workbench_payload(
+        again = console_payload(
             self.world,
             model_name="model.ifc",
             n=2,
@@ -280,14 +306,14 @@ class WorkbenchDocumentTests(unittest.TestCase):
             audit=self.audit,
         )
         self.assertEqual(self.payload, again)
-        self.assertEqual(self.payload["format"], WORKBENCH_FORMAT)
+        self.assertEqual(self.payload["format"], CONSOLE_FORMAT)
         self.assertEqual(self.payload["message_format"], MESSAGE_FORMAT)
-        self.assertEqual([m["mode"] for m in self.payload["modes"]], list(MODES))
+        self.assertEqual([m["readout"] for m in self.payload["readouts"]], list(READOUTS))
         self.assertTrue(all(m["availability"] == AVAILABLE
-                            for m in self.payload["modes"] if m["mode"] not in ("MAP", "GLOBE")))
+                            for m in self.payload["readouts"] if m["readout"] not in ("MAP", "GLOBE")))
         self.assertEqual(self.payload["decision"]["disposition"], "REJECT")
         self.assertEqual(self.payload["decision"]["subjects"], ["Wall-Party"])
-        self.assertEqual(self.payload["structure"]["world_digest"], self.world.digest())
+        self.assertEqual(self.payload["field"]["world_digest"], self.world.digest())
 
     def test_document_is_one_offline_file(self) -> None:
         self.assertTrue(self.html.startswith("<!doctype html>"))
@@ -295,7 +321,7 @@ class WorkbenchDocumentTests(unittest.TestCase):
         self.assertNotIn("https://", self.html)
         self.assertIn('sandbox="allow-scripts"', self.html)
         self.assertIn("srcdoc=", self.html)
-        self.assertIn(WORKBENCH_FORMAT, self.html)
+        self.assertIn(CONSOLE_FORMAT, self.html)
         self.assertIn(MESSAGE_FORMAT, self.html)
         self.assertIn(READ_ONLY_FOOTER, self.html)
         self.assertIn(NON_AUTHORIZING_FOOTER, self.html)
@@ -303,11 +329,26 @@ class WorkbenchDocumentTests(unittest.TestCase):
             self.assertIn(rule, self.html)
 
     def test_every_mode_has_a_tab_and_a_panel(self) -> None:
-        for mode in MODES:
+        for mode in READOUTS:
             self.assertIn(f'role="tab" data-mode="{mode}"', self.html)
             self.assertIn(f'class="panel" data-mode="{mode}" role="tabpanel"', self.html)
-        self.assertIn('data-mode="MAP" class="unavailable"', self.html)
-        self.assertIn('data-mode="STRUCTURE" class="available"', self.html)
+        # The tab's class is the readout's availability, not a guess.
+        for spec in self.payload["readouts"]:
+            with self.subTest(readout=spec["readout"]):
+                self.assertIn(
+                    f'data-mode="{spec["readout"]}" class="{spec["availability"]}"',
+                    self.html,
+                )
+
+    def test_the_shell_is_laid_out_as_an_instrument(self) -> None:
+        for part in ('id="specimen"', 'id="modes"', 'id="panels"', 'id="reading"'):
+            self.assertIn(part, self.html)
+        self.assertIn("this instrument does not measure", self.html)
+        self.assertIn("GAT Console", self.html)
+
+    def test_the_shell_carries_no_other_project(self) -> None:
+        for foreign in ("Notation", "kepler", "Cesium", "projection triad"):
+            self.assertNotIn(foreign, self.html)
 
     def test_reports_compose_byte_identically(self) -> None:
         for report in (self.decision_report, self.ledger, self.audit):
@@ -319,21 +360,21 @@ class WorkbenchDocumentTests(unittest.TestCase):
 
     def test_decision_and_report_bind_together_or_not_at_all(self) -> None:
         with self.assertRaisesRegex(ValueError, "bound together"):
-            workbench_payload(self.world, n=0, decision=self.decision)
+            console_payload(self.world, n=0, decision=self.decision)
         with self.assertRaisesRegex(ValueError, "bound together"):
-            workbench_payload(self.world, n=0, decision_report=self.decision_report)
+            console_payload(self.world, n=0, decision_report=self.decision_report)
         with self.assertRaisesRegex(ValueError, "disagree"):
-            workbench_payload(
+            console_payload(
                 self.world, n=0, decision=self.decision, decision_report=self.ledger
             )
 
     def test_unbound_modes_state_their_reason_in_the_page(self) -> None:
-        payload = workbench_payload(self.world, n=0, audit_reason="The IFC audit was skipped.")
-        html = render_workbench_html(payload)
+        payload = console_payload(self.world, n=0, audit_reason="The IFC audit was skipped.")
+        html = render_console_html(payload)
         self.assertIn("No decision is bound", html)
         self.assertIn("No execution ledger is bound", html)
         self.assertIn("The IFC audit was skipped.", html)
-        self.assertIn('data-mode="TIME" class="empty"', html)
+        self.assertIn('data-mode="LOG" class="empty"', html)
         self.assertIn("no decision bound", html)
 
     def test_structure_scene_carries_audit_statuses_only_with_the_audit(self) -> None:
@@ -341,16 +382,17 @@ class WorkbenchDocumentTests(unittest.TestCase):
         from gat.ifc_audit import audit_ifc_file
 
         statuses = audit_statuses(audit_ifc_file(MODEL).to_dict())
-        payload = workbench_payload(self.world, n=0, audit=self.audit, audit_statuses=statuses)
-        self.assertEqual(payload["structure"]["audit"]["matched"], 8)
-        self.assertIn("EXPLODE", payload["modes"][2]["transformation"])
+        payload = console_payload(self.world, n=0, audit=self.audit, audit_statuses=statuses)
+        self.assertEqual(payload["field"]["audit"]["matched"], 8)
+        field = next(r for r in payload["readouts"] if r["readout"] == "FIELD")
+        self.assertIn("EXPLODE", field["transformation"])
         with self.assertRaisesRegex(ValueError, "bind both or neither"):
-            workbench_payload(self.world, n=0, audit_statuses=statuses)
+            console_payload(self.world, n=0, audit_statuses=statuses)
 
     def test_untrusted_names_are_escaped(self) -> None:
-        payload = json.loads(json.dumps(workbench_payload(self.world, n=0)))
+        payload = json.loads(json.dumps(console_payload(self.world, n=0)))
         payload["model"] = "<img src=x onerror=alert(1)>"
-        html = render_workbench_html(payload)
+        html = render_console_html(payload)
         self.assertNotIn("<img", html)
         self.assertIn("&lt;img", html)
 
@@ -397,7 +439,7 @@ class WorkbenchCliTests(unittest.TestCase):
             with open(out, encoding="utf-8") as handle:
                 html = handle.read()
             self.assertIn("--no-audit", html)
-            self.assertIn('data-mode="COMPLEXITY" class="empty"', html)
+            self.assertIn('data-mode="INTAKE" class="empty"', html)
             self.assertIn("No decision is bound", html)
 
     def test_cli_refuses_a_tampered_ledger_and_writes_nothing(self) -> None:
@@ -420,12 +462,11 @@ class WorkbenchCliTests(unittest.TestCase):
         world = GatSession.load_ifc(MODEL).world
         with tempfile.TemporaryDirectory() as tmp:
             out = os.path.join(tmp, "workbench.html")
-            availability = export_workbench_html(world, out, n=0)
+            availability = export_console_html(world, out, n=0)
             self.assertTrue(os.path.exists(out))
-        self.assertEqual(list(availability), list(MODES))
-        self.assertEqual(availability["MAP"], UNAVAILABLE)
-        self.assertEqual(availability["STRUCTURE"], AVAILABLE)
-        self.assertEqual(availability["TIME"], EMPTY)
+        self.assertEqual(list(availability), list(READOUTS))
+        self.assertEqual(availability["FIELD"], AVAILABLE)
+        self.assertEqual(availability["LOG"], EMPTY)
 
 
 class WalkthroughDemoTests(unittest.TestCase):
@@ -440,7 +481,7 @@ class WalkthroughDemoTests(unittest.TestCase):
             with open(result["page"], encoding="utf-8") as handle:
                 html = handle.read()
             self.assertIn("hash chain verified", html)
-            self.assertIn('data-mode="EVIDENCE" class="available"', html)
+            self.assertIn('data-mode="DECISION" class="available"', html)
 
 
 if __name__ == "__main__":

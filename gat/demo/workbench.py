@@ -3,7 +3,7 @@
 Does the available building evidence support routing a duct through the
 party wall at the required clearance?  The engine decides; this demo binds
 its decision, the execution history and the corpus audit into a single
-offline Notation Workbench page, then asserts what the page must show.
+offline GAT Console page, then asserts what the page must show.
 
 Run with::
 
@@ -106,7 +106,7 @@ def run(out_dir: str) -> dict[str, str]:
         "history": "hash chain verified",
         "audit": "gat-ifc-audit-v1",
         "identity": session.world.digest(),
-        "map honesty": 'data-mode="MAP" class="unavailable"',
+        "declared limits": "this instrument does not measure",
     }
     missing = [label for label, needle in expected.items() if needle not in html]
     if missing:
@@ -123,8 +123,8 @@ def main(argv: list[str] | None = None) -> int:
     result = run(args.out_dir)
     print(
         f"clearance review: {result['disposition']} — open {result['page']} "
-        "(STRUCTURE shows the duct where it was refused; EVIDENCE lists the "
-        "next evidence; TIME holds the record)"
+        "(FIELD shows the duct where it was refused; DECISION lists the "
+        "next evidence; LOG holds the record)"
     )
     return 0
 

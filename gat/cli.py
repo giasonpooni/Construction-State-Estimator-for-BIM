@@ -9,7 +9,7 @@
     gat report  response.json [--html]           render a gat-headless decision
     gat ledger  ledger.json [--html]             render an execution-ledger timeline
     gat view    model.ifc -o viewer.html         offline 3D viewer (+ --decision overlay, --audit)
-    gat workbench model.ifc -o page.html       offline Workbench: eight modes, one identity
+    gat console model.ifc -o page.html         offline instrument: six readouts, one specimen
 
 Every command is deterministic and never mutates the model.  ``--json``
 (where offered) switches to machine-readable output.
@@ -172,7 +172,7 @@ def _audit_statuses(model_path: str, session: GatSession) -> dict[str, str]:
 
 
 def _run_workbench(args: argparse.Namespace) -> int:
-    from gat.workbench import export_workbench_html
+    from gat.workbench import export_console_html
 
     session, model_path, decision, _, response = _bind_decision("gat workbench", args)
     decision_report = decode_response(response) if response is not None else None
@@ -200,7 +200,7 @@ def _run_workbench(args: argparse.Namespace) -> int:
             "The IFC audit applies to IFC sources; this model was loaded from "
             f"a {suffix} carrier."
         )
-    availability = export_workbench_html(
+    availability = export_console_html(
         session.world,
         args.output,
         model_name=args.model,
@@ -214,11 +214,11 @@ def _run_workbench(args: argparse.Namespace) -> int:
         audit_reason=audit_reason,
         audit_statuses=statuses,
     )
-    modes = ", ".join(
-        mode if state == "available" else f"{mode} ({state})"
-        for mode, state in availability.items()
+    readouts = ", ".join(
+        name if state == "available" else f"{name} ({state})"
+        for name, state in availability.items()
     )
-    print(f"wrote {args.output}: workbench with modes {modes}")
+    print(f"wrote {args.output}: console with readouts {readouts}")
     return 0
 
 
@@ -556,27 +556,28 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(handler=_run_view)
 
     p = commands.add_parser(
-        "workbench",
-        help="the Notation Workbench: one offline instrument, eight projection modes",
+        "console",
+        aliases=["workbench"],
+        help="the GAT Console: one offline instrument, six readouts, one specimen",
     )
     p.add_argument("model")
-    p.add_argument("-o", "--output", required=True, help="workbench HTML path")
+    p.add_argument("-o", "--output", required=True, help="console HTML path")
     p.add_argument("--variations", type=int, default=8)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--spacing", type=float, default=0.75)
     p.add_argument(
         "--decision",
-        help="gat-headless response to bind (EVIDENCE mode + STRUCTURE overlay)",
+        help="gat-headless response to bind (DECISION readout + FIELD overlay)",
     )
     p.add_argument(
         "--request",
         help="the matching gat-headless request; draws proposed clearance geometry",
     )
-    p.add_argument("--ledger", help="execution ledger JSON to bind (TIME mode)")
+    p.add_argument("--ledger", help="execution ledger JSON to bind (LOG readout)")
     p.add_argument(
         "--no-audit",
         action="store_true",
-        help="skip the IFC compatibility audit (COMPLEXITY mode stays empty)",
+        help="skip the IFC compatibility audit (INTAKE readout stays empty)",
     )
     p.set_defaults(handler=_run_workbench)
 

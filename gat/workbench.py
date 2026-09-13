@@ -1,34 +1,43 @@
-"""The Notation Workbench: one instrument, eight projection modes, one identity.
+"""The GAT Console: one specimen, six readouts, one identity.
 
-The platform synthesis names a projection triad — kepler.gl for analytical
-geography (*where is the pattern?*), CesiumJS for geodetic reality (*where
-does it exist?*), Three.js for computational structure (*how is it
-constituted?*) — behind a mode toolbar: MAP, GLOBE, STRUCTURE, GRAPH, STATE,
-TIME, EVIDENCE, COMPLEXITY.  This module composes the surfaces GAT already
-produces into that instrument, one self-contained HTML file:
+A scientific instrument, laid out the way instruments are: a **specimen**
+you can always see the identity of, a **function selector** for the readouts
+it offers, and a **reading** that says what the instrument currently makes of
+what is loaded. One self-contained HTML file, no server and no network.
 
-* STRUCTURE embeds the offline 3D viewer (the Three.js seat, filled today
-  by the hand-rolled WebGL renderer) in a sandboxed frame;
-* GRAPH draws the IR relationship graph ``G`` with a deterministic layout
-  and its provenance;
-* STATE lists the belief ``N(mu, Sigma)`` per entity — every quantity's
-  mean and sigma, raw or derived;
-* TIME, EVIDENCE and COMPLEXITY host the ledger timeline, the bound
-  decision report and the IFC audit in the report grammar;
-* MAP and GLOBE are declared **unavailable** with the reason: this corpus
-  release lowers no geographic coordinate semantics, and a globe would be a
-  connected instrument, a surface class not yet defined.
+The readouts, each named for what it reads:
 
-Three rules carry across every mode.  Projection never mutates its source:
-the page renders and re-checks, it never writes.  Identity survives
-representation: the same ``EntityId`` names an element in every mode, the
-same world digest names the world, and the frames exchange only ids.
-Visual adjacency is never evidence: the graph layout is a reading order,
-not a measurement, and says so.
+``FIELD``
+    The belief's marginal geometry, rendered — the offline WebGL viewer in a
+    sandboxed frame, with sampled realizations of ``N(mu, Sigma)``.
+``RELATIONS``
+    The typed IR relationship graph, with the IFC record that asserts each
+    edge.
+``BELIEF``
+    ``N(mu, Sigma)`` per entity: every quantity's mean and sigma, raw or
+    derived, in its declared unit.
+``LOG``
+    The hash-chained execution ledger: what happened, in what order, and
+    whether the chain held.
+``DECISION``
+    The bound decision report: what was decided, on what evidence, and what
+    is still missing.
+``INTAKE``
+    The IFC compatibility audit: what this instrument can accept from this
+    file, and what it refuses.
 
-Every ``ProjectionSpec`` — what a mode projects, from which source, whether
-it is available and why not — is embedded verbatim, so the instrument
-states what it is not.  See ``docs/projection-spec-v1.md``.
+Three rules carry across every readout. A readout never mutates its
+specimen: the page renders and re-checks, it never writes. Identity survives
+representation: the same ``EntityId`` names an element in every readout, the
+same world digest names the world, and the frames exchange only ids. Visual
+adjacency is never evidence: the graph layout is a reading order, not a
+measurement, and says so.
+
+Every ``ReadoutSpec`` — what a readout reads, how it transforms it, what
+that means, and what is lost — is embedded verbatim, alongside a standing
+declaration of what this instrument does **not** measure. An instrument that
+cannot state its own limits is not an instrument. See
+``docs/readout-spec-v1.md``.
 """
 
 from __future__ import annotations
@@ -49,23 +58,62 @@ from gat.ir.core import RelKind
 from gat.report import (
     _HTML_STYLE,
     DecisionReport,
-    NON_AUTHORIZING_FOOTER,
+    NON_AUTHORIZING_INSTRUMENT_FOOTER,
     READ_ONLY_FOOTER,
     disposition_hex,
     format_digest,
     render_html_fragment,
 )
 
-WORKBENCH_FORMAT = "gat-workbench-v1"
-MESSAGE_FORMAT = "gat-workbench-message-v1"
-PROJECTION_SPEC_VERSION = "gat-projection-spec-v1"
+CONSOLE_FORMAT = "gat-console-v1"
+MESSAGE_FORMAT = "gat-console-message-v1"
+READOUT_SPEC_VERSION = "gat-readout-spec-v1"
 
-#: The mode toolbar, in the order the synthesis names it.
-MODES = ("MAP", "GLOBE", "STRUCTURE", "GRAPH", "STATE", "TIME", "EVIDENCE", "COMPLEXITY")
+#: The function selector, in the order an operator works through it: what is
+#: there, how it relates, what is believed, what was done, what was decided,
+#: and what this file could offer in the first place.
+READOUTS = ("FIELD", "RELATIONS", "BELIEF", "LOG", "DECISION", "INTAKE")
+
+#: What each position on the selector reads, shown under its name. An
+#: operator should not have to open a spec to know what a knob does.
+_READS = {
+    "FIELD": "the belief, rendered",
+    "RELATIONS": "what relates to what",
+    "BELIEF": "mu and sigma per quantity",
+    "LOG": "what happened, in order",
+    "DECISION": "what was decided, and why",
+    "INTAKE": "what this file can offer",
+}
 
 AVAILABLE = "available"
-EMPTY = "empty"            # the mode exists here; nothing is bound to it yet
-UNAVAILABLE = "unavailable"  # the corpus cannot fill it; the reason is stated
+EMPTY = "empty"            # the readout exists here; nothing is bound to it yet
+
+#: What this instrument does not measure, stated once and standing, rather
+#: than as dead positions on the function selector. An earlier shell carried
+#: MAP and GLOBE as permanently unavailable readouts; they were the silhouette
+#: of a geospatial platform this is not, and a selector with two knobs that
+#: never turn teaches an operator to distrust the ones that do.
+NOT_MEASURED = (
+    (
+        "geographic position",
+        "No IfcSite placement, IfcMapConversion or coordinate reference system "
+        "reaches the IR, so nothing here can be put on a map without inventing "
+        "a position -- and an invented position is visual adjacency presented "
+        "as evidence.",
+    ),
+    (
+        "geodetic reality",
+        "No geodetic datum is lowered, and terrain or imagery would be fetched "
+        "over the network. This instrument is self-contained by construction: "
+        "one file, no server, no external resource.",
+    ),
+    (
+        "time",
+        "A world is one belief state. LOG orders recorded transitions by "
+        "sequence, and FIELD's realizations are draws from one posterior, not "
+        "moments. Nothing here is a time series.",
+    ),
+)
 
 #: Reading-order rank of IFC classes for the GRAPH layout: containers first,
 #: then spaces, then the elements that bound them, then what voids and fills
@@ -87,18 +135,18 @@ _GRAPH_RANKS = (
 )
 
 _RULES = (
-    "projection never mutates its source",
+    "a readout never mutates its specimen",
     "identity survives representation",
     "visual adjacency is never evidence",
 )
 
 
 @dataclass(frozen=True)
-class ProjectionSpec:
-    """What one Workbench mode projects, from where, and whether it can."""
+class ReadoutSpec:
+    """What one readout reads, how, and whether it can read it here."""
 
-    mode: str
-    seat: str
+    readout: str
+    instrument: str
     question: str
     surface_class: str
     #: Every representation identifies its source, its transformation, its
@@ -115,64 +163,29 @@ class ProjectionSpec:
     reason: str
 
     def to_dict(self) -> dict[str, object]:
-        return {"version": PROJECTION_SPEC_VERSION, **asdict(self), "mutates_source": False}
+        return {
+            "version": READOUT_SPEC_VERSION,
+            **asdict(self),
+            "mutates_specimen": False,
+        }
 
 
-def projection_specs(
+def readout_specs(
     world: World,
     *,
     decision_bound: bool,
     ledger_bound: bool,
     audit_bound: bool,
     audit_reason: str = "",
-) -> tuple[ProjectionSpec, ...]:
-    """The eight ProjectionSpecs for this world and what is bound to it."""
+) -> tuple[ReadoutSpec, ...]:
+    """The six ReadoutSpecs for this world and what is bound to it."""
     module = world.module
-    geographic = (
-        "This corpus release lowers no geographic coordinate semantics: no "
-        "IfcSite placement, IfcMapConversion or coordinate reference system "
-        "reaches the IR, so nothing can be placed on a map without inventing "
-        "a position — and an invented position would be visual adjacency "
-        "presented as evidence."
-    )
     one_world = "one belief state, named by its world digest"
     model_frame = "model frame: IFC local placement in metres, Z up; no geodetic frame"
     return (
-        ProjectionSpec(
-            mode="MAP",
-            seat="kepler.gl — analytical geography",
-            question="Where is the pattern?",
-            surface_class="instrument",
-            source="geographic coordinates and aggregates (none in this corpus)",
-            transformation="none performed",
-            meaning="would be: patterns and aggregates over geography",
-            loss="not assessable until a source exists",
-            identity="EntityId (would be)",
-            frame="none: no coordinate reference system is lowered",
-            time="none",
-            availability=UNAVAILABLE,
-            reason=geographic,
-        ),
-        ProjectionSpec(
-            mode="GLOBE",
-            seat="CesiumJS — geodetic reality",
-            question="Where does it exist?",
-            surface_class="connected instrument (not yet defined)",
-            source="geodetic placement plus terrain and imagery tiles (none in this corpus)",
-            transformation="none performed",
-            meaning="would be: the element at its place on the earth",
-            loss="not assessable until a source exists",
-            identity="EntityId (would be)",
-            frame="none: no geodetic datum is lowered",
-            time="none",
-            availability=UNAVAILABLE,
-            reason=geographic
-            + " A globe also fetches terrain and imagery over the network: a "
-            "connected instrument, a surface class this release does not define.",
-        ),
-        ProjectionSpec(
-            mode="STRUCTURE",
-            seat="Three.js seat — computational structure (self-contained WebGL viewer today)",
+        ReadoutSpec(
+            readout="FIELD",
+            instrument="self-contained WebGL viewer over the Gaussian field",
             question="How is it constituted?",
             surface_class="instrument",
             source=f"gat view scene ({VIEWER_SCENE_FORMAT}) derived from the world"
@@ -193,9 +206,9 @@ def projection_specs(
             availability=AVAILABLE,
             reason="",
         ),
-        ProjectionSpec(
-            mode="GRAPH",
-            seat="IR relationship graph G",
+        ReadoutSpec(
+            readout="RELATIONS",
+            instrument="the typed IR relationship graph G",
             question="What relates to what, and on whose authority?",
             surface_class="instrument",
             source=f"{len(module.entities)} entities, {len(module.rels)} typed edges "
@@ -211,9 +224,9 @@ def projection_specs(
             availability=AVAILABLE,
             reason="",
         ),
-        ProjectionSpec(
-            mode="STATE",
-            seat="IR entities X over the belief N(mu, Sigma)",
+        ReadoutSpec(
+            readout="BELIEF",
+            instrument="IR entities X over the belief N(mu, Sigma)",
             question="What is believed, and how surely?",
             surface_class="instrument",
             source=f"{len(tuple(module.all_slots()))} quantity slots "
@@ -229,9 +242,9 @@ def projection_specs(
             availability=AVAILABLE,
             reason="",
         ),
-        ProjectionSpec(
-            mode="TIME",
-            seat="execution ledger timeline",
+        ReadoutSpec(
+            readout="LOG",
+            instrument="the hash-chained execution ledger",
             question="What happened, in what order, and did the chain hold?",
             surface_class="report",
             source="hash-chained execution ledger (gat ledger)"
@@ -252,9 +265,9 @@ def projection_specs(
             else "No execution ledger is bound. Export one (session.export_ledger, or "
             "python -m gat.demo.ledger_replay ledger.json) and pass --ledger.",
         ),
-        ProjectionSpec(
-            mode="EVIDENCE",
-            seat="decision report",
+        ReadoutSpec(
+            readout="DECISION",
+            instrument="the bound decision report",
             question="What was decided, on what evidence, and what is still missing?",
             surface_class="report",
             source="gat-headless response (gat report)" if decision_bound else "no decision bound",
@@ -274,9 +287,9 @@ def projection_specs(
             else "No decision is bound. Evaluate a request with gat-headless and pass "
             "--decision response.json [--request request.json].",
         ),
-        ProjectionSpec(
-            mode="COMPLEXITY",
-            seat="IFC compatibility audit",
+        ReadoutSpec(
+            readout="INTAKE",
+            instrument="the IFC compatibility audit",
             question="What can this corpus represent, and what can it not?",
             surface_class="report",
             source="gat-ifc-audit-v1 (gat audit)" if audit_bound else "no audit bound",
@@ -393,7 +406,7 @@ def state_payload(world: World) -> dict[str, object]:
     }
 
 
-def workbench_payload(
+def console_payload(
     world: World,
     *,
     model_name: str = "",
@@ -411,8 +424,8 @@ def workbench_payload(
 
     ``decision`` is the viewer overlay from :func:`decision_overlay`, already
     bound fail-closed to ``world``; ``decision_report``, ``ledger`` and
-    ``audit`` are decoded reports for EVIDENCE, TIME and COMPLEXITY.  A
-    decision report whose world differs from the overlay's is refused.
+    ``audit`` are decoded reports for DECISION, LOG and INTAKE.  A decision
+    report whose world differs from the overlay's is refused.
     """
     if (decision is None) != (decision_report is None):
         raise ValueError("a decision overlay and its report must be bound together")
@@ -430,23 +443,37 @@ def workbench_payload(
         decision=decision,
         audit_statuses=audit_statuses,
     )
-    specs = projection_specs(
+    specs = readout_specs(
         world,
         decision_bound=decision is not None,
         ledger_bound=ledger is not None,
         audit_bound=audit is not None,
         audit_reason=audit_reason,
     )
+    state = state_payload(world)
     return {
-        "format": WORKBENCH_FORMAT,
+        "format": CONSOLE_FORMAT,
         "message_format": MESSAGE_FORMAT,
         "model": model_name,
         "world_digest": world.digest(),
         "rules": list(_RULES),
-        "modes": [spec.to_dict() for spec in specs],
-        "structure": scene,
+        "not_measured": [
+            {"quantity": quantity, "reason": reason} for quantity, reason in NOT_MEASURED
+        ],
+        "specimen": {
+            "model": model_name,
+            "world_digest": world.digest(),
+            "source_sha256": str(world.module.meta.get("source_sha256", "")),
+            "entities": len(state["entities"]),
+            "raw": state["raw"],
+            "derived": state["derived"],
+            "relationships": state["relationships"],
+            "constraints": state["constraints"],
+        },
+        "readouts": [spec.to_dict() for spec in specs],
+        "field": scene,
         "graph": graph_payload(world),
-        "state": state_payload(world),
+        "state": state,
         "decision": None
         if decision is None
         else {
@@ -458,7 +485,7 @@ def workbench_payload(
     }
 
 
-def render_workbench_html(
+def render_console_html(
     payload: Mapping[str, object],
     *,
     decision_report: DecisionReport | None = None,
@@ -467,8 +494,8 @@ def render_workbench_html(
 ) -> str:
     """Compose the single-file instrument from a payload and its reports."""
     esc = html_mod.escape
-    specs = {spec["mode"]: spec for spec in payload["modes"]}
-    viewer_document = render_viewer_html(payload["structure"])
+    specs = {spec["readout"]: spec for spec in payload["readouts"]}
+    viewer_document = render_viewer_html(payload["field"])
     page_payload = {key: value for key, value in payload.items() if key != "structure"}
     # The data block is JSON, not markup: every angle bracket and ampersand
     # is escaped so no untrusted string can ever read as a tag.
@@ -482,7 +509,7 @@ def render_workbench_html(
     def spec_strip(mode: str) -> str:
         spec = specs[mode]
         rows = [
-            ("seat", spec["seat"]),
+            ("reads", spec["instrument"]),
             ("question", spec["question"]),
             ("surface class", spec["surface_class"]),
             ("source", spec["source"]),
@@ -498,9 +525,12 @@ def render_workbench_html(
             rows.append(("reason", spec["reason"]))
         body = "".join(f"<dt>{esc(k)}</dt><dd>{esc(v)}</dd>" for k, v in rows)
         return (
+            f'<header class="readout-head {esc(spec["availability"])}">'
+            f'<h2>{esc(mode)}</h2><p class="reads">{esc(_READS[mode])}</p>'
+            f'<p class="asks">{esc(spec["question"])}</p>'
+            f'<span class="state">{esc(spec["availability"])}</span></header>'
             f'<details class="spec {esc(spec["availability"])}">'
-            f"<summary>ProjectionSpec — {esc(mode)} · {esc(spec['availability'])}"
-            "</summary>"
+            f"<summary>ReadoutSpec — {esc(mode)}</summary>"
             f"<dl>{body}</dl></details>"
         )
 
@@ -530,7 +560,7 @@ def render_workbench_html(
         'aria-label="relationship graph"></svg></div>'
         '<p class="note">Layout is a reading order by IFC class rank, top to bottom; '
         "position and distance on this canvas are not evidence. Edges are typed and "
-        "carry their IFC source reference. Click a node to select it in every mode."
+        "carry their IFC source reference. Click a node to select it in every readout."
         "</p>"
         '<div id="graph-legend"></div>'
         '<section><h2>edges</h2><div class="tablewrap"><table><thead><tr>'
@@ -552,76 +582,103 @@ def render_workbench_html(
         f"<dt>constraints</dt><dd>{state['constraints']}</dd>{meta_rows}</dl></section>"
     )
 
-    structure_panel = (
-        '<iframe id="structure" title="STRUCTURE: as-built viewer" '
+    field_panel = (
+        '<iframe id="structure" title="FIELD: the belief rendered" '
         'sandbox="allow-scripts" srcdoc="' + esc(viewer_document, quote=True) + '"></iframe>'
     )
 
     panels = {
-        "MAP": empty_state("MAP"),
-        "GLOBE": empty_state("GLOBE"),
-        "STRUCTURE": structure_panel,
-        "GRAPH": graph_panel,
-        "STATE": state_panel,
-        "TIME": report_panel("TIME", ledger),
-        "EVIDENCE": report_panel("EVIDENCE", decision_report),
-        "COMPLEXITY": report_panel("COMPLEXITY", audit),
+        "FIELD": field_panel,
+        "RELATIONS": graph_panel,
+        "BELIEF": state_panel,
+        "LOG": report_panel("LOG", ledger),
+        "DECISION": report_panel("DECISION", decision_report),
+        "INTAKE": report_panel("INTAKE", audit),
     }
     mode_buttons = "".join(
         f'<button role="tab" data-mode="{mode}" class="{esc(specs[mode]["availability"])}" '
         f'aria-selected="false" title="{esc(specs[mode]["question"])}">'
-        f'<span class="key">{index + 1}</span>{mode}'
-        f'<span class="avail">{esc(specs[mode]["availability"])}</span></button>'
-        for index, mode in enumerate(MODES)
+        f'<span class="key">{index + 1}</span><span class="name">{mode}</span>'
+        f'<span class="lamp" aria-hidden="true"></span>'
+        f'<span class="sr">{esc(specs[mode]["availability"])}</span></button>'
+        for index, mode in enumerate(READOUTS)
     )
     panel_markup = "".join(
         f'<section class="panel" data-mode="{mode}" role="tabpanel" hidden>'
         f"{spec_strip(mode)}{panels[mode]}</section>"
-        for mode in MODES
+        for mode in READOUTS
     )
     decision = payload["decision"]
     decision_badge = (
         f'<span class="badge" style="background:{disposition_hex(decision["disposition"])}">'
         f"{esc(decision['disposition'])}</span> {esc(decision['headline'].split(': ', 1)[-1])}"
         if decision
-        else '<span class="muted">no decision bound</span>'
+        else '<span class="idle">no decision bound</span>'
     )
     rules = " · ".join(esc(rule) for rule in payload["rules"])
-    specs_json = esc(json.dumps(payload["modes"], indent=1))
-    title = esc(payload["model"] or "workbench")
+    specs_json = esc(json.dumps(payload["readouts"], indent=1))
+    specimen = payload["specimen"]
+    title = esc(payload["model"] or "unnamed specimen")
+    census = (
+        f"{specimen['entities']} entities · {specimen['raw']} raw + "
+        f"{specimen['derived']} derived · {specimen['relationships']} relationships · "
+        f"{specimen['constraints']} constraints"
+    )
+    source = (
+        f'<span class="cell">source {_digest(specimen["source_sha256"])}</span>'
+        if specimen["source_sha256"]
+        else ""
+    )
+    not_measured = "".join(
+        f"<dt>{esc(item['quantity'])}</dt><dd>{esc(item['reason'])}</dd>"
+        for item in payload["not_measured"]
+    )
     return (
         "<!doctype html>\n"
         '<html lang="en"><head><meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n'
-        f"<title>Notation Workbench: {title}</title>\n"
-        f"<style>{_HTML_STYLE}{_WORKBENCH_STYLE}</style></head><body>\n"
-        '<div id="workbench">\n'
-        '<header id="bar">\n'
-        '<div id="brand"><strong>Notation Workbench</strong><span class="muted">GAT instrument</span></div>\n'
-        f'<nav id="modes" role="tablist" aria-label="modes">{mode_buttons}</nav>\n'
-        '<div id="identity">'
-        f'<span class="cell">{title}</span>'
+        f"<title>GAT Console — {title}</title>\n"
+        f"<style>{_HTML_STYLE}{_CONSOLE_STYLE}</style></head><body>\n"
+        '<div id="console">\n'
+        '<header id="head">\n'
+        '<div id="specimen">\n'
+        '<span class="label">specimen</span>'
+        f'<h1>{title}</h1>\n'
+        '<div id="ident">'
         f'<span class="cell">world {_digest(payload["world_digest"])}</span>'
-        f'<span class="cell" id="decision-cell">{decision_badge}</span>'
-        '<span class="cell" id="selection-cell"><span class="muted">nothing selected</span></span>'
+        f"{source}"
+        f'<span class="cell census">{esc(census)}</span>'
         "</div>\n"
+        "</div>\n"
+        '<div id="mark"><span class="glyph" aria-hidden="true">\u25c9</span>'
+        '<span class="wordmark">GAT<br><b>CONSOLE</b></span></div>\n'
         "</header>\n"
+        '<nav id="modes" role="tablist" aria-label="readouts">'
+        f'<span class="label">readout</span>{mode_buttons}</nav>\n'
         f'<div id="panels">{panel_markup}</div>\n'
-        '<footer id="foot">'
-        f"<p>{esc(NON_AUTHORIZING_FOOTER)} {esc(READ_ONLY_FOOTER)}</p>"
-        f"<p>{rules}</p>"
-        f"<details><summary>ProjectionSpec ({esc(PROJECTION_SPEC_VERSION)}) for every mode"
+        '<footer id="foot">\n'
+        '<div id="reading">'
+        '<span class="label">reading</span>'
+        f'<span class="cell" id="decision-cell">{decision_badge}</span>'
+        '<span class="cell" id="selection-cell"><span class="idle">nothing selected</span></span>'
+        "</div>\n"
+        f'<details id="limits"><summary>this instrument does not measure</summary>'
+        f"<dl>{not_measured}</dl></details>"
+        f"<details><summary>ReadoutSpec ({esc(READOUT_SPEC_VERSION)}) for every readout"
         f"</summary><pre>{specs_json}</pre></details>"
+        f'<p class="fine">{esc(NON_AUTHORIZING_INSTRUMENT_FOOTER)} '
+        f"{esc(READ_ONLY_FOOTER)}</p>"
+        f'<p class="fine">{rules}</p>'
         "</footer>\n"
         "</div>\n"
-        f'<script id="workbench-data" type="application/json">{encoded}</script>\n'
-        f"<script>{_WORKBENCH_SCRIPT}</script>\n"
+        f'<script id="console-data" type="application/json">{encoded}</script>\n'
+        f"<script>{_CONSOLE_SCRIPT}</script>\n"
         "</body></html>\n"
     )
 
 
-def export_workbench_html(
+def export_console_html(
     world: World,
     path: str | Path,
     *,
@@ -636,8 +693,8 @@ def export_workbench_html(
     audit_reason: str = "",
     audit_statuses: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
-    """Write the instrument; returns each mode's availability."""
-    payload = workbench_payload(
+    """Write the instrument; returns each readout's availability."""
+    payload = console_payload(
         world,
         model_name=model_name,
         n=n,
@@ -650,11 +707,11 @@ def export_workbench_html(
         audit_reason=audit_reason,
         audit_statuses=audit_statuses,
     )
-    document = render_workbench_html(
+    document = render_console_html(
         payload, decision_report=decision_report, ledger=ledger, audit=audit
     )
     Path(path).write_text(document, encoding="utf-8")
-    return {spec["mode"]: spec["availability"] for spec in payload["modes"]}
+    return {spec["readout"]: spec["availability"] for spec in payload["readouts"]}
 
 
 def _digest(value: str) -> str:
@@ -666,36 +723,94 @@ def _digest(value: str) -> str:
     )
 
 
-_WORKBENCH_STYLE = """
+_CONSOLE_STYLE = """
+/* Instrument anatomy: a specimen you can always identify, a function
+   selector, a readout, and a reading. Nothing decorative competes with a
+   number. */
 html, body { height: 100%; }
 body { overflow: hidden; }
-#workbench { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; }
-#bar { background: var(--card); border-bottom: 1px solid var(--rule); padding: 0.5rem 1rem 0;
-  display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 1.5rem; align-items: center; }
-#brand strong { font-size: 0.95rem; letter-spacing: 0.02em; margin-right: 0.5rem; }
-.muted { color: var(--muted); }
-#modes { display: flex; flex-wrap: wrap; gap: 0.15rem; }
-#modes button { border: 0; border-bottom: 3px solid transparent; background: none; color: var(--ink);
-  font: inherit; font-size: 0.78rem; letter-spacing: 0.08em; padding: 0.45rem 0.7rem 0.35rem;
-  cursor: pointer; display: inline-flex; align-items: baseline; gap: 0.4rem; }
-#modes button .key { color: var(--muted); font-size: 0.7rem; font-variant-numeric: tabular-nums; }
-#modes button .avail { font-size: 0.62rem; letter-spacing: 0.04em; text-transform: none;
-  color: var(--muted); border: 1px solid var(--rule); border-radius: 999px; padding: 0 0.4em; }
-#modes button.available .avail { display: none; }
-#modes button.unavailable { color: var(--muted); }
-#modes button.unavailable .avail { border-style: dashed; }
+#console { height: 100vh; display: grid; grid-template-rows: auto auto 1fr auto; }
+.label { font-size: 0.6rem; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muted); display: block; }
+
+/* -- specimen: the identity band, the instrument's most important readout -- */
+#head { background: var(--card); border-bottom: 1px solid var(--rule);
+  padding: 0.65rem 1rem 0.6rem; display: grid; grid-template-columns: 1fr auto;
+  gap: 1.5rem; align-items: start; }
+#specimen h1 { font-size: 1.15rem; line-height: 1.2; margin: 0.1rem 0 0.35rem;
+  letter-spacing: -0.01em; font-weight: 600; }
+#ident { display: flex; flex-wrap: wrap; gap: 0.1rem 1.1rem; font-size: 0.78rem;
+  color: var(--muted); font-variant-numeric: tabular-nums; }
+#ident .cell code { font-size: 0.92em; }
+#ident .census { font-variant-numeric: tabular-nums; }
+#mark { display: flex; align-items: center; gap: 0.5rem; color: var(--muted);
+  font-size: 0.62rem; letter-spacing: 0.16em; line-height: 1.35; text-align: right;
+  white-space: nowrap; }
+#mark .glyph { font-size: 1.5rem; letter-spacing: 0; color: var(--ink); opacity: 0.8; }
+#mark b { font-weight: 600; color: var(--ink); }
+
+/* -- function selector: every position turns, and says what it reads ------- */
+#modes { background: var(--card); border-bottom: 1px solid var(--rule);
+  padding: 0 1rem 0; display: flex; flex-wrap: wrap; align-items: stretch; gap: 0.1rem; }
+#modes > .label { align-self: center; padding-right: 0.9rem; }
+#modes button { border: 0; border-bottom: 3px solid transparent; background: none;
+  color: var(--ink); font: inherit; cursor: pointer; padding: 0.5rem 0.8rem 0.4rem;
+  display: inline-flex; align-items: center; gap: 0.45rem; }
+#modes button .key { color: var(--muted); font-size: 0.68rem;
+  font-variant-numeric: tabular-nums; }
+#modes button .name { font-size: 0.8rem; letter-spacing: 0.09em; }
+/* A lamp, not a sentence: an unbound position is visibly unlit and stays the
+   same width as a lit one, so the selector never reflows. */
+#modes button .lamp { width: 0.5rem; height: 0.5rem; border-radius: 50%;
+  border: 1px solid var(--muted); background: var(--ink); }
+#modes button.empty { color: var(--muted); }
+#modes button.empty .lamp { background: none; }
 #modes button[aria-selected="true"] { border-bottom-color: var(--ink); }
+#modes button[aria-selected="true"] .name { font-weight: 600; }
 #modes button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
-#identity { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0 1.2rem; padding: 0.25rem 0 0.5rem;
-  font-size: 0.8rem; color: var(--muted); border-top: 1px solid var(--rule-soft); }
-#identity .cell code { font-size: 0.9em; }
-#identity .badge { font-weight: 600; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; }
+
+/* -- the readout names itself, so the selector does not have to ----------- */
+.readout-head { display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: 0 0.7rem; border-bottom: 1px solid var(--rule-soft);
+  padding-bottom: 0.4rem; margin-bottom: 0.6rem; }
+.readout-head h2 { margin: 0; font-size: 0.9rem; letter-spacing: 0.09em; }
+.readout-head .reads { margin: 0; font-size: 0.82rem; }
+.readout-head .asks { margin: 0; font-size: 0.78rem; color: var(--muted);
+  font-style: italic; }
+.readout-head .asks::before { content: "· "; font-style: normal; }
+.readout-head .state { margin-left: auto; font-size: 0.62rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted); }
+.readout-head.empty .reads { color: var(--muted); }
+
+/* -- reading: what the instrument currently makes of what is loaded ------- */
+#foot { background: var(--card); border-top: 1px solid var(--rule);
+  padding: 0.5rem 1rem 0.6rem; font-size: 0.78rem; }
+#foot > details { margin-top: 0.25rem; }
+#foot .fine { margin: 0.3rem 0 0; font-size: 0.72rem; }
+#reading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.1rem 1.1rem;
+  font-size: 0.82rem; }
+#reading > .label { align-self: center; }
+#reading .badge { font-weight: 600; }
+.idle { color: var(--muted); font-style: italic; }
 #selection-cell button { border: 1px solid var(--rule); background: none; color: var(--muted);
-  border-radius: 999px; font: inherit; font-size: 0.75rem; padding: 0 0.5em; margin-left: 0.4rem; cursor: pointer; }
+  border-radius: 999px; font: inherit; font-size: 0.75rem; padding: 0 0.5em;
+  margin-left: 0.4rem; cursor: pointer; }
+#limits dt { font-weight: 600; }
+#limits dd { margin: 0 0 0.5rem; color: var(--muted); }
+.fine { color: var(--muted); }
+@media (max-width: 640px) {
+  #head { grid-template-columns: 1fr; }
+  #mark { justify-content: flex-start; text-align: left; }
+  #modes > .label { width: 100%; padding: 0.35rem 0 0; }
+}
 #panels { overflow: hidden; position: relative; }
 .panel { position: absolute; inset: 0; overflow-y: auto; padding: 1rem; box-sizing: border-box; }
-.panel[data-mode="STRUCTURE"] { padding: 0; display: grid; grid-template-rows: auto 1fr; }
-.panel[data-mode="STRUCTURE"] details.spec { margin: 0.6rem 1rem 0.4rem; }
+.panel[data-mode="FIELD"] { padding: 0; display: grid;
+  grid-template-rows: auto auto 1fr; }
+.panel[data-mode="FIELD"] .readout-head { margin: 0.7rem 1rem 0; }
+.panel[data-mode="FIELD"] details.spec { margin: 0.5rem 1rem 0.5rem; }
 #structure { width: 100%; height: 100%; border: 0; background: #f5f4f1; }
 details.spec { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.8rem; }
 details.spec summary { cursor: pointer; letter-spacing: 0.04em; }
@@ -749,12 +864,12 @@ tr.hit td { background: var(--rule-soft); }
 """
 
 
-_WORKBENCH_SCRIPT = r"""
+_CONSOLE_SCRIPT = r"""
 "use strict";
-const DATA = JSON.parse(document.getElementById("workbench-data").textContent);
+const DATA = JSON.parse(document.getElementById("console-data").textContent);
 const MESSAGE_FORMAT = DATA.message_format;
-const MODES = DATA.modes.map((spec) => spec.mode);
-const SPECS = Object.fromEntries(DATA.modes.map((spec) => [spec.mode, spec]));
+const MODES = DATA.readouts.map((spec) => spec.readout);
+const SPECS = Object.fromEntries(DATA.readouts.map((s) => [s.readout, s]));
 const ENTITIES = Object.fromEntries(DATA.state.entities.map((entity) => [entity.entity, entity]));
 const state = { mode: null, selection: null };
 const text = (value) => document.createTextNode(String(value));
@@ -781,7 +896,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 // -- identity -----------------------------------------------------------------
-// One EntityId names the selected element in every mode; the frames exchange
+// One EntityId names the selected element in every readout; the frames exchange
 // only ids and the world digest, never positions.
 function select(entity, origin) {
   if (entity !== null && !(entity in ENTITIES)) return;
@@ -826,7 +941,7 @@ function readHash() {
   return { mode: mode || null, entity: entity ? decodeURIComponent(entity) : null };
 }
 
-// -- STRUCTURE messages --------------------------------------------------------
+// -- FIELD messages --------------------------------------------------------
 window.addEventListener("message", (event) => {
   if (!structure || event.source !== structure.contentWindow) return;
   const message = event.data;
@@ -842,7 +957,7 @@ window.addEventListener("message", (event) => {
   }
 });
 
-// -- GRAPH ----------------------------------------------------------------------
+// -- RELATIONS ----------------------------------------------------------------------
 // The SVG namespace comes from the element itself: the page names no URL.
 const svgNS = document.getElementById("graph-svg").namespaceURI;
 const graphPositions = {};
@@ -926,12 +1041,12 @@ function renderGraphSelection() {
     edge.classList.toggle("lit", touches);
     edge.classList.toggle("dim", selected !== null && !touches);
   }
-  for (const row of document.querySelectorAll('.panel[data-mode="GRAPH"] tbody tr'))
+  for (const row of document.querySelectorAll('.panel[data-mode="RELATIONS"] tbody tr'))
     row.classList.toggle("hit", selected !== null &&
       (row.dataset.source === selected || row.dataset.target === selected));
 }
 
-// -- STATE ------------------------------------------------------------------------
+// -- BELIEF ------------------------------------------------------------------------
 function renderEntityList() {
   const list = document.getElementById("entity-list");
   const byClass = new Map();
@@ -961,7 +1076,7 @@ function renderEntityCard() {
   if (state.selection === null) {
     h2.append(text("belief"));
     const p = document.createElement("p");
-    p.append(text("Select an entity in any mode to read its quantities: believed mean and sigma, " +
+    p.append(text("Select an entity in any readout to read its quantities: believed mean and sigma, " +
       "raw (canonical belief) or derived (pushforward), with the IFC record each came from."));
     section.append(h2, p); card.append(section); return;
   }
@@ -1029,23 +1144,23 @@ function applyHash(fallback) {
   if (entity !== state.selection) select(entity, "hash");
 }
 window.addEventListener("hashchange", () => applyHash(null));
-applyHash("STRUCTURE");
+applyHash("FIELD");
 """
 
 
 __all__ = [
     "AVAILABLE",
+    "CONSOLE_FORMAT",
     "EMPTY",
     "MESSAGE_FORMAT",
-    "MODES",
-    "PROJECTION_SPEC_VERSION",
-    "ProjectionSpec",
-    "UNAVAILABLE",
-    "WORKBENCH_FORMAT",
-    "export_workbench_html",
+    "NOT_MEASURED",
+    "READOUTS",
+    "READOUT_SPEC_VERSION",
+    "ReadoutSpec",
+    "export_console_html",
     "graph_payload",
-    "projection_specs",
-    "render_workbench_html",
+    "readout_specs",
+    "render_console_html",
     "state_payload",
-    "workbench_payload",
+    "console_payload",
 ]
