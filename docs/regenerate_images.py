@@ -18,6 +18,7 @@ import argparse
 import html
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -229,9 +230,14 @@ def capture(pages: dict[str, Path], chrome: str) -> None:
     shots = [
         ("term_start", "cli-inspect.png", 980, 600, True, None, 1000),
         ("term_decide", "cli-decision.png", 980, 600, True, None, 1000),
-        ("console", "console-field.png", 1500, 940, False, None, 2500),
+        # A realization, not the nominal: the point of FIELD is that the
+        # building is a belief, and a tidy nominal box does not show that.
+        ("console", "console-field.png", 1500, 940, False, "FIELD~sample 2", 2500),
         ("console", "console-relations.png", 1500, 940, False, "RELATIONS", 2500),
-        ("console", "console-belief.png", 1500, 940, False, "BELIEF", 2500),
+        # A readout screenshot must show the reading, not the prompt to take
+        # one: BELIEF with nothing selected is an empty card, and the README
+        # claims it shows mean and sigma per quantity.
+        ("console", "console-belief.png", 1500, 940, False, "BELIEF/Wall-Party", 2500),
         ("report", "report-verdict.png", 1100, 900, False, None, 1200),
         ("ledger", "ledger.png", 1100, 900, True, None, 1200),
         ("term_closed", "cli-fail-closed.png", 1020, 430, True, None, 1000),
@@ -249,10 +255,25 @@ def capture(pages: dict[str, Path], chrome: str) -> None:
             page.goto(pages[key].as_uri())
             page.wait_for_timeout(wait)
             if click:
+                # "READOUT" switches the readout; "/x" then selects x in its
+                # panel, and "~x" clicks x inside its sandboxed viewer frame.
+                match = re.fullmatch(r"([A-Z]+)(?:([/~])(.+))?", click)
+                readout, sep, target = match.group(1), match.group(2), match.group(3)
                 # The readout name appears in the panel body too; only the tab
                 # switches the instrument.
-                page.get_by_role("tab", name=click).click()
-                page.wait_for_timeout(1800)
+                page.get_by_role("tab", name=readout).click()
+                page.wait_for_timeout(1200)
+                if sep == "/":
+                    # Scope to the visible panel: entity names also appear in
+                    # the other readouts, which are hidden and unclickable.
+                    page.locator(f'.panel[data-mode="{readout}"]').get_by_text(
+                        target, exact=True
+                    ).first.click()
+                elif sep == "~":
+                    page.frame_locator("#structure").get_by_text(
+                        target, exact=True
+                    ).first.click()
+                page.wait_for_timeout(1500)
             page.screenshot(path=str(IMAGES / name), full_page=full)
             page.close()
             print(f"wrote docs/images/{name}")

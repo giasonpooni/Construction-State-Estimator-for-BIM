@@ -62,10 +62,12 @@ gat inspect gat/demo/model.ifc --var "Level 1.TotalWallCost"
 
 `audit` answers the only question worth asking first — *can GAT open this
 model at all* — without partially importing it. `inspect` shows the second
-idea: the wall cost is uncertain, and the **variance attribution** says where
-that uncertainty actually comes from. Note that `ClearHeight` contributes to
-five walls at once. That coupling is not bookkeeping; it is the covariance,
-and it is what makes a single design change propagate correctly.
+idea, and the two lists under it disagree on purpose. `ClearHeight` has a
+large **sensitivity** (+2873.6 per metre, fifth of six) and contributes 0.7%
+of the **variance**, because it is believed to ±10 mm. Two walls' `UnitCost`
+carry 77.5% of it between them. What moves the answer most is not what you
+are least sure of, and a design tool that only shows you the first one is
+pointing at the wrong thing.
 
 ## One decision, three answers
 
@@ -110,10 +112,20 @@ outcomes are the whole fail-closed stance in one command:
 
 Exit codes follow: `0` clean, `1` a finding, `2` input GAT will not accept.
 
-## The instruments
+## The instrument and its surfaces
 
-Four offline, self-contained HTML surfaces. No server, no network, no
-telemetry — each is a single file you can email to an engineer.
+Offline, self-contained HTML. No server, no network, no telemetry — each is a
+single file you can email to an engineer. They come in two classes, and the
+difference is enforced, not stylistic:
+
+- **Reports** (`gat report`, `gat ledger`, `gat audit --html`) carry no
+  scripts and fetch nothing. Interactivity is native `<details>` only, so a
+  report attached to an RFI or pulled out of an archive cannot change meaning.
+- **Instruments** (`gat console`, `gat view`) carry their own inline scripts
+  under the same isolation — one file, no network, no external resource — and
+  render state without ever mutating it.
+
+`gat console` is the instrument that holds the others against one specimen.
 
 ### `gat console` — one specimen, six readouts
 
@@ -186,10 +198,11 @@ compatible runtime reproduces the chain or refuses it.
 gat view gat/demo/model.ifc -o viewer.html --variations 3
 ```
 
-The standalone 3D viewer, with an optional `--decision` overlaid on the
-geometry it was taken about. The scene layer lowers walls, spaces, openings
-and doors; a world without them — a lone beam, say — is refused with a
-message that names what is missing rather than a numerical error.
+The same renderer the console embeds as FIELD, standalone, with an optional
+`--decision` overlaid on the geometry it was taken about. The scene layer
+lowers walls, spaces, openings and doors; a world without them — a lone beam,
+say — is refused with a message that names what is missing rather than a
+numerical error.
 
 ## Geometry authority
 
@@ -287,10 +300,18 @@ python validation/regenerate.py --check    # what CI runs
 
 A changed digest in that diff means a changed decision.
 
+The screenshots above are output too: every one is rebuilt from the running
+tool by [`docs/regenerate_images.py`](docs/regenerate_images.py), never
+edited. That is not free — regenerating them after the console redesign is
+what revealed that one image had been silently capturing the wrong readout —
+but a screenshot nobody can reproduce is an illustration, not evidence.
+
 ## Docs
 
 - [`docs/treatise.md`](docs/treatise.md) — architecture treatise
 - [`docs/geometry-authority-v1.md`](docs/geometry-authority-v1.md)
+- [`docs/design-language-v1.md`](docs/design-language-v1.md) — reports vs instruments, and the shared palette
+- [`docs/readout-spec-v1.md`](docs/readout-spec-v1.md) — the console's six readouts and what it declares it cannot measure
 - [`docs/world-identity-v2.md`](docs/world-identity-v2.md) — path-independent world digests
 - [`docs/kernel-v1.md`](docs/kernel-v1.md)
 - [`docs/sparse-belief-v1.md`](docs/sparse-belief-v1.md)
@@ -304,6 +325,12 @@ A changed digest in that diff means a changed decision.
 Not Revit, Archicad, CAD, a renderer, an LLM, a generic Gaussian package,
 FEM, IFC, or a twin platform. It is a computational layer that can sit
 between those representations and a decision.
+
+Not a geospatial or mapping platform either. No coordinate reference system,
+geodetic datum or survey epoch is lowered into the IR, so nothing here can be
+placed on a map without inventing a position — and an invented position is
+visual adjacency presented as evidence. The console declares that limit
+rather than reserving a map view for it.
 
 Repository: [giasonpooni/Gaussian-Architectural-Transformer-for-BIM](https://github.com/giasonpooni/Gaussian-Architectural-Transformer-for-BIM).
 Engine name is GAT; package is `gat-bim`. The repository was previously
