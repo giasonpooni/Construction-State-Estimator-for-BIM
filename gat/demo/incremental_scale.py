@@ -1,9 +1,26 @@
 """Synthetic scale probe for dense and incremental GAT propagation.
 
-This is a measurement harness, not a performance promise. It builds independent
-storey-local nonlinear dependency chains, changes one raw variable, and compares
-complete pushforward against the incremental path while reporting the dense
-state footprint and actual rows invalidated.
+This is a measurement harness, not a performance promise. It builds synthetic
+nonlinear dependency chains, changes one raw variable, and compares complete
+pushforward against the incremental path while reporting the dense state
+footprint and actual rows invalidated.
+
+Two shapes, because the answer depends entirely on which one you build:
+
+``independent``
+    Storey-local chains that share nothing. One changed variable invalidates
+    two derived rows out of ``3N``, whatever ``N`` is, so the incremental path
+    wins by roughly 2x at every size. This was the only shape the probe built,
+    and it is the easy case by construction.
+
+``coupled``
+    ``N`` walls whose areas all ride one storey ``ClearHeight`` -- the coupling
+    GAT is built around, and the one the README singles out. Changing a wall's
+    own length still invalidates two rows. Changing the shared height
+    invalidates ``2N``, and then the incremental path is about 1.5x *slower*
+    than simply recomputing everything, because it pays bookkeeping for work it
+    cannot avoid. That is the design-change workflow, so the shape that
+    measures it belongs in the harness.
 """
 
 from __future__ import annotations
@@ -67,6 +84,72 @@ def synthetic_storey_module(storeys: int) -> Module:
     )
 
 
+def coupled_storey_module(walls: int) -> Module:
+    """``walls`` walls whose areas all ride one shared storey ``ClearHeight``.
+
+    The dense-covariance regime: every derived quantity depends on the same
+    raw variable, so the full covariance is ~45% dense off the diagonal where
+    the independent shape is ~0.2%, and one design change touches every row.
+    """
+    if isinstance(walls, bool) or not isinstance(walls, int) or walls <= 0:
+        raise ValueError("walls must be a positive integer")
+    storey_id = EntityId("IfcBuildingStorey", "SYNTHETIC-STOREY-COUPLED")
+    height = VarId(storey_id, "ClearHeight")
+    height_ref = VarRef(height)
+    entities: dict[EntityId, Entity] = {
+        storey_id: Entity(
+            storey_id,
+            "Synthetic Level",
+            slots={
+                "ClearHeight": QtySlot(
+                    height, Role.RAW, Unit.M, prior_mu=3.0, prior_sigma=0.01
+                )
+            },
+        )
+    }
+    for index in range(walls):
+        wall_id = EntityId("IfcWall", f"SYNTHETIC-WALL-{index:08d}")
+        length = VarId(wall_id, "Length")
+        area = VarId(wall_id, "Area")
+        volume = VarId(wall_id, "Volume")
+        length_ref, area_ref = VarRef(length), VarRef(area)
+        entities[wall_id] = Entity(
+            wall_id,
+            f"Synthetic Wall {index}",
+            slots={
+                "Length": QtySlot(
+                    length,
+                    Role.RAW,
+                    Unit.M,
+                    prior_mu=4.0 + index * 1.0e-6,
+                    prior_sigma=0.01,
+                ),
+                "Area": QtySlot(
+                    area, Role.DERIVED, Unit.M2, expr=Mul(length_ref, height_ref)
+                ),
+                "Volume": QtySlot(
+                    volume, Role.DERIVED, Unit.M3, expr=Mul(area_ref, length_ref)
+                ),
+            },
+        )
+    return Module(entities, (), (), {"source": "gat-synthetic-coupled-scale-v1"})
+
+
+#: The shapes, and how each picks the raw variable to change. ``coupled-shared``
+#: is the design-change workflow: one storey height moving every wall with it.
+MODELS = {
+    "independent": (synthetic_storey_module, lambda vars_: vars_[0]),
+    "coupled-local": (
+        coupled_storey_module,
+        lambda vars_: next(v for v in vars_ if v.quantity != "ClearHeight"),
+    ),
+    "coupled-shared": (
+        coupled_storey_module,
+        lambda vars_: next(v for v in vars_ if v.quantity == "ClearHeight"),
+    ),
+}
+
+
 def dense_state_bytes(raw_variables: int, full_variables: int) -> int:
     """Resident bytes for belief/full view, Jacobian, and ``J @ Sigma``."""
     return 8 * (
@@ -107,14 +190,25 @@ def _best_seconds(operation, repeats: int) -> tuple[float, object]:
     return best, result
 
 
-def measure_size(storeys: int, repeats: int = 3) -> dict[str, object]:
+def measure_size(
+    storeys: int, repeats: int = 3, model: str = "independent"
+) -> dict[str, object]:
     """Measure one synthetic size without imposing a timing assertion."""
     if repeats <= 0:
         raise ValueError("repeats must be positive")
-    world = World.compile(synthetic_storey_module(storeys))
-    target = world.binding.raw_index.vars[0]
+    if model not in MODELS:
+        raise ValueError(f"model must be one of {sorted(MODELS)}")
+    build, pick_target = MODELS[model]
+    world = World.compile(build(storeys))
+    target = pick_target(world.binding.raw_index.vars)
     transformation = ShiftParameter(target, 0.01)
     belief = transformation.apply(world.binding, world.belief)
+
+    # Warm the allocator and any lazily built state, so the first timed call
+    # is not measuring setup. Without this the incremental path reads ~3x
+    # slower than it is.
+    world.with_belief(belief)
+    world.with_belief_incremental(belief)
 
     full_seconds, full_world_obj = _best_seconds(
         lambda: world.with_belief(belief),
@@ -139,8 +233,22 @@ def measure_size(storeys: int, repeats: int = 3) -> dict[str, object]:
     if not verification.passed:
         raise RuntimeError("incrementally propagated synthetic world failed invariants")
 
+    sigma = full_world_obj.full.sigma
+    side = sigma.shape[0]
+    off_diagonal = side * side - side
+    density = (
+        float(
+            (np.count_nonzero(sigma) - np.count_nonzero(np.diag(sigma)))
+            / off_diagonal
+        )
+        if off_diagonal
+        else 0.0
+    )
     return {
         "storeys": storeys,
+        "model": model,
+        "changed_variable": str(target),
+        "full_covariance_offdiagonal_density": density,
         "raw_variables": world.binding.n_raw,
         "derived_variables": len(world.binding.deps.derived_vars),
         "full_variables": world.binding.n_full,
@@ -192,13 +300,16 @@ def run_probe(
     time_cliff_seconds: float = 1.0,
     output_path: str | Path | None = None,
     quiet: bool = False,
+    model: str = "independent",
 ) -> dict[str, object]:
     """Measure requested sizes and report observed and analytical cliffs."""
     if not sizes or any(size <= 0 for size in sizes):
         raise ValueError("sizes must contain positive storey counts")
     if time_cliff_seconds <= 0.0:
         raise ValueError("time_cliff_seconds must be positive")
-    measurements = [measure_size(size, repeats) for size in sizes]
+    if model not in MODELS:
+        raise ValueError(f"model must be one of {sorted(MODELS)}")
+    measurements = [measure_size(size, repeats, model) for size in sizes]
     observed_cliff = next(
         (
             row["storeys"]
@@ -223,9 +334,12 @@ def run_probe(
             "platform": platform.platform(),
         },
         "synthetic_model": {
+            "shape": model,
             "raw_variables_per_storey": 1,
             "derived_variables_per_storey": 2,
-            "dependency_scope_per_change": 2,
+            "dependency_scope_per_change": (
+                2 if model != "coupled-shared" else "2 per wall: every derived row"
+            ),
             "covariance_representation": "dense-float64",
         },
         "time_cliff_seconds": time_cliff_seconds,
@@ -236,6 +350,14 @@ def run_probe(
             "four_gib_storeys": storeys_for_dense_budget(4 * 1024**3),
         },
         "measurements": measurements,
+        "conclusion_note": (
+            "Speedup is a property of the shape, not of the engine: an "
+            "'independent' world invalidates two rows per change at any size, "
+            "while 'coupled-shared' -- one storey height moving every wall, "
+            "which is the design-change workflow -- invalidates every derived "
+            "row and runs slower than the complete pushforward it is meant to "
+            "replace."
+        ),
         "conclusion": (
             "Incremental dependency/Jacobian and covariance-row recomputation is "
             "implemented, but the canonical raw and full covariances remain dense; "
@@ -252,7 +374,8 @@ def run_probe(
             encoding="utf-8",
         )
     if not quiet:
-        print("GAT INCREMENTAL PROPAGATION SCALE PROBE")
+        print(f"GAT INCREMENTAL PROPAGATION SCALE PROBE  [{model}]")
+        print(f"changing {measurements[0]['changed_variable']}")
         print(
             "storeys  full vars  complete(s)  incremental(s)  verify(s)  "
             "speedup  left/cov rows"
@@ -286,12 +409,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--time-cliff-seconds", type=float, default=1.0)
     parser.add_argument("--output")
+    parser.add_argument(
+        "--model",
+        choices=sorted(MODELS),
+        default="independent",
+        help="which synthetic shape to measure (see the module docstring)",
+    )
     args = parser.parse_args(argv)
     run_probe(
         tuple(args.sizes),
         repeats=args.repeats,
         time_cliff_seconds=args.time_cliff_seconds,
         output_path=args.output,
+        model=args.model,
     )
     return 0
 

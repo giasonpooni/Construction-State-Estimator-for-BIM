@@ -1,0 +1,165 @@
+{
+ "findings": [
+  "Off-diagonal covariance density is ~0.1-0.5% for the independent shape and ~44.5% once a single variable is shared. Coupling, not size, is what makes the covariance dense.",
+  "A local change stays local even in a coupled world: two covariance rows recomputed, and the incremental path wins by ~1.5-2.6x.",
+  "Changing the shared height invalidates every derived row (2N) and the incremental path becomes SLOWER than the complete pushforward it replaces: 0.76x at 128 walls, falling to 0.38x at 1024. It pays bookkeeping for work it cannot avoid.",
+  "That case is the design-change workflow, and it was the one shape the shipped probe could not build."
+ ],
+ "format": "gat-coupled-scale-reference-v1",
+ "interpretation": "The measured speedup is a property of the synthetic shape, not of the engine. Incremental propagation is the right mechanism for a local edit and the wrong one for a change that moves everything -- where the honest answer is to recompute. Neither shape changes the dense-covariance memory bound; both remain quadratic in the full variable count.",
+ "measured_on": "2026-09-13",
+ "measurements": {
+  "coupled-local": [
+   {
+    "changed_variable": "SYNTHETIC-WALL-00000000.Length",
+    "complete_pushforward_seconds": 0.005243,
+    "full_covariance_offdiagonal_density": 0.4485,
+    "full_covariance_rows_recomputed": 2,
+    "full_variables": 385,
+    "incremental_pushforward_seconds": 0.002047,
+    "measured_speedup": 2.561,
+    "storeys": 128,
+    "verification_seconds": 0.001726
+   },
+   {
+    "changed_variable": "SYNTHETIC-WALL-00000000.Length",
+    "complete_pushforward_seconds": 0.013606,
+    "full_covariance_offdiagonal_density": 0.4465,
+    "full_covariance_rows_recomputed": 2,
+    "full_variables": 769,
+    "incremental_pushforward_seconds": 0.008308,
+    "measured_speedup": 1.638,
+    "storeys": 256,
+    "verification_seconds": 0.004191
+   },
+   {
+    "changed_variable": "SYNTHETIC-WALL-00000000.Length",
+    "complete_pushforward_seconds": 0.057835,
+    "full_covariance_offdiagonal_density": 0.4455,
+    "full_covariance_rows_recomputed": 2,
+    "full_variables": 1537,
+    "incremental_pushforward_seconds": 0.038859,
+    "measured_speedup": 1.488,
+    "storeys": 512,
+    "verification_seconds": 0.020712
+   },
+   {
+    "changed_variable": "SYNTHETIC-WALL-00000000.Length",
+    "complete_pushforward_seconds": 0.366885,
+    "full_covariance_offdiagonal_density": 0.445,
+    "full_covariance_rows_recomputed": 2,
+    "full_variables": 3073,
+    "incremental_pushforward_seconds": 0.237747,
+    "measured_speedup": 1.543,
+    "storeys": 1024,
+    "verification_seconds": 0.145412
+   }
+  ],
+  "coupled-shared": [
+   {
+    "changed_variable": "SYNTHETIC-STOREY-COUPLED.ClearHeight",
+    "complete_pushforward_seconds": 0.005055,
+    "full_covariance_offdiagonal_density": 0.4485,
+    "full_covariance_rows_recomputed": 256,
+    "full_variables": 385,
+    "incremental_pushforward_seconds": 0.006613,
+    "measured_speedup": 0.764,
+    "storeys": 128,
+    "verification_seconds": 0.001767
+   },
+   {
+    "changed_variable": "SYNTHETIC-STOREY-COUPLED.ClearHeight",
+    "complete_pushforward_seconds": 0.013921,
+    "full_covariance_offdiagonal_density": 0.4465,
+    "full_covariance_rows_recomputed": 512,
+    "full_variables": 769,
+    "incremental_pushforward_seconds": 0.022281,
+    "measured_speedup": 0.625,
+    "storeys": 256,
+    "verification_seconds": 0.004845
+   },
+   {
+    "changed_variable": "SYNTHETIC-STOREY-COUPLED.ClearHeight",
+    "complete_pushforward_seconds": 0.058298,
+    "full_covariance_offdiagonal_density": 0.4455,
+    "full_covariance_rows_recomputed": 1024,
+    "full_variables": 1537,
+    "incremental_pushforward_seconds": 0.092039,
+    "measured_speedup": 0.633,
+    "storeys": 512,
+    "verification_seconds": 0.021658
+   },
+   {
+    "changed_variable": "SYNTHETIC-STOREY-COUPLED.ClearHeight",
+    "complete_pushforward_seconds": 0.369656,
+    "full_covariance_offdiagonal_density": 0.445,
+    "full_covariance_rows_recomputed": 2048,
+    "full_variables": 3073,
+    "incremental_pushforward_seconds": 0.972979,
+    "measured_speedup": 0.38,
+    "storeys": 1024,
+    "verification_seconds": 0.145763
+   }
+  ],
+  "independent": [
+   {
+    "changed_variable": "SYNTHETIC-STOREY-00000000.Height",
+    "complete_pushforward_seconds": 0.004818,
+    "full_covariance_offdiagonal_density": 0.0052,
+    "full_covariance_rows_recomputed": 2,
+    "full_variables": 384,
+    "incremental_pushforward_seconds": 0.002368,
+    "measured_speedup": 2.035,
+    "storeys": 128,
+    "verification_seconds": 0.001936
+   },
+   {
+    "changed_variable": "SYNTHETIC-STOREY-00000000.Height",
+    "complete_pushforward_seconds": 0.015611,
+    "full_covariance_offdiagonal_density": 0.0026,
+    "full_covariance_rows_recomputed": 2,
+    "full_variables": 768,
+    "incremental_pushforward_seconds": 0.009883,
+    "measured_speedup": 1.58,
+    "storeys": 256,
+    "verification_seconds": 0.006476
+   },
+   {
+    "changed_variable": "SYNTHETIC-STOREY-00000000.Height",
+    "complete_pushforward_seconds": 0.082503,
+    "full_covariance_offdiagonal_density": 0.0013,
+    "full_covariance_rows_recomputed": 2,
+    "full_variables": 1536,
+    "incremental_pushforward_seconds": 0.045093,
+    "measured_speedup": 1.83,
+    "storeys": 512,
+    "verification_seconds": 0.03291
+   },
+   {
+    "changed_variable": "SYNTHETIC-STOREY-00000000.Height",
+    "complete_pushforward_seconds": 0.424965,
+    "full_covariance_offdiagonal_density": 0.0007,
+    "full_covariance_rows_recomputed": 2,
+    "full_variables": 3072,
+    "incremental_pushforward_seconds": 0.209513,
+    "measured_speedup": 2.028,
+    "storeys": 1024,
+    "verification_seconds": 0.167098
+   }
+  ]
+ },
+ "question": "Does incremental propagation still win when quantities are coupled? The shipped incremental-scale reference measures storey-local chains that share nothing, so one change invalidates two rows at any size. GAT's own coupling story is a storey ClearHeight that every wall rides, and a design change moves exactly that variable.",
+ "runtime": {
+  "blas_threads": "process default; not pinned",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+  "numpy": "2.4.6",
+  "platform": "Linux-6.18.44-fc-v24-x86_64-with-glibc2.39",
+  "python": "3.11.15"
+ },
+ "shapes": {
+  "coupled-local": "N walls riding one shared ClearHeight; change one wall Length",
+  "coupled-shared": "the same world; change the shared ClearHeight",
+  "independent": "N storey-local chains sharing nothing; change one storey Height"
+ },
+ "status": "environment-specific-reference-not-regression-threshold"
+}

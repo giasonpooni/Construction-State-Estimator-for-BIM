@@ -247,7 +247,12 @@ ranked request to measure the variable that would settle it.
   [`docs/world-identity-v2.md`](docs/world-identity-v2.md); v1 ledgers and
   carriers do not replay on this runtime.
 - Scale is unproven at product size. The shipped inventory covers 24, 4 and 1
-  raw variables.
+  raw variables. What *is* measured: coupling, not size, is what makes the
+  covariance dense — 0.1% off-diagonal for independent quantities, 44.5% once
+  one variable is shared — and incremental propagation, which wins ~2x on a
+  local edit, runs 0.38x at 1024 walls when the shared height moves, because
+  every derived row is invalidated anyway. That is the design-change workflow.
+  See [`validation/coupled-scale-reference-v1.json`](validation/coupled-scale-reference-v1.json).
 
 ## Kernel vs satellites
 

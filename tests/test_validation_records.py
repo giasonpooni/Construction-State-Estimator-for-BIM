@@ -92,6 +92,8 @@ EXTERNALLY_PRODUCED = {
     # an explicitly environment-specific scale reference; it names the host it
     # was measured on and is a reference, not a threshold
     "incremental-scale-reference-v1.json",
+    # the same, for the coupled shape: wall-clock seconds measured on one host
+    "coupled-scale-reference-v1.json",
 }
 
 

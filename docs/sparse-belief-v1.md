@@ -10,6 +10,25 @@ state is still O(n²). That is acceptable for the demo IFC and the clinic
 beam inventory's *quantities*. It is not acceptable as the product belief
 for a storey of MEP plus scan latents.
 
+Measured, on one host, at matched sizes
+([`validation/coupled-scale-reference-v1.json`](../validation/coupled-scale-reference-v1.json)):
+
+| shape | off-diagonal density | rows recomputed | speedup at 1024 |
+|---|---|---|---|
+| independent quantities | 0.1% | 2 | 2.03x |
+| coupled, local change | 44.5% | 2 | 1.54x |
+| coupled, shared change | 44.5% | 2N | **0.38x** |
+
+Two things follow. Density is a property of *coupling*, not of size — one
+shared variable takes the covariance from 0.1% to 44.5% off-diagonal at
+every size measured. And "unchanged rows" is doing the load-bearing work in
+the sentence above: when the shared storey height moves, no row is
+unchanged, the incremental path recomputes everything *and* pays its
+bookkeeping, and it is 2.6x slower than simply recomputing. A factor graph
+whose cliques follow IFC relationships is aimed at exactly the structure
+that makes the dense case expensive, so it should be judged on the
+`coupled-shared` shape rather than the independent one.
+
 ## Decision
 
 1. Keep dense Σ as the bitwise oracle used by snapshot / OpenUSD
