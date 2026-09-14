@@ -23,6 +23,8 @@ import numpy as np
 import gat.demo
 from gat.errors import RegistrationError
 from gat.geometry.registration import (
+    BASIN_TRANSLATION_TOL,
+    BASIN_YAW_TOL,
     RigidTransformZ,
     ScanRegistrar,
     _basin_separation,
@@ -310,7 +312,65 @@ class TestBasinSeparation(RegistrationTestBase):
     def test_the_margin_is_a_declared_parameter(self):
         strict = self.registrar.register(self.scan, min_basin_margin=1e9)
         self.assertFalse(strict.accepted)
-        self.assertIn("distinct poses", strict.refusal)
+        self.assertIn("converged poses", strict.refusal)
+
+
+class ConvergedBasinTests(RegistrationTestBase):
+    """Basins are measured on converged poses, not on the starts.
+
+    Six EM iterations from a 45-degree start barely moves: on the demo the
+    eight coarse results sat within 2 degrees of the eight starts, so the gate
+    was counting its own starts and reporting eight optima that did not exist.
+    """
+
+    def test_the_gate_clusters_fewer_poses_than_there_are_starts(self) -> None:
+        self.assertLess(len(self.result.start_poses), 8)
+        self.assertEqual(len(self.result.start_poses), len(self.result.start_nlls))
+
+    def test_contenders_that_share_an_optimum_collapse_onto_it(self) -> None:
+        """The visible symptom of convergence, and the reason the count is
+        honest: several starts fall into one basin and land on the same pose,
+        so there are fewer distinct poses than contenders."""
+        poses = self.result.start_poses
+        self.assertGreater(len(poses), self.result.basin_count)
+        for index, pose in enumerate(poses):
+            with self.subTest(contender=index):
+                twin = min(
+                    (other for j, other in enumerate(poses) if j != index),
+                    key=lambda other: pose.compose_error(other)[0],
+                )
+                yaw, translation = pose.compose_error(twin)
+                if yaw <= BASIN_YAW_TOL:
+                    # Same basin: the two agree far inside the tolerance that
+                    # grouped them, not merely within it.
+                    self.assertLess(yaw, BASIN_YAW_TOL / 10.0)
+                    self.assertLess(translation, BASIN_TRANSLATION_TOL / 10.0)
+
+    def test_a_clean_scan_separates_its_basins_decisively(self) -> None:
+        """The demo building does have a 180-degree rival -- a rectangular
+        plan is nearly symmetric -- and the converged margin to it is 0.47
+        nats/point, comfortably above the 0.10 the gate asks for. The gate
+        reported 8 basins and 0.27 before it clustered converged poses."""
+        self.assertTrue(self.result.accepted)
+        self.assertGreaterEqual(self.result.basin_count, 2)
+        self.assertGreater(self.result.basin_margin, 4.0 * 0.10)
+
+    def test_clustering_is_transitive(self) -> None:
+        """A~B and B~C with A!~C is one basin, not two with a zero margin."""
+        near = math.radians(4.0)
+        chain = [
+            RigidTransformZ(0.0, (0.0, 0.0, 0.0)),
+            RigidTransformZ(near, (0.0, 0.0, 0.0)),
+            RigidTransformZ(2 * near, (0.0, 0.0, 0.0)),
+        ]
+        count, margin = _basin_separation([1.0, 1.0, 1.0], chain, 0)
+        self.assertEqual(count, 1)
+        self.assertEqual(margin, math.inf)
+
+        rival = RigidTransformZ(math.pi, (9.0, 0.0, 0.0))
+        count, margin = _basin_separation([1.0, 1.0, 1.0, 4.0], chain + [rival], 0)
+        self.assertEqual(count, 2)
+        self.assertAlmostEqual(margin, 3.0)
 
 
 if __name__ == "__main__":

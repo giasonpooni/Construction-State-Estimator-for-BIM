@@ -369,10 +369,6 @@ class ViewerHtmlTests(unittest.TestCase):
             self.assertTrue(os.path.exists(path))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class SceneRefusalTests(unittest.TestCase):
     """A world with no Gaussianizable geometry must say so."""
 
@@ -397,3 +393,6 @@ class SceneRefusalTests(unittest.TestCase):
 
         scene = derive_scene(GatSession.load_ifc(MODEL).world)
         self.assertGreater(len(scene.elements), 0)
+
+if __name__ == "__main__":
+    unittest.main()

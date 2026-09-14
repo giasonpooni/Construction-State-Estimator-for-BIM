@@ -484,10 +484,6 @@ class WalkthroughDemoTests(unittest.TestCase):
             self.assertIn('data-mode="DECISION" class="available"', html)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class PayloadWeightTests(unittest.TestCase):
     """The scene is embedded in the viewer frame; it must not ride along in
     the data block too. The readout rename moved the payload key from
@@ -515,3 +511,6 @@ class PayloadWeightTests(unittest.TestCase):
         html = render_console_html(console_payload(world, model_name="m", n=2))
         srcdoc = html[html.index('<iframe id="structure"') :]
         self.assertIn(VIEWER_SCENE_FORMAT, srcdoc)
+
+if __name__ == "__main__":
+    unittest.main()

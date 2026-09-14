@@ -212,10 +212,6 @@ class OperationTests(unittest.TestCase):
         self.assertEqual(chain.point_count, 0)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class OwnershipTests(unittest.TestCase):
     """Filtering a capture must not confiscate it."""
 
@@ -263,3 +259,6 @@ class DeclaredCropTests(unittest.TestCase):
                 with self.subTest(bound=next(iter(kwargs)), prepare=prepare.__name__):
                     with self.assertRaisesRegex(ScanArtifactError, "needs both bounds"):
                         prepare(self.cloud, **kwargs)
+
+if __name__ == "__main__":
+    unittest.main()

@@ -85,9 +85,16 @@ class RegistrationResult:
     #: Poses the starts converged to, in start order. Kept so the basin
     #: structure is auditable rather than only summarized.
     start_poses: tuple[RigidTransformZ, ...] = ()
-    #: Distinct basins the starts found, and the NLL margin from the winning
-    #: basin to the next one. ``inf`` when every start agreed, which is the
-    #: unambiguous case and not a missing measurement.
+    #: Distinct converged poses found among the contenders, and the NLL margin
+    #: from the winner to the best of the others. ``inf`` when every contender
+    #: agreed, which is the unambiguous case and not a missing measurement.
+    #:
+    #: The count is over the contenders as converged on a ``BASIN_SAMPLE_POINTS``
+    #: probe, so it resolves the structure at that density and can split a
+    #: shallow optimum the full capture merges -- measured on the demo it reads
+    #: 2 or 3 for the same scene. The *margin* is what the gate decides on, and
+    #: it is stable: 0.47 to 0.61 nats/point across 700 to 4000 points on the
+    #: demo building against 1.8e-05 for a genuinely ambiguous single wall.
     basin_count: int = 1
     basin_margin: float = math.inf
     #: Why ``accepted`` is False, or the empty string. A refusal that does
@@ -112,6 +119,35 @@ class RegistrationResult:
 BASIN_YAW_TOL = math.radians(5.0)
 BASIN_TRANSLATION_TOL = 0.25
 
+#: How far above the best coarse NLL a start is still worth refining. A start
+#: outside this window lost the coarse stage by more than any refinement is
+#: going to recover, so it is not a candidate optimum and costs nothing to
+#: drop. Inside it, two starts may still be one basin or two, and only
+#: convergence can say which.
+CONTENDER_WINDOW = 1.0
+
+#: One ``register_from`` call stops when the NLL *step* falls below ``tol``,
+#: which a slow plateau satisfies while the pose is still moving: on the demo
+#: building the "refined" contenders shifted another 2.8 to 13.7 degrees on the
+#: next call, and two pairs of them turned out to be one basin each. A pose has
+#: converged when the pose stops moving, not when the objective flattens for
+#: one step.
+#: Settled to a tenth of the basin tolerance it feeds -- enough to decide
+#: whether two contenders are the same optimum, and no tighter. Converging to
+#: arcseconds instead cost 31 s for one registration and answered the same
+#: question.
+#: Which optimum a start falls into is a coarse, global property: it does not
+#: depend on the last few thousand returns. Deciding it on a deterministic
+#: stride subsample keeps the count honest and keeps its cost off the full
+#: capture -- the same reasoning :mod:`gat.geometry.scan_filter` applies to
+#: registration itself, where pose wants coverage and not density. The final
+#: pose is still refined on every point.
+BASIN_SAMPLE_POINTS = 600
+
+CONVERGENCE_ROUNDS = 8
+CONVERGENCE_YAW = BASIN_YAW_TOL / 10.0
+CONVERGENCE_TRANSLATION = BASIN_TRANSLATION_TOL / 10.0
+
 
 def _basin_separation(
     nlls: list[float],
@@ -125,15 +161,26 @@ def _basin_separation(
     start in a *different* basin.  With one basin there is no competitor and
     the margin is infinite: an unopposed answer, not an unmeasured one.
     """
-    basins: list[list[int]] = []
-    for index, pose in enumerate(poses):
-        for basin in basins:
-            yaw, translation = pose.compose_error(poses[basin[0]])
+    # Union-find, not first-match: "within tolerance of the basin's first
+    # member" is not transitive, so a greedy pass can split one basin in two
+    # (A~B, B~C, A!~C) and report a phantom rival separated by ~0 nats.
+    parent = list(range(len(poses)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    for i in range(len(poses)):
+        for j in range(i + 1, len(poses)):
+            yaw, translation = poses[i].compose_error(poses[j])
             if yaw <= BASIN_YAW_TOL and translation <= BASIN_TRANSLATION_TOL:
-                basin.append(index)
-                break
-        else:
-            basins.append([index])
+                parent[find(i)] = find(j)
+    grouped: dict[int, list[int]] = {}
+    for index in range(len(poses)):
+        grouped.setdefault(find(index), []).append(index)
+    basins: list[list[int]] = list(grouped.values())
 
     home = next(b for b in basins if winner in b)
     rivals = [min(nlls[i] for i in b) for b in basins if b is not home]
@@ -433,6 +480,20 @@ class ScanRegistrar:
                 break
         return T, trace[-1], trace
 
+    def _converge(
+        self, scan: np.ndarray, start: RigidTransformZ
+    ) -> tuple[RigidTransformZ, float]:
+        """Refine until the pose settles, not until one NLL step is small."""
+        pose = start
+        nll = self.nll(scan, start)
+        for _ in range(CONVERGENCE_ROUNDS):
+            nxt, nll, _ = self.register_from(scan, pose)
+            yaw, translation = nxt.compose_error(pose)
+            pose = nxt
+            if yaw <= CONVERGENCE_YAW and translation <= CONVERGENCE_TRANSLATION:
+                break
+        return pose, nll
+
     def register(
         self,
         scan: np.ndarray,
@@ -443,9 +504,18 @@ class ScanRegistrar:
         """Coarse-to-fine multi-start registration.
 
         Stage A runs a few EM iterations from every yaw start at the coarse
-        smoothing scale; stage B refines the best basin to convergence,
-        then anneals to the fine scale for the final polish and the
-        information matrix.  Fully deterministic; ties break by start index.
+        smoothing scale; stage B refines every *contender* -- each start whose
+        coarse NLL is within ``CONTENDER_WINDOW`` of the best -- to
+        convergence, clusters those into basins, and anneals the winner to the
+        fine scale for the final polish and the information matrix.  Fully
+        deterministic; ties break by start index.
+
+        Converging the contenders rather than clustering the six-iteration
+        coarse results costs roughly twice the EM work of the single-refinement
+        path it replaced.  That is the price of an honest count: on the demo
+        building the coarse poses sit within 2 degrees of the eight starts they
+        began at, so clustering them reported eight optima that do not exist
+        and a margin to a rival that is not there.
 
         ``min_basin_margin`` is how much better, in nats per point, the
         winning basin must be than the best *distinct* basin.  Without it a
@@ -463,18 +533,40 @@ class ScanRegistrar:
 
         self._set_sigma(self.reg_sigma)
         best: tuple[int, float, RigidTransformZ] | None = None
-        start_nlls: list[float] = []
-        start_poses: list[RigidTransformZ] = []
+        coarse_nlls: list[float] = []
+        coarse_poses: list[RigidTransformZ] = []
         for k in range(n_starts):
             theta0 = 2.0 * math.pi * k / n_starts
             R0 = rot_z(theta0)
             t0 = model_centroid - R0 @ scan_centroid
             T0 = RigidTransformZ(theta0, tuple(t0))
             T, final_nll, _ = self.register_from(scan, T0, max_iter=6)
-            start_nlls.append(final_nll)
-            start_poses.append(T)
-            if best is None or final_nll < best[1] - 1e-12:
-                best = (k, final_nll, T)
+            coarse_nlls.append(final_nll)
+            coarse_poses.append(T)
+
+        # Six EM iterations from a 45-degree start is not a converged pose: on
+        # the demo building the eight coarse results sit within 2 degrees of
+        # the eight starts they began at, so clustering *those* measures the
+        # starts and reports eight basins that do not exist. Refine every
+        # contender to convergence first, and cluster what converged.
+        floor = min(coarse_nlls)
+        contenders = [
+            k for k, nll in enumerate(coarse_nlls)
+            if nll <= floor + CONTENDER_WINDOW
+        ]
+        # Ceiling division: the probe is at most BASIN_SAMPLE_POINTS, not
+        # 'at most one stride above it'. Floor division left a 700-point
+        # scan at stride 1, so it paid full price for the probe.
+        stride = max(1, -(-scan.shape[0] // BASIN_SAMPLE_POINTS))
+        probe = scan[::stride]
+        start_nlls: list[float] = []
+        start_poses: list[RigidTransformZ] = []
+        for k in contenders:
+            refined, refined_nll = self._converge(probe, coarse_poses[k])
+            start_nlls.append(refined_nll)
+            start_poses.append(refined)
+            if best is None or refined_nll < best[1] - 1e-12:
+                best = (len(start_nlls) - 1, refined_nll, refined)
         assert best is not None
         basin_count, basin_margin = _basin_separation(
             start_nlls, start_poses, best[0]
@@ -492,9 +584,10 @@ class ScanRegistrar:
             refusals.append(f"fit nll {nll:.4f} is not below {accept_nll:.4f}")
         if not basin_margin >= min_basin_margin:
             refusals.append(
-                f"{basin_count} distinct poses explain this scan within "
-                f"{basin_margin:.3g} nats/point (need {min_basin_margin:g}); "
-                "the scan does not determine where it was taken from"
+                f"{basin_count} converged poses fit this scan and the best two "
+                f"are within {basin_margin:.3g} nats/point (need "
+                f"{min_basin_margin:g}); the scan does not determine where it "
+                "was taken from"
             )
         return RegistrationResult(
             transform=T,

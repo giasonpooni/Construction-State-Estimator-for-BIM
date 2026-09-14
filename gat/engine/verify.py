@@ -84,6 +84,14 @@ class InvariantResult:
 @dataclass(frozen=True)
 class VerificationReport:
     results: tuple[InvariantResult, ...]
+    #: The confidence the probabilistic invariants were classified against.
+    #: A report cannot be reclassified against a *stricter* threshold after
+    #: the fact: when nothing warns, ``CONS-01``/``CONS-02`` collapse to one
+    #: aggregate row carrying only the tightest ``p_holds``, so every other
+    #: constraint between the two thresholds is simply not in the report.
+    #: Recording what it was run at is what lets a reader refuse rather than
+    #: guess.
+    confidence: float = DEFAULT_INVARIANT_CONFIDENCE
 
     @property
     def passed(self) -> bool:
@@ -574,4 +582,4 @@ def run_invariants(
     results: list[InvariantResult] = []
     for inv in ALL_INVARIANTS:
         results.extend(inv.check(world, confidence))
-    return VerificationReport(tuple(results))
+    return VerificationReport(tuple(results), confidence=confidence)

@@ -61,6 +61,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import hashlib
+from types import MappingProxyType
 
 import numpy as np
 
@@ -106,6 +107,11 @@ class FilterStep:
     advisory: str = ""
 
     def __post_init__(self) -> None:
+        # Frozen means frozen: a live dict on a frozen dataclass let a step
+        # that dropped 90% of a capture at 0.30 m be rewritten to claim 0.05 m
+        # after the fact, and changed its own hash out from under any set it
+        # was already in.
+        object.__setattr__(self, "parameters", MappingProxyType(dict(self.parameters)))
         if not self.method.strip():
             raise ValueError("filter step needs a method name")
         if self.points_in < 0 or self.points_out < 0:
@@ -157,6 +163,7 @@ class FilteredScan:
     points: np.ndarray
     source_digest: str
     steps: tuple[FilterStep, ...] = field(default_factory=tuple)
+    _digest: str = field(default="", repr=False, compare=False)
 
     def __post_init__(self) -> None:
         # Copy before freezing. ``_validated`` returns the caller's own array
@@ -166,6 +173,11 @@ class FilteredScan:
         array = np.array(_validated(self.points, "filtered points"), copy=True)
         array.setflags(write=False)
         object.__setattr__(self, "points", array)
+        # The array is frozen, so its digest cannot change -- and __eq__,
+        # __hash__, to_dict and render all read it. Re-hashing 11 MB of
+        # float64 on every set insertion made a working-size capture cost
+        # seconds in pure repeat work.
+        object.__setattr__(self, "_digest", scan_digest(array))
         if not self.source_digest:
             raise ValueError("a filtered scan must name its source digest")
 
@@ -184,7 +196,7 @@ class FilteredScan:
     @property
     def digest(self) -> str:
         """Digest of the filtered cloud -- what the registrar will bind to."""
-        return scan_digest(self.points)
+        return self._digest
 
     @property
     def point_count(self) -> int:
@@ -246,8 +258,20 @@ def _voxel_keys(points: np.ndarray, voxel_m: float) -> tuple[np.ndarray, np.ndar
     where the building sits in world coordinates.
     """
     origin = points.min(axis=0)
-    keys = np.floor((points - origin) / voxel_m).astype(np.int64)
-    return keys, origin
+    scaled = np.floor((points - origin) / voxel_m)
+    # The cast to int64 is undefined for anything the type cannot hold, and
+    # numpy only warns. A voxel small enough to overflow it silently collapsed
+    # 50 measured returns to 4 and recorded that as a declared reduction --
+    # the one thing this module exists to prevent.
+    if scaled.size and (
+        not np.isfinite(scaled).all()
+        or scaled.max() > float(np.iinfo(np.int64).max - 2)
+    ):
+        raise ScanArtifactError(
+            f"voxel size {voxel_m:g} m is too small to index this cloud's "
+            f"{float(np.ptp(points, axis=0).max()):g} m extent"
+        )
+    return scaled.astype(np.int64), origin
 
 
 def _require_positive(value: float, name: str) -> float:
@@ -436,6 +460,10 @@ def density_outlier_removal(
     points = scan.points
     parameters = {"radius_m": radius_m, "min_neighbours": float(min_neighbours)}
     if points.shape[0] == 0:
+        # Same keys as every other return, so a consumer of the provenance
+        # record does not KeyError on exactly the case -- a crop that emptied
+        # the cloud -- most worth reporting on.
+        parameters["median_neighbours"] = 0.0
         return scan.then(
             FilterStep("density_outlier_removal", parameters, 0, 0), points
         )
@@ -522,6 +550,31 @@ def _crop_requested(
     return lower is not None
 
 
+def _prepare(
+    points: np.ndarray,
+    lower: tuple[float, float, float] | None,
+    upper: tuple[float, float, float] | None,
+    *,
+    margin_m: float,
+    clean_radius_m: float,
+    min_neighbours: int,
+    voxel_m: float,
+) -> FilteredScan:
+    """Crop, clean, downsample -- written once.
+
+    The module docstring measures this order as load-bearing: the wrong one
+    registered 79 arcmin from truth where this one registered 2. It was
+    written out twice, once per profile, so a future fix or an added step had
+    to be applied in both places or one entry point would silently keep the
+    order that fails.
+    """
+    chain = begin(points)
+    if _crop_requested(lower, upper):
+        chain = crop_to_bounds(chain, lower, upper, margin_m)
+    chain = density_outlier_removal(chain, clean_radius_m, min_neighbours)
+    return voxel_downsample(chain, voxel_m)
+
+
 def prepare_for_pose(
     points: np.ndarray,
     lower: tuple[float, float, float] | None = None,
@@ -538,11 +591,15 @@ def prepare_for_pose(
     measures. The defaults suit a terrestrial scan of a storey; a coarser
     ``voxel_m`` trades registration cost against pose precision.
     """
-    chain = begin(points)
-    if _crop_requested(lower, upper):
-        chain = crop_to_bounds(chain, lower, upper, margin_m)
-    chain = density_outlier_removal(chain, clean_radius_m, min_neighbours)
-    return voxel_downsample(chain, voxel_m)
+    return _prepare(
+        points,
+        lower,
+        upper,
+        margin_m=margin_m,
+        clean_radius_m=clean_radius_m,
+        min_neighbours=min_neighbours,
+        voxel_m=voxel_m,
+    )
 
 
 def prepare_for_measurement(
@@ -561,11 +618,15 @@ def prepare_for_measurement(
     but a fine voxel: a face measurement wants the returns on that face, and
     a local as-built defect is exactly what coarse downsampling would erase.
     """
-    chain = begin(points)
-    if _crop_requested(lower, upper):
-        chain = crop_to_bounds(chain, lower, upper, margin_m)
-    chain = density_outlier_removal(chain, clean_radius_m, min_neighbours)
-    return voxel_downsample(chain, voxel_m)
+    return _prepare(
+        points,
+        lower,
+        upper,
+        margin_m=margin_m,
+        clean_radius_m=clean_radius_m,
+        min_neighbours=min_neighbours,
+        voxel_m=voxel_m,
+    )
 
 
 __all__ = [

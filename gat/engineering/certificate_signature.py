@@ -7,7 +7,7 @@ closed. This is identity, not issuer accreditation.
 There is no default trust store. ``keys`` is a required argument on both
 signing and verification, and an empty store is refused rather than treated
 as "trust nothing, silently". An earlier version fell back to
-:func:`test_trust_store` when ``keys`` was omitted, which meant a caller who
+:func:`fixture_trust_store` when ``keys`` was omitted, which meant a caller who
 forgot the argument would accept anything signed with the published test
 secret below. That secret is in this file, in the repository, and in every
 published copy of it: it authenticates nothing.
@@ -48,7 +48,7 @@ class CertificateSignature:
         }
 
 
-def test_trust_store() -> dict[str, bytes]:
+def fixture_trust_store() -> dict[str, bytes]:
     """The repository's own fixture key. Not a production trust store.
 
     Callers must pass this explicitly; nothing falls back to it.
@@ -61,7 +61,7 @@ def _resolve(keys: dict[str, bytes] | None, action: str) -> dict[str, bytes]:
         raise ValueError(
             f"{action} requires an explicit non-empty trust store; there is no "
             "default key set. Pass keys={key_id: secret}, or "
-            "test_trust_store() for this repository's own fixtures."
+            "fixture_trust_store() for this repository's own fixtures."
         )
     return keys
 

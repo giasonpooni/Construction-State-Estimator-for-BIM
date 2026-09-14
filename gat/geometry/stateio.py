@@ -285,7 +285,7 @@ def derive_scene(
             "this world has no Gaussianizable geometry: the scene layer "
             "lowers IfcWall, IfcSpace, IfcOpeningElement and IfcDoor, and "
             f"this world contains {', '.join(present) or 'nothing'}. "
-            "Surfaces that need a scene (gat view, gat workbench STRUCTURE, "
+            "Surfaces that need a scene (gat view, gat console FIELD, "
             "clash) cannot render it."
         )
 

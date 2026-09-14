@@ -363,10 +363,6 @@ class VariantToMeasurementTests(unittest.TestCase):
             plan_variant_evidence(self.session.world, self.report, [])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class GateReadsTheWholeReportTests(unittest.TestCase):
     """What the gate consults, and on whose threshold.
 
@@ -446,23 +442,62 @@ class GateReadsTheWholeReportTests(unittest.TestCase):
         )
         self.assertEqual(len({request.check_id for request in requests}), 3)
 
-    def test_the_policy_confidence_governs_not_the_report_s(self) -> None:
-        """The report is classified again against what the policy declared."""
+    def test_a_report_can_be_narrowed_but_not_tightened(self) -> None:
+        """Reclassifying against the policy is only sound one way.
+
+        Below its own threshold a passing probabilistic invariant is a single
+        aggregate row carrying the tightest p_holds under the label "bounds",
+        so the constraints between the report's confidence and a stricter
+        policy's are not in the report at all. Reading them out of it gave one
+        phantom constraint named after the aggregate.
+        """
         lax = run_invariants(self.session.world, confidence=0.50)
+        self.assertEqual(lax.confidence, 0.50)
         self.assertEqual(lax.warnings, (), "nothing is a warning at 0.50")
+
         tolerant = evaluate_acceptance_case(
             self.case,
             policy=replace(self.review, invariant_confidence=0.50),
             verification=lax,
         )
         self.assertIs(tolerant.disposition, AcceptanceDisposition.ACCEPT)
+
         strict = evaluate_acceptance_case(
             self.case,
             policy=replace(self.review, invariant_confidence=0.999),
             verification=lax,
         )
         self.assertIs(strict.disposition, AcceptanceDisposition.REQUEST_EVIDENCE)
-        self.assertEqual(len(strict.variant_constraints), 1)
+        self.assertEqual(
+            strict.variant_constraints, (), "no constraint is invented from a label"
+        )
+        self.assertTrue(
+            any("cannot be tightened" in reason for reason in strict.reasons)
+        )
+
+    def test_narrowing_drops_a_constraint_the_report_flagged(self) -> None:
+        report = run_invariants(self.session.world)
+        self.assertTrue(report.warnings)
+        narrowed = evaluate_acceptance_case(
+            self.case,
+            policy=replace(self.review, invariant_confidence=0.50),
+            verification=report,
+        )
+        self.assertIs(narrowed.disposition, AcceptanceDisposition.ACCEPT)
+
+    def test_a_variant_request_names_a_measurable_constraint(self) -> None:
+        """Not the aggregate label the invariant reports a pass under."""
+        outcome = evaluate_acceptance_case(
+            self.case, policy=self.review, verification=run_invariants(self.session.world)
+        )
+        targets = [
+            request.target
+            for request in outcome.evidence_requests
+            if request.action == "MEASURE_VARIANT_CONSTRAINT"
+        ]
+        self.assertEqual(len(targets), 1)
+        self.assertNotIn(targets[0], {"bounds", "nonneg"})
+        self.assertIn("<=", targets[0])
 
     def test_the_warn_residual_follows_the_confidence_that_fired(self) -> None:
         """It was pinned at two sigma, so a run at 0.999 recorded a number that
@@ -479,3 +514,6 @@ class GateReadsTheWholeReportTests(unittest.TestCase):
         )
         self.assertGreater(_z_for(0.999), 2.0)
         self.assertNotEqual(loose.residual, tight.residual)
+
+if __name__ == "__main__":
+    unittest.main()

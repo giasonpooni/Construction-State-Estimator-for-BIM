@@ -154,29 +154,48 @@ def evaluate_acceptance_case(
     )
     variant: tuple[tuple[str, float], ...] = ()
     failed: tuple[tuple[str, str], ...] = ()
+    stale_report = ""
     if verification is not None:
         failed = tuple(
             (result.invariant_id, result.subject) for result in verification.failures
         )
         # Classify against the confidence *this policy* declared, not against
-        # whatever the caller happened to hand ``run_invariants``. Reading
-        # ``verification.warnings`` took the report's own threshold, so a
-        # policy asking for 0.999 silently accepted a constraint holding at
-        # 0.98 while recording the stricter number.
+        # whatever the caller happened to hand ``run_invariants``. Reading the
+        # warnings as-is took the report's own threshold, so a policy asking
+        # for 0.999 silently accepted a constraint holding at 0.98 while
+        # recording the stricter number.
         confidence = getattr(
             policy, "invariant_confidence", DEFAULT_INVARIANT_CONFIDENCE
         )
-        variant = tuple(
-            (result.subject, result.p_holds)
-            for result in verification.results
-            if result.p_holds is not None
-            and result.p_holds < confidence
-            and result.status is not Status.FAIL
+        report_confidence = getattr(
+            verification, "confidence", DEFAULT_INVARIANT_CONFIDENCE
         )
+        if confidence > report_confidence + 1e-12:
+            # Narrowing a report is sound; widening it is not. Below its own
+            # threshold a passing probabilistic invariant is one aggregate row
+            # carrying the tightest p_holds, so the constraints between the
+            # two thresholds are not in this report to be found. Say so.
+            stale_report = (
+                f"verification was classified at {report_confidence:.6f} but "
+                f"this policy requires {confidence:.6f}; re-run the invariants "
+                "at the policy's confidence -- a report cannot be tightened "
+                "after the fact"
+            )
+        else:
+            stale_report = ""
+            variant = tuple(
+                (result.subject, result.p_holds)
+                for result in verification.warnings
+                if result.p_holds is not None and result.p_holds < confidence
+            )
 
     disposition = outcome.disposition
     reasons = list(outcome.reasons)
     generated = list(outcome.evidence_requests)
+
+    if stale_report and disposition is AcceptanceDisposition.ACCEPT:
+        disposition = AcceptanceDisposition.REQUEST_EVIDENCE
+        reasons.append(stale_report)
 
     if failed:
         # A world that fails its own invariants cannot be accepted, and asking

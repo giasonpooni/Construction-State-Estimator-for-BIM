@@ -28,7 +28,7 @@ from gat.engineering.beam import BeamBendingCheck, BeamBendingEvaluator
 from gat.engineering.certificate_signature import (
     TEST_KEY_ID,
     sign_certificate_bytes,
-    test_trust_store,
+    fixture_trust_store,
     verify_certificate_bytes,
 )
 from gat.engineering.material_certificate import read_material_certificate
@@ -272,7 +272,7 @@ def build_beam_records() -> dict[str, dict]:
     certificate_bytes = CERTIFICATE.read_bytes()
     # This repository's own fixture key, named explicitly: the packet proves
     # the certificate bytes are unaltered, not that an issuer vouched for them.
-    trust_store = test_trust_store()
+    trust_store = fixture_trust_store()
     signature = sign_certificate_bytes(
         certificate_bytes, key_id=TEST_KEY_ID, keys=trust_store
     )

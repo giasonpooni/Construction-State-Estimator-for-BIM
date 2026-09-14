@@ -100,10 +100,6 @@ class PlyScanIoTests(unittest.TestCase):
         np.testing.assert_allclose(points, scene.cloud.means, rtol=0.0, atol=1e-6)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class HostileArtifactTests(unittest.TestCase):
     """The declared vertex count is third-party input, not a promise.
 
@@ -185,3 +181,6 @@ class TrailingNewlineTests(unittest.TestCase):
                 )
                 with self.assertRaisesRegex(ScanArtifactError, "can hold at most"):
                     load_ply_points(path)
+
+if __name__ == "__main__":
+    unittest.main()

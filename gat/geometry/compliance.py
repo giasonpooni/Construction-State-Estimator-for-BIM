@@ -99,9 +99,14 @@ class ComplianceReport:
                 "nothing was established"
             )
         else:
-            worst = min(self.unresolved, key=lambda r: r.p_satisfied)
+            # Every row that is not a pass, not only the canonical MARGINAL:
+            # status is an unvalidated str on a public dataclass, and render()
+            # is the fail-path formatter -- the one function that must not
+            # raise on its way to reporting a problem.
+            unsettled = [r for r in self.rows if r.status != "PASS"]
+            worst = min(unsettled, key=lambda r: r.p_satisfied)
             verdict = (
-                f"-> UNRESOLVED {len(self.unresolved)} margin(s) the belief "
+                f"-> UNRESOLVED {len(unsettled)} margin(s) the belief "
                 f"cannot settle; weakest {worst.rule} at P {worst.p_satisfied:.4f}"
             )
         return "\n".join([head] + [r.render() for r in self.rows] + [verdict])

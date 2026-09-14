@@ -255,7 +255,7 @@ class RecordHonestyTests(unittest.TestCase):
 
     def test_the_field_packet_signature_verifies(self) -> None:
         from gat.engineering.certificate_signature import (
-            test_trust_store,
+            fixture_trust_store,
             verify_certificate_bytes,
         )
 
@@ -264,14 +264,14 @@ class RecordHonestyTests(unittest.TestCase):
         self.assertTrue(packet["signature_verified"])
         self.assertTrue(
             verify_certificate_bytes(
-                source.read_bytes(), packet["signature"], keys=test_trust_store()
+                source.read_bytes(), packet["signature"], keys=fixture_trust_store()
             ),
             "the shipped HMAC does not verify against the certificate bytes",
         )
 
     def test_tampered_certificate_bytes_fail_the_packet_signature(self) -> None:
         from gat.engineering.certificate_signature import (
-            test_trust_store,
+            fixture_trust_store,
             verify_certificate_bytes,
         )
 
@@ -279,7 +279,7 @@ class RecordHonestyTests(unittest.TestCase):
         source = (REPO / packet["source_path"]).read_bytes()
         self.assertFalse(
             verify_certificate_bytes(
-                source + b" ", packet["signature"], keys=test_trust_store()
+                source + b" ", packet["signature"], keys=fixture_trust_store()
             ),
             "the packet signature accepted altered certificate bytes",
         )

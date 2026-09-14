@@ -16,7 +16,7 @@ import gat.demo
 from gat.engineering.certificate_signature import (
     TEST_KEY_ID,
     sign_certificate_bytes,
-    test_trust_store,
+    fixture_trust_store,
     verify_certificate_bytes,
 )
 from gat.engineering.material_certificate import read_material_certificate
@@ -28,7 +28,7 @@ CERTIFICATE = Path(gat.demo.__file__).parent / "material_certificate.json"
 class CertificateSignatureTests(unittest.TestCase):
     def setUp(self) -> None:
         self.body = CERTIFICATE.read_bytes()
-        self.keys = test_trust_store()
+        self.keys = fixture_trust_store()
         self.signature = sign_certificate_bytes(
             self.body, key_id=TEST_KEY_ID, keys=self.keys
         )
@@ -62,7 +62,7 @@ class TrustStoreIsRequiredTests(unittest.TestCase):
     def setUp(self) -> None:
         self.body = CERTIFICATE.read_bytes()
         self.signature = sign_certificate_bytes(
-            self.body, key_id=TEST_KEY_ID, keys=test_trust_store()
+            self.body, key_id=TEST_KEY_ID, keys=fixture_trust_store()
         )
 
     def test_verification_without_a_store_is_a_type_error(self) -> None:
@@ -92,7 +92,7 @@ class TrustStoreIsRequiredTests(unittest.TestCase):
         )
 
     def test_the_fixture_key_is_labelled_as_such(self) -> None:
-        store = test_trust_store()
+        store = fixture_trust_store()
         self.assertEqual(list(store), [TEST_KEY_ID])
         self.assertIn(b"not-for-production", store[TEST_KEY_ID])
 
