@@ -123,5 +123,5 @@ FEM, IFC, or a twin platform. It is a computational layer that can sit
 between those representations and a decision.
 
 Repository: [giasonpooni/BIM-State-Transformer-Engine-WIP](https://github.com/giasonpooni/BIM-State-Transformer-Engine-WIP).
-Engine name is GAT; package is `gat-bim`. Rename the GitHub repo when you are
+Engine name is CSE; package is `gat-bim`. Rename the GitHub repo when you are
 ready — GitHub keeps redirects from the old URL.
