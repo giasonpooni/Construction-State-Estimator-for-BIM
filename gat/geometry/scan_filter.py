@@ -55,6 +55,20 @@ Registration needs sparse coverage over the whole extent; the clearance
 measurement needs local density on the face under assessment. Both chains
 start from the same source digest, so a receipt can name the one capture that
 produced both.
+
+One limit on that, stated rather than discovered: the likelihood chain binds
+its posterior to the *exact* points that were registered
+(:meth:`ScanRegistrar.posterior_at` compares scan digests), so today a single
+reduction has to serve both purposes and :func:`prepare_for_measurement`
+cannot be handed to :func:`adapt_clearance_likelihood` on the strength of a
+pose fitted to :func:`prepare_for_pose`. The digest check is doing real work
+-- it is what stops a transform being reused for different observations --
+and carrying a pose across to a sibling reduction needs the source digest to
+become the thing that binds, in the registration, the evidence report and the
+evidence plan together. Until that exists, pick one voxel that serves the
+coverage the pose needs and the density the face needs;
+:mod:`tests.test_surface_capture_chain` measures where that window is on the
+shipped model.
 """
 
 from __future__ import annotations

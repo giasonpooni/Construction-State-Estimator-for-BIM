@@ -67,6 +67,42 @@ right formula only while the residual is independent noise. A face that
 fails the gate is not a support plane, and scanning it harder does not make
 its mean one.
 
+## What a surface capture does that a drawn scan does not
+
+Every scan this runtime was measured against until now came from
+`synthesize_scan`, which draws points from the model's own Gaussian mixture.
+That makes the estimator's job well posed by construction: the data really
+does come from the density being fitted. A scanner does not oblige.
+
+The elements are solids. A wall is a 0.3 m slab whose Gaussians fill it; a
+scanner sees one face. Fitting face returns to a volume pulls the model
+toward the side that was measured, and the fit's own information matrix
+cannot see it — the optimum is sharp, it is simply in the wrong place.
+Measured on a four-station simulated survey of the shipped model, with
+occlusion, range-dependent noise, mixed pixels, clutter and stray returns:
+the pose lands 0.15 m out while `pose_sigma` reports 6 mm, and the
+registration accepts it.
+
+Nothing downstream is fooled, because nothing downstream trusts it. The
+independent pose is what the measurement is taken at; the fit is used for
+association, and the agreement between the two is checked. That check
+refuses this capture at m² of 221 against a gate of 16.
+
+It is not the only thing that refuses it, and the chain does not rest on any
+one gate:
+
+| Reduction | Points | Pose error | What refuses it |
+|---|---|---|---|
+| 0.70 m voxel | 356 | 56 mm | face mass — 2.8 effective points on the face (pose m² is 15, under the gate) |
+| 0.50 m voxel | 729 | 150 mm | independent pose, m² 221 |
+| 0.30 m voxel | 2017 | 88 mm | independent pose, m² 183 |
+| 0.12 m voxel | 11949 | 42 mm | face scatter — 21.7 mm rms against a declared 10 mm sensor |
+
+The last row is the declared-sensor gate doing exactly what it says: the
+simulated instrument delivers range-dependent error the declaration does not
+cover, and the face residual is held to the declaration. `tests/
+test_surface_capture_chain.py` holds this sequence.
+
 ## Beam mapping
 
 `BeamGeometryStatus` from the IFC adapter maps as:
