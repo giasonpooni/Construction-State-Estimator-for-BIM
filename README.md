@@ -1,4 +1,4 @@
-# Construction State Filter for BIM (WIP).
+# Construction State Estimator for BIM (WIP).
 
 Portable **evidence-to-decision** runtime for BIM. GAT compiles IFC design
 intent into an auditable architectural belief, conditions that belief on
@@ -116,7 +116,7 @@ the acceptance / beam / RFI slice. See [`docs/kernel-v1.md`](docs/kernel-v1.md).
 - [`docs/workflow-deployment-v1.md`](docs/workflow-deployment-v1.md)
 - [`docs/real-ifc-validation-v1.md`](docs/real-ifc-validation-v1.md)
 
-## What This CSF is not
+## What This CSE is not
 
 Not Revit, Archicad, CAD, a renderer, an LLM, a generic Gaussian package,
 FEM, IFC, or a twin platform. It is a computational layer that can sit
