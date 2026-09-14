@@ -1,4 +1,4 @@
-# GAT — Gaussian Architectural Transformer (WIP)
+# Construction State Filter for BIM (WIP).
 
 Portable **evidence-to-decision** runtime for BIM. GAT compiles IFC design
 intent into an auditable architectural belief, conditions that belief on
