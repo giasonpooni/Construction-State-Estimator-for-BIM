@@ -70,7 +70,7 @@ class ScanLikelihoodTests(unittest.TestCase):
             nll=0.0,
             nll_trace=(),
             coarse_trace=(),
-            start_nlls=(),
+            converged_nlls=(),
             info_matrix=np.diag([1.0e4] * 4),
             accepted=True,
             scan_digest=cls.scan_digest,

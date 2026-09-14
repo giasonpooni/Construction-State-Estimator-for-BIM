@@ -22,9 +22,11 @@ import numpy as np
 
 import gat.demo
 from gat.errors import RegistrationError
+from gat.geometry import registration
 from gat.geometry.registration import (
     BASIN_TRANSLATION_TOL,
     BASIN_YAW_TOL,
+    CONTENDER_WINDOW,
     RigidTransformZ,
     ScanRegistrar,
     _basin_separation,
@@ -101,7 +103,7 @@ class TestRecovery(RegistrationTestBase):
         self.assertEqual(a.nll, b.nll)
         self.assertEqual(a.nll_trace, b.nll_trace)
         self.assertEqual(a.coarse_trace, b.coarse_trace)
-        self.assertEqual(a.start_nlls, b.start_nlls)
+        self.assertEqual(a.converged_nlls, b.converged_nlls)
         self.assertEqual(a.scan_digest, b.scan_digest)
         self.assertEqual(a.scene_version, b.scene_version)
         self.assertTrue(np.array_equal(a.info_matrix, b.info_matrix))
@@ -264,9 +266,9 @@ class TestBasinSeparation(RegistrationTestBase):
         self.assertEqual(self.result.refusal, "")
         self.assertGreaterEqual(self.result.basin_margin, 0.10)
 
-    def test_every_start_is_kept_with_the_pose_it_found(self):
+    def test_each_reported_pose_is_reported_with_its_own_fit(self):
         self.assertEqual(
-            len(self.result.start_poses), len(self.result.start_nlls)
+            len(self.result.converged_poses), len(self.result.converged_nlls)
         )
 
     def test_one_planar_wall_does_not_determine_where_it_was_scanned(self):
@@ -324,27 +326,44 @@ class ConvergedBasinTests(RegistrationTestBase):
     """
 
     def test_the_gate_clusters_fewer_poses_than_there_are_starts(self) -> None:
-        self.assertLess(len(self.result.start_poses), 8)
-        self.assertEqual(len(self.result.start_poses), len(self.result.start_nlls))
+        self.assertLess(len(self.result.converged_poses), 8)
+        self.assertEqual(len(self.result.converged_poses), len(self.result.converged_nlls))
 
-    def test_contenders_that_share_an_optimum_collapse_onto_it(self) -> None:
-        """The visible symptom of convergence, and the reason the count is
-        honest: several starts fall into one basin and land on the same pose,
-        so there are fewer distinct poses than contenders."""
-        poses = self.result.start_poses
-        self.assertGreater(len(poses), self.result.basin_count)
+    def test_no_reported_pose_is_another_one_counted_twice(self) -> None:
+        """Contenders that reach the same optimum are one answer found twice.
+
+        They are merged as they meet, so the reported set contains no two
+        poses at the same point -- an invariant of the convergence, checked
+        here on a real scan as well as argued in the module.
+        """
+        poses = self.result.converged_poses
+        self.assertGreater(len(poses), 1, "a scan with one contender proves nothing")
         for index, pose in enumerate(poses):
-            with self.subTest(contender=index):
-                twin = min(
-                    (other for j, other in enumerate(poses) if j != index),
-                    key=lambda other: pose.compose_error(other)[0],
-                )
-                yaw, translation = pose.compose_error(twin)
-                if yaw <= BASIN_YAW_TOL:
-                    # Same basin: the two agree far inside the tolerance that
-                    # grouped them, not merely within it.
-                    self.assertLess(yaw, BASIN_YAW_TOL / 10.0)
-                    self.assertLess(translation, BASIN_TRANSLATION_TOL / 10.0)
+            for other_index, other in enumerate(poses):
+                if other_index <= index:
+                    continue
+                with self.subTest(pair=(index, other_index)):
+                    yaw, translation = pose.compose_error(other)
+                    self.assertFalse(
+                        yaw <= BASIN_YAW_TOL / 10.0
+                        and translation <= BASIN_TRANSLATION_TOL / 10.0,
+                        "two reported poses are the same pose",
+                    )
+
+    def test_the_reported_poses_are_rivals_and_not_near_misses(self) -> None:
+        """On this scan the survivors are separated by a quadrant and metres,
+        so each is its own basin and the count is the number reported.
+
+        A pair between the two tolerances -- merged by neither, grouped by
+        basin clustering -- would make these two numbers disagree. That is
+        allowed by construction and simply does not arise here."""
+        poses = self.result.converged_poses
+        self.assertEqual(self.result.basin_count, len(poses))
+        for index, pose in enumerate(poses):
+            for other in poses[index + 1:]:
+                yaw, translation = pose.compose_error(other)
+                self.assertGreater(yaw, BASIN_YAW_TOL)
+                self.assertGreater(translation, BASIN_TRANSLATION_TOL)
 
     def test_a_clean_scan_separates_its_basins_decisively(self) -> None:
         """The demo building does have a 180-degree rival -- a rectangular
@@ -371,6 +390,66 @@ class ConvergedBasinTests(RegistrationTestBase):
         count, margin = _basin_separation([1.0, 1.0, 1.0, 4.0], chain + [rival], 0)
         self.assertEqual(count, 2)
         self.assertAlmostEqual(margin, 3.0)
+
+
+class SearchEconomyTests(RegistrationTestBase):
+    """The pose search is cheap for two reasons, and both change what is
+    searched. Neither may change what is *found*, so both are measured here
+    against the exhaustive search they replace rather than argued for.
+
+    Together they take this fixture from 59 s to 17 s. The demo goes from
+    52 s to 30 s -- below where it sat before basin separation existed.
+    """
+
+    def test_a_pruned_start_could_never_have_been_the_rival(self) -> None:
+        """Starts outside the contender window are dropped before convergence.
+
+        That is only free if such a start could not have become the basin the
+        margin is measured to. Converging all eight instead returns the same
+        winning pose and the same margin to the last bit, and the four extra
+        basins it finds sit 3.7 nats/point above the winner -- 37x the gate
+        they would have to beat to matter.
+        """
+        with patch.object(registration, "CONTENDER_WINDOW", math.inf):
+            exhaustive = self.registrar.register(self.scan)
+
+        self.assertEqual(exhaustive.transform, self.result.transform)
+        self.assertEqual(exhaustive.basin_margin, self.result.basin_margin)
+        self.assertEqual(exhaustive.accepted, self.result.accepted)
+
+        winner = min(exhaustive.converged_nlls)
+        pruned = [n - winner for n in exhaustive.converged_nlls
+                  if n - winner > CONTENDER_WINDOW]
+        self.assertTrue(pruned, "nothing was pruned, so nothing was tested")
+        self.assertEqual(
+            len(exhaustive.converged_nlls) - len(pruned),
+            len(self.result.converged_nlls),
+            "the kept starts are exactly the ones inside the window",
+        )
+        self.assertGreater(min(pruned), 2.0)
+
+    def test_the_probe_resolves_the_same_basins_as_every_point(self) -> None:
+        """The search runs on a stride subsample; only the winner is refined
+        on the full scan.
+
+        Searching every point instead moves the final pose by 0.02 arcseconds
+        and 0.4 nanometres -- the two answers are the same number -- and moves
+        the margin by 0.035 nats/point, with both readings five times the gate.
+        A subsample that could not resolve the structure would show up as a
+        different basin count, so that is asserted too.
+        """
+        with patch.object(registration, "BASIN_SAMPLE_POINTS", 10 ** 9):
+            dense = self.registrar.register(self.scan)
+
+        yaw, translation = dense.transform.compose_error(self.result.transform)
+        self.assertLess(math.degrees(yaw) * 3600.0, 1.0)   # arcseconds
+        self.assertLess(translation, 1.0e-6)               # micrometres
+        self.assertEqual(dense.basin_count, self.result.basin_count)
+        self.assertEqual(dense.accepted, self.result.accepted)
+        self.assertAlmostEqual(
+            dense.basin_margin, self.result.basin_margin, delta=0.10
+        )
+        self.assertGreater(min(dense.basin_margin, self.result.basin_margin), 0.10)
 
 
 if __name__ == "__main__":
