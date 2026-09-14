@@ -42,6 +42,7 @@
   "disposition": "ACCEPT",
   "evidence_receipt_ids": [],
   "evidence_requests": [],
+  "failed_invariants": [],
   "insufficient_geometry_check_ids": [],
   "may_authorize": true,
   "policy_id": "design-review-v1",

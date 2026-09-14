@@ -214,3 +214,52 @@ class OperationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OwnershipTests(unittest.TestCase):
+    """Filtering a capture must not confiscate it."""
+
+    def test_the_callers_cloud_stays_writable(self) -> None:
+        cloud = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])
+        chain = F.begin(cloud)
+        cloud[0, 0] = 9.0  # the caller still owns this array
+        self.assertEqual(chain.points[0, 0], 0.0, "and the copy did not follow")
+
+    def test_the_filtered_points_are_frozen(self) -> None:
+        chain = F.begin(np.zeros((4, 3)))
+        with self.assertRaises(ValueError):
+            chain.points[0, 0] = 1.0
+
+    def test_a_scan_compares_and_hashes_by_its_digest(self) -> None:
+        """A frozen dataclass over an ndarray cannot use the generated ones."""
+        same = F.begin(np.zeros((4, 3))), F.begin(np.zeros((4, 3)))
+        self.assertEqual(*same)
+        self.assertEqual(len(set(same)), 1)
+        self.assertNotEqual(same[0], F.begin(np.ones((4, 3))))
+
+    def test_a_step_hashes_despite_holding_a_dict(self) -> None:
+        step = F.FilterStep("m", {"a": 1.0, "b": 2.0}, 4, 2)
+        self.assertEqual(hash(step), hash(F.FilterStep("m", {"b": 2.0, "a": 1.0}, 4, 2)))
+        self.assertEqual(len({step, F.FilterStep("other", {}, 1, 1)}), 2)
+
+
+class DeclaredCropTests(unittest.TestCase):
+    """A crop that did not happen must not read as one nobody asked for."""
+
+    def setUp(self) -> None:
+        self.cloud = np.random.default_rng(3).uniform(0.0, 5.0, (600, 3))
+
+    def test_neither_bound_declares_an_uncropped_capture(self) -> None:
+        steps = [step.method for step in F.prepare_for_pose(self.cloud).steps]
+        self.assertNotIn("crop_to_bounds", steps)
+
+    def test_both_bounds_crop_and_record_it(self) -> None:
+        chain = F.prepare_for_pose(self.cloud, (0.0, 0.0, 0.0), (5.0, 5.0, 5.0))
+        self.assertIn("crop_to_bounds", [step.method for step in chain.steps])
+
+    def test_one_bound_is_refused_rather_than_skipped(self) -> None:
+        for kwargs in ({"lower": (0.0, 0.0, 0.0)}, {"upper": (5.0, 5.0, 5.0)}):
+            for prepare in (F.prepare_for_pose, F.prepare_for_measurement):
+                with self.subTest(bound=next(iter(kwargs)), prepare=prepare.__name__):
+                    with self.assertRaisesRegex(ScanArtifactError, "needs both bounds"):
+                        prepare(self.cloud, **kwargs)

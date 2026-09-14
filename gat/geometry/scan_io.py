@@ -104,7 +104,11 @@ def _check_declared_count(
         )
     if min_bytes_per_vertex <= 0:
         raise ScanArtifactError(f"{path}: vertex element declares no properties")
-    capacity = remaining // min_bytes_per_vertex
+    # An ASCII file's last vertex may omit its trailing newline, so N vertices
+    # need N * min - 1 bytes, not N * min. Charging the full separator refused
+    # valid clouds from every writer that does not end the file with one.
+    slack = 1 if fmt == "ascii" else 0
+    capacity = (remaining + slack) // min_bytes_per_vertex
     if count > capacity:
         raise ScanArtifactError(
             f"{path}: header declares {count} vertices but only {remaining} "

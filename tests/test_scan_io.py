@@ -147,3 +147,41 @@ class HostileArtifactTests(unittest.TestCase):
             (self.HEADER % (b"binary_little_endian", 3)) + points.tobytes()
         )
         np.testing.assert_allclose(load_ply_points(path), points.astype(np.float64))
+
+
+class TrailingNewlineTests(unittest.TestCase):
+    """The declared-count ceiling must not charge for a separator that a
+    valid file is allowed to omit."""
+
+    HEADER = (
+        "ply\nformat ascii 1.0\nelement vertex {n}\n"
+        "property float x\nproperty float y\nproperty float z\nend_header\n"
+    )
+
+    def _write(self, body: str) -> str:
+        path = os.path.join(self.tmp.name, f"cloud{abs(hash(body))}.ply")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(body)
+        return path
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_a_file_without_a_final_newline_still_loads(self) -> None:
+        path = self._write(self.HEADER.format(n=3) + "0 0 0\n1 1 1\n2 2 2")
+        self.assertEqual(len(load_ply_points(path)), 3)
+
+    def test_a_single_vertex_without_a_final_newline_loads(self) -> None:
+        self.assertEqual(
+            len(load_ply_points(self._write(self.HEADER.format(n=1) + "0 0 0"))), 1
+        )
+
+    def test_an_overstated_count_is_still_refused(self) -> None:
+        for declared in (4, 99):
+            with self.subTest(declared=declared):
+                path = self._write(
+                    self.HEADER.format(n=declared) + "0 0 0\n1 1 1\n2 2 2"
+                )
+                with self.assertRaisesRegex(ScanArtifactError, "can hold at most"):
+                    load_ply_points(path)

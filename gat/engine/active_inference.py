@@ -154,6 +154,12 @@ class ObservationPlan:
     action_cost: float
     expected_free_energy: float
     target: VarId | None = None
+    #: What the plan is aimed at when that is not a single variable. A margin
+    #: preference spans two, so ``target`` is necessarily None for it and
+    #: ``describe()`` used to report "all raw state" -- the string a
+    #: preference-free plan emits -- for the very case the margin planner
+    #: exists to serve.
+    target_label: str = ""
     target_mean: float | None = None
     target_sigma: float | None = None
     posterior_target_sigma: float | None = None
@@ -166,7 +172,14 @@ class ObservationPlan:
         return self.epistemic_value - self.action_cost
 
     def describe(self) -> str:
-        target = "all raw state" if self.target is None else str(self.target)
+        if self.target is not None:
+            target = str(self.target)
+        elif self.target_label:
+            target = self.target_label
+        elif self.target_mean is not None:
+            target = "the declared preference"
+        else:
+            target = "all raw state"
         return (
             f"observe {self.candidate.name}: target {target}; "
             f"epistemic {self.epistemic_value:.6f} nat; "
@@ -216,6 +229,7 @@ def plan_observations(
             )
         )
         preference_target = terms[0][1] if len(terms) == 1 else None
+        preference_label = getattr(preference, "name", "") if len(terms) > 1 else ""
         target_var = float(target_row @ world.belief.sigma @ target_row)
         target_var = max(target_var, 0.0)
         target_sigma = math.sqrt(target_var)
@@ -277,6 +291,7 @@ def plan_observations(
                 action_cost=candidate.cost_nats,
                 expected_free_energy=risk + candidate.cost_nats - epistemic,
                 target=preference_target,
+                target_label=preference_label,
                 target_mean=target_mean,
                 target_sigma=math.sqrt(target_var),
                 posterior_target_sigma=math.sqrt(posterior_target_var),

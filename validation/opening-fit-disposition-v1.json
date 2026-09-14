@@ -57,6 +57,7 @@
       "target": "Door-1 width fit"
     }
   ],
+  "failed_invariants": [],
   "insufficient_geometry_check_ids": [],
   "may_authorize": false,
   "policy_id": "gat-safe-acceptance-v1",

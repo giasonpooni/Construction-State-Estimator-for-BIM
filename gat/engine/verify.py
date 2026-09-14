@@ -16,6 +16,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 import math
+from statistics import NormalDist
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -43,6 +44,17 @@ DEFAULT_INVARIANT_CONFIDENCE = 0.9772498680518208
 
 def _normal_cdf(x: float) -> float:
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+def _z_for(confidence: float) -> float:
+    """The one-sided normal quantile: ``z`` with ``Phi(z) == confidence``.
+
+    ``_z_for(DEFAULT_INVARIANT_CONFIDENCE)`` is exactly ``2.0``, so the
+    default residual stays bit-identical and no existing digest moves. A
+    bisection on :func:`_normal_cdf` lands 4e-16 away from 2.0, which is
+    enough to perturb a hashed residual -- hence the stdlib quantile.
+    """
+    return NormalDist().inv_cdf(confidence)
 
 
 def _p_holds(margin: float, sigma: float) -> float:
@@ -354,7 +366,12 @@ class NonNegativeQuantities(Invariant):
                 out.append(
                     self._warn(
                         str(c.var),
-                        mean - 2.0 * std,
+                        # The bound at the confidence that actually fired.
+                        # Hardcoding two sigma made the residual describe an
+                        # interval nobody asked for: under confidence 0.999 it
+                        # read as comfortably satisfied beside a detail line
+                        # saying the constraint is variant.
+                        mean - _z_for(confidence) * std,
                         f"variant: P(>= 0) = {p_holds:.6f} below the required "
                         f"{confidence:.6f} (mu={mean:.6f}, sigma={std:.6f})",
                         p_holds=p_holds,
@@ -426,7 +443,7 @@ class BoundsRespected(Invariant):
                 out.append(
                     self._warn(
                         subject,
-                        diff + 2.0 * std_diff,
+                        diff + _z_for(confidence) * std_diff,
                         f"variant: P(holds) = {p_holds:.6f} below the required "
                         f"{confidence:.6f} (margin {-diff:.6f}, sigma {std_diff:.6f})",
                         p_holds=p_holds,

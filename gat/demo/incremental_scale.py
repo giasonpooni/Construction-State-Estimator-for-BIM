@@ -293,6 +293,38 @@ def measure_size(
     }
 
 
+def _model_description(model: str, measurements: list[dict]) -> dict[str, object]:
+    """What the measured world actually was.
+
+    The block used to hardcode the independent shape's 1-raw/2-derived storey
+    for every shape, so a coupled record described a world it had not measured:
+    ``coupled-*`` sizes count walls, not storeys, and carry one extra shared
+    raw variable. Counts are read back off the first measurement rather than
+    asserted.
+    """
+    first = measurements[0]
+    coupled = model.startswith("coupled")
+    unit = "wall" if coupled else "storey"
+    description: dict[str, object] = {
+        "shape": model,
+        "size_unit": unit,
+        f"raw_variables_per_{unit}": 1,
+        f"derived_variables_per_{unit}": 2,
+        "measured_raw_variables": first["raw_variables"],
+        "measured_derived_variables": first["derived_variables"],
+        "covariance_representation": "dense-float64",
+    }
+    if coupled:
+        description["shared_raw_variables"] = 1
+        description["shared_variable"] = "one storey ClearHeight, ridden by every wall"
+    description["dependency_scope_per_change"] = (
+        "every derived row: the changed variable is the shared one"
+        if model == "coupled-shared"
+        else 2
+    )
+    return description
+
+
 def run_probe(
     sizes: tuple[int, ...] = (16, 32, 64, 128, 256),
     *,
@@ -333,21 +365,17 @@ def run_probe(
             "numpy": np.__version__,
             "platform": platform.platform(),
         },
-        "synthetic_model": {
-            "shape": model,
-            "raw_variables_per_storey": 1,
-            "derived_variables_per_storey": 2,
-            "dependency_scope_per_change": (
-                2 if model != "coupled-shared" else "2 per wall: every derived row"
-            ),
-            "covariance_representation": "dense-float64",
-        },
+        "synthetic_model": _model_description(model, measurements),
         "time_cliff_seconds": time_cliff_seconds,
         "first_measured_complete_pushforward_cliff_storeys": observed_cliff,
         "first_measured_verified_incremental_cliff_storeys": verified_cliff,
         "analytical_resident_memory_limits": {
             "one_gib_storeys": storeys_for_dense_budget(1024**3),
             "four_gib_storeys": storeys_for_dense_budget(4 * 1024**3),
+            "assumes": (
+                "the independent shape's 1 raw / 3 full variables per storey; "
+                "a coupled world of the same size carries one more raw variable"
+            ),
         },
         "measurements": measurements,
         "conclusion_note": (

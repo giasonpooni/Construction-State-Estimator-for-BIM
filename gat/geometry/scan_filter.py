@@ -90,7 +90,12 @@ def scan_digest(points: np.ndarray) -> str:
 
 @dataclass(frozen=True)
 class FilterStep:
-    """One declared reduction: what was done, with what, and what it cost."""
+    """One declared reduction: what was done, with what, and what it cost.
+
+    ``parameters`` is a dict, so the generated ``__hash__`` raises; hashing by
+    the ordered record keeps a step usable as a set member or dict key without
+    changing what equality means.
+    """
 
     method: str
     parameters: dict[str, float]
@@ -116,6 +121,17 @@ class FilterStep:
     def retained_fraction(self) -> float:
         return self.points_out / self.points_in if self.points_in else 0.0
 
+    def __hash__(self) -> int:
+        return hash(
+            (
+                self.method,
+                tuple(sorted(self.parameters.items())),
+                self.points_in,
+                self.points_out,
+                self.advisory,
+            )
+        )
+
     def to_dict(self) -> dict[str, object]:
         return {
             "method": self.method,
@@ -128,20 +144,42 @@ class FilterStep:
         }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class FilteredScan:
-    """Reduced points, bound to the cloud they were reduced from."""
+    """Reduced points, bound to the cloud they were reduced from.
+
+    ``eq=False``: the generated ``__eq__`` compares the point arrays with
+    ``==``, which raises on anything but a one-element cloud. Identity is what
+    this type has a digest for, so equality is digest equality and a scan is
+    hashable by it.
+    """
 
     points: np.ndarray
     source_digest: str
     steps: tuple[FilterStep, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
-        array = _validated(self.points, "filtered points")
+        # Copy before freezing. ``_validated`` returns the caller's own array
+        # unchanged when it is already float64 and contiguous, so freezing in
+        # place made *their* cloud permanently read-only -- filtering a
+        # capture must not confiscate it.
+        array = np.array(_validated(self.points, "filtered points"), copy=True)
         array.setflags(write=False)
         object.__setattr__(self, "points", array)
         if not self.source_digest:
             raise ValueError("a filtered scan must name its source digest")
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, FilteredScan):
+            return NotImplemented
+        return (
+            self.digest == other.digest
+            and self.source_digest == other.source_digest
+            and self.steps == other.steps
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.digest, self.source_digest, self.steps))
 
     @property
     def digest(self) -> str:
@@ -462,6 +500,28 @@ def density_outlier_removal(
     )
 
 
+def _crop_requested(
+    lower: tuple[float, float, float] | None,
+    upper: tuple[float, float, float] | None,
+) -> bool:
+    """Whether to crop, refusing a half-declared box.
+
+    Requiring both and silently skipping on one meant an ``upper`` that came
+    back ``None`` from an optional scene lookup produced a full-extent capture
+    whose provenance record showed no crop at all -- a reduction that did not
+    happen, recorded as though none was asked for. In a module whose contract
+    is that a transformation which changes what the evidence says is part of
+    the evidence, a silent no-op is the one outcome not allowed.
+    """
+    if (lower is None) != (upper is None):
+        missing = "upper" if upper is None else "lower"
+        raise ScanArtifactError(
+            f"a crop needs both bounds; {missing} is missing. Pass both to "
+            "crop, or neither to declare that the capture was not cropped"
+        )
+    return lower is not None
+
+
 def prepare_for_pose(
     points: np.ndarray,
     lower: tuple[float, float, float] | None = None,
@@ -479,7 +539,7 @@ def prepare_for_pose(
     ``voxel_m`` trades registration cost against pose precision.
     """
     chain = begin(points)
-    if lower is not None and upper is not None:
+    if _crop_requested(lower, upper):
         chain = crop_to_bounds(chain, lower, upper, margin_m)
     chain = density_outlier_removal(chain, clean_radius_m, min_neighbours)
     return voxel_downsample(chain, voxel_m)
@@ -502,7 +562,7 @@ def prepare_for_measurement(
     a local as-built defect is exactly what coarse downsampling would erase.
     """
     chain = begin(points)
-    if lower is not None and upper is not None:
+    if _crop_requested(lower, upper):
         chain = crop_to_bounds(chain, lower, upper, margin_m)
     chain = density_outlier_removal(chain, clean_radius_m, min_neighbours)
     return voxel_downsample(chain, voxel_m)

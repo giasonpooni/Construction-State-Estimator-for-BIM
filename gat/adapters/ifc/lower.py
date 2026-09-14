@@ -177,6 +177,12 @@ def lower_ifc(
     # names the subjects that may become state; the rest of the file stays
     # audit-only input.
     derived_lengths: dict[int, float] = {}
+    #: Beams whose Length slot actually took the axis-derived value. A beam can
+    #: be in ``derived_lengths`` (it arrived with no GAT contract, so the axis
+    #: was derived for it) and still declare an IfcQuantityLength, in which
+    #: case the declared quantity wins and nothing about that length was
+    #: measured from the solid.
+    derived_used: set[int] = set()
     scope_ids: tuple[str, ...] | None = None
     if scope is not None:
         available: dict[str, int] = {
@@ -233,7 +239,11 @@ def lower_ifc(
     spaces: list[EntityId] = []
     openings: list[EntityId] = []
     doors: list[EntityId] = []
-    beams: list[EntityId] = []
+    # Every lowered beam, length-only members included. Write-only today and
+    # deliberately named so: a capacity loop must never reach for this list,
+    # because a length-only member carries no yield strength or resistance
+    # factor. Use ``capacity_beams``.
+    all_beams: list[EntityId] = []
     # Beams carrying the GAT_Structural contract; only these get AISC
     # capacity slots.  A length-only member is a subject, not a capacity.
     capacity_beams: list[EntityId] = []
@@ -263,6 +273,7 @@ def lower_ifc(
                     # slot has no source_ref and the writer leaves it alone.
                     var = VarId(eid, qname)
                     value = derived_lengths[sid]
+                    derived_used.add(sid)
                     slots[qname] = QtySlot(
                         var=var,
                         role=Role.RAW,
@@ -395,7 +406,7 @@ def lower_ifc(
             "IfcSpace": spaces,
             "IfcOpeningElement": openings,
             "IfcDoor": doors,
-            "IfcBeam": beams,
+            "IfcBeam": all_beams,
         }[canonical].append(eid)
         if canonical == "IfcBeam" and sid not in derived_lengths:
             capacity_beams.append(eid)
@@ -692,9 +703,12 @@ def lower_ifc(
         # The subject set is part of the world's identity: two worlds lowered
         # from the same file under different scopes must not share a digest.
         meta["lowering_scope"] = ",".join(scope_ids)
-        if derived_lengths:
+        if derived_used:
+            # Only the beams whose length this world actually measured from a
+            # solid. Naming every beam that *could* have been derived put a
+            # false provenance claim inside the world digest.
             meta["derived_axis_length_subjects"] = ",".join(
-                sorted(products[sid][0].global_id for sid in derived_lengths)
+                sorted(products[sid][0].global_id for sid in derived_used)
             )
 
     module = Module(

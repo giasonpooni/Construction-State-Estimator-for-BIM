@@ -496,7 +496,10 @@ def render_console_html(
     esc = html_mod.escape
     specs = {spec["readout"]: spec for spec in payload["readouts"]}
     viewer_document = render_viewer_html(payload["field"])
-    page_payload = {key: value for key, value in payload.items() if key != "structure"}
+    # The scene is already embedded in the iframe srcdoc; carrying it in the
+    # data block too made the page ~11x larger for nothing, and nothing
+    # reads DATA.field.
+    page_payload = {key: value for key, value in payload.items() if key != "field"}
     # The data block is JSON, not markup: every angle bracket and ampersand
     # is escaped so no untrusted string can ever read as a tag.
     encoded = (

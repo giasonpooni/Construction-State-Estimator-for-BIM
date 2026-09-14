@@ -24,9 +24,8 @@ import gat.demo
 from gat.errors import RegistrationError
 from gat.geometry.registration import (
     RigidTransformZ,
-    _basin_separation,
-    RigidTransformZ,
     ScanRegistrar,
+    _basin_separation,
     synthesize_scan,
 )
 from gat.geometry.stateio import derive_scene

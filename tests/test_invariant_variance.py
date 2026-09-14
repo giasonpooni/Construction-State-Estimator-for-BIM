@@ -14,6 +14,7 @@ would settle it. These tests pin that chain end to end.
 
 from __future__ import annotations
 
+from dataclasses import replace
 import math
 import unittest
 
@@ -26,6 +27,7 @@ from gat.engine.active_inference import (
 from gat.engine.transform import SetParameter
 from gat.engine.verify import (
     ALL_INVARIANTS,
+    _z_for,
     DEFAULT_INVARIANT_CONFIDENCE,
     InvariantResult,
     Status,
@@ -363,3 +365,117 @@ class VariantToMeasurementTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GateReadsTheWholeReportTests(unittest.TestCase):
+    """What the gate consults, and on whose threshold.
+
+    The gate originally read only ``verification.warnings``. That left three
+    holes, each of which an audit reproduced: an outright FAILED constraint
+    never blocked ACCEPT, only the first variant constraint became a request,
+    and the policy's own declared confidence was never applied.
+    """
+
+    def setUp(self) -> None:
+        session = _variant_session()
+        assessment = assess_difference(
+            session.world,
+            DifferenceDecision(
+                session.var("Opening-1", "Height"),
+                session.var("Door-1", "Height"),
+                minimum_margin=0.05,
+                confidence=0.95,
+                label="Door-1 height fit",
+            ),
+        )
+        self.session = session
+        self.case = AcceptanceCase(
+            "gate-case",
+            WorkflowKind.OPENING_VERIFICATION,
+            "Door-1 into Opening-1",
+            (difference_check("height", assessment),),
+        )
+        self.review = AcceptancePolicy(
+            "design-review-v1", require_verified_evidence_for_accept=False
+        )
+
+    @staticmethod
+    def _result(status: Status, subject: str, p_holds: float | None) -> InvariantResult:
+        return InvariantResult(
+            "CONS-02", status, subject, 0.0, "detail", p_holds=p_holds, variables=()
+        )
+
+    def _evaluate(self, *results: InvariantResult, policy=None):
+        return evaluate_acceptance_case(
+            self.case,
+            policy=policy or self.review,
+            verification=VerificationReport(results),
+        )
+
+    def test_a_violated_constraint_cannot_be_accepted(self) -> None:
+        """It reached ACCEPT while a merely variant one did not -- the gate was
+        strictly stronger on the weaker evidence."""
+        outcome = self._evaluate(self._result(Status.FAIL, "violated", 0.0))
+        self.assertIs(outcome.disposition, AcceptanceDisposition.REJECT)
+        self.assertFalse(outcome.may_authorize)
+        self.assertEqual(outcome.failed_invariants, (("CONS-02", "violated"),))
+
+    def test_a_violation_outranks_a_variant_constraint(self) -> None:
+        outcome = self._evaluate(
+            self._result(Status.WARN, "variant", 0.60),
+            self._result(Status.FAIL, "violated", 0.0),
+        )
+        self.assertIs(outcome.disposition, AcceptanceDisposition.REJECT)
+
+    def test_every_variant_constraint_is_asked_about(self) -> None:
+        outcome = self._evaluate(
+            self._result(Status.WARN, "strongest", 0.95),
+            self._result(Status.WARN, "middle", 0.90),
+            self._result(Status.WARN, "weakest", 0.60),
+        )
+        requests = [
+            request
+            for request in outcome.evidence_requests
+            if request.action == "MEASURE_VARIANT_CONSTRAINT"
+        ]
+        self.assertEqual(len(requests), 3)
+        self.assertEqual(
+            [request.target for request in requests],
+            ["weakest", "middle", "strongest"],
+            "the weakest constraint is the one worth measuring first",
+        )
+        self.assertEqual(len({request.check_id for request in requests}), 3)
+
+    def test_the_policy_confidence_governs_not_the_report_s(self) -> None:
+        """The report is classified again against what the policy declared."""
+        lax = run_invariants(self.session.world, confidence=0.50)
+        self.assertEqual(lax.warnings, (), "nothing is a warning at 0.50")
+        tolerant = evaluate_acceptance_case(
+            self.case,
+            policy=replace(self.review, invariant_confidence=0.50),
+            verification=lax,
+        )
+        self.assertIs(tolerant.disposition, AcceptanceDisposition.ACCEPT)
+        strict = evaluate_acceptance_case(
+            self.case,
+            policy=replace(self.review, invariant_confidence=0.999),
+            verification=lax,
+        )
+        self.assertIs(strict.disposition, AcceptanceDisposition.REQUEST_EVIDENCE)
+        self.assertEqual(len(strict.variant_constraints), 1)
+
+    def test_the_warn_residual_follows_the_confidence_that_fired(self) -> None:
+        """It was pinned at two sigma, so a run at 0.999 recorded a number that
+        contradicted the status beside it."""
+        self.assertEqual(_z_for(DEFAULT_INVARIANT_CONFIDENCE), 2.0)
+        world = self.session.world
+        loose = next(
+            r for r in run_invariants(world).warnings if r.p_holds is not None
+        )
+        tight = next(
+            r
+            for r in run_invariants(world, confidence=0.999).warnings
+            if r.subject == loose.subject
+        )
+        self.assertGreater(_z_for(0.999), 2.0)
+        self.assertNotEqual(loose.residual, tight.residual)

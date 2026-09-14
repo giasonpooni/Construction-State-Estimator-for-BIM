@@ -22,7 +22,11 @@ from gat.workflows.acceptance import (
 from gat.workflows.acceptance import (
     evaluate_acceptance_case as evaluate_acceptance_case_ungated,
 )
-from gat.engine.verify import VerificationReport  # noqa: F401  (annotation)
+from gat.engine.verify import (  # noqa: F401  (VerificationReport: annotation)
+    DEFAULT_INVARIANT_CONFIDENCE,
+    Status,
+    VerificationReport,
+)
 from gat.workflows.geometry_authority import (
     GeometryAuthority,
     geometry_sufficient,
@@ -64,6 +68,9 @@ class GatedAcceptanceOutcome:
     #: posterior to rely on, as ``(subject, p_holds)``. Empty when no
     #: verification report was supplied.
     variant_constraints: tuple[tuple[str, float], ...] = ()
+    #: Invariants this world outright fails, as ``(invariant_id, subject)``.
+    #: A world that fails its own invariants cannot authorize anything.
+    failed_invariants: tuple[tuple[str, str], ...] = ()
 
     def __getattr__(self, name: str) -> object:
         return getattr(self.base, name)
@@ -83,6 +90,10 @@ class GatedAcceptanceOutcome:
         payload["variant_constraints"] = [
             {"subject": subject, "p_holds": p_holds}
             for subject, p_holds in self.variant_constraints
+        ]
+        payload["failed_invariants"] = [
+            {"invariant_id": invariant_id, "subject": subject}
+            for invariant_id, subject in self.failed_invariants
         ]
         payload["evidence_requests"] = [
             {
@@ -142,16 +153,43 @@ def evaluate_acceptance_case(
         policy, "require_invariant_constraints_for_accept", True
     )
     variant: tuple[tuple[str, float], ...] = ()
+    failed: tuple[tuple[str, str], ...] = ()
     if verification is not None:
+        failed = tuple(
+            (result.invariant_id, result.subject) for result in verification.failures
+        )
+        # Classify against the confidence *this policy* declared, not against
+        # whatever the caller happened to hand ``run_invariants``. Reading
+        # ``verification.warnings`` took the report's own threshold, so a
+        # policy asking for 0.999 silently accepted a constraint holding at
+        # 0.98 while recording the stricter number.
+        confidence = getattr(
+            policy, "invariant_confidence", DEFAULT_INVARIANT_CONFIDENCE
+        )
         variant = tuple(
             (result.subject, result.p_holds)
-            for result in verification.warnings
+            for result in verification.results
             if result.p_holds is not None
+            and result.p_holds < confidence
+            and result.status is not Status.FAIL
         )
 
     disposition = outcome.disposition
     reasons = list(outcome.reasons)
     generated = list(outcome.evidence_requests)
+
+    if failed:
+        # A world that fails its own invariants cannot be accepted, and asking
+        # for evidence would misdescribe the problem: this is not a gap in what
+        # was measured. Until this branch existed the gate read only
+        # ``warnings``, so a constraint VIOLATED at the mean reached ACCEPT
+        # while one merely variant at P = 0.97 did not -- strictly stronger on
+        # the weaker evidence.
+        disposition = AcceptanceDisposition.REJECT
+        reasons.append(
+            f"{len(failed)} invariant(s) fail on this world: "
+            + ", ".join(sorted({invariant_id for invariant_id, _ in failed}))
+        )
 
     if variant and require_invariants and disposition is AcceptanceDisposition.ACCEPT:
         disposition = AcceptanceDisposition.REQUEST_EVIDENCE
@@ -162,10 +200,16 @@ def evaluate_acceptance_case(
         )
     if variant and disposition is not AcceptanceDisposition.REJECT:
         known = {request.check_id for request in generated}
-        for subject, p_holds in variant:
+        # Weakest first, and one request each. A single shared request id
+        # deduplicated every constraint after the first, so a case with three
+        # variant constraints asked about one of them -- in report order, so
+        # usually not the one that needed measuring most.
+        for index, (subject, p_holds) in enumerate(
+            sorted(variant, key=lambda item: (item[1], item[0]))
+        ):
             # A variant constraint is not owned by any one check, so the
             # request is raised against the case itself.
-            request_id = f"{case.case_id}:variant"
+            request_id = f"{case.case_id}:variant:{index}"
             if request_id in known:
                 continue
             generated.append(
@@ -215,6 +259,7 @@ def evaluate_acceptance_case(
         evidence_requests=tuple(generated),
         insufficient_geometry_check_ids=insufficient,
         variant_constraints=variant,
+        failed_invariants=failed,
     )
 
 

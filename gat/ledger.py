@@ -482,8 +482,10 @@ def _validate_verification_record(value: object) -> dict[str, object]:
         _require_number(result["residual"], f"verification.results[{index}].residual")
         p_holds = result["p_holds"]
         if p_holds is not None:
-            value = _require_number(p_holds, f"verification.results[{index}].p_holds")
-            if not 0.0 <= value <= 1.0:
+            probability = _require_number(
+                p_holds, f"verification.results[{index}].p_holds"
+            )
+            if not 0.0 <= probability <= 1.0:
                 raise LedgerError(
                     f"verification.results[{index}].p_holds must be a probability"
                 )

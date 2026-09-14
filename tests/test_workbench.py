@@ -486,3 +486,32 @@ class WalkthroughDemoTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PayloadWeightTests(unittest.TestCase):
+    """The scene is embedded in the viewer frame; it must not ride along in
+    the data block too. The readout rename moved the payload key from
+    "structure" to "field" and left the strip filter on the old name, so the
+    whole scene was serialized twice and the page grew ~60%."""
+
+    def test_the_data_block_does_not_repeat_the_scene(self) -> None:
+        world = GatSession.load_ifc(MODEL).world
+        payload = console_payload(world, model_name="model.ifc", n=4)
+        html = render_console_html(payload)
+        start = html.index('<script id="console-data"')
+        block = html[start : html.index("</script>", start)]
+        self.assertNotIn('"field"', block)
+        self.assertLess(
+            len(block),
+            len(json.dumps(payload["field"])),
+            "the data block is smaller than the scene it must not contain",
+        )
+
+    def test_the_viewer_frame_still_has_it(self) -> None:
+        """Stripping it from the data block must not strip it from the page."""
+        from gat.geometry.viewer import VIEWER_SCENE_FORMAT
+
+        world = GatSession.load_ifc(MODEL).world
+        html = render_console_html(console_payload(world, model_name="m", n=2))
+        srcdoc = html[html.index('<iframe id="structure"') :]
+        self.assertIn(VIEWER_SCENE_FORMAT, srcdoc)
