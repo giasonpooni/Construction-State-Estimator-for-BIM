@@ -1,4 +1,4 @@
-"""Stable command-line surface over the headless GAT core.
+"""Stable command-line surface over the headless CSE core.
 
     gat audit   model.ifc                        IFC compatibility inventory (fail-closed)
     gat check   model.ifc [--proposed duct.json] probabilistic clash report
@@ -558,7 +558,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = commands.add_parser(
         "console",
         aliases=["workbench"],
-        help="the GAT Console: one offline instrument, six readouts, one specimen",
+        help="the CSE Console: one offline instrument, six readouts, one specimen",
     )
     p.add_argument("model")
     p.add_argument("-o", "--output", required=True, help="console HTML path")

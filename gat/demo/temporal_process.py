@@ -51,7 +51,7 @@ def run() -> str:
     if replay.world.digest() != session.world.digest():
         raise RuntimeError("temporal ledger replay diverged")
 
-    print("GAT TEMPORAL PREDICT-UPDATE")
+    print("CSE TEMPORAL PREDICT-UPDATE")
     print(
         f"7-day forecast: height={forecast.final_world.belief.mean(height):.6f} m, "
         f"sigma={forecast.final_world.belief.std(height):.6f} m"

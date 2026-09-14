@@ -216,7 +216,7 @@ class LinearGaussianDynamicsTests(unittest.TestCase):
             text=True,
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("GAT TEMPORAL PREDICT-UPDATE", proc.stdout)
+        self.assertIn("CSE TEMPORAL PREDICT-UPDATE", proc.stdout)
         self.assertIn("2 accepted transitions", proc.stdout)
 
 

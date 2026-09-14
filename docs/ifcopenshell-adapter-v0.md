@@ -4,7 +4,7 @@ Status: planned extra. Not the authoritative v0 loader.
 
 ## Why a second adapter
 
-GAT's hand-written IFC path exists so the engine can fail closed on units,
+CSE's hand-written IFC path exists so the engine can fail closed on units,
 missing quantities, and unsupported beam bodies without inheriting a large
 C++ world. That personality stays.
 
@@ -20,7 +20,7 @@ not a replacement religion.
 
   1. emit the same `EntityId` / `VarId` identities for quantities both
      loaders can see;
-  2. refuse to invent section properties GAT would have marked
+  2. refuse to invent section properties CSE would have marked
      `LENGTH_ONLY`;
   3. expose mesh / solid support as an explicit geometry authority
      (`SWEPT_SOLID` or `INSUFFICIENT`), including voids when present;

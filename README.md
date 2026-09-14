@@ -1,6 +1,6 @@
-# GAT — Gaussian Architectural Transformer (WIP)
+# Construction State Estimator for BIM (WIP).
 
-Portable **evidence-to-decision** runtime for BIM. GAT compiles IFC design
+Portable **evidence-to-decision** runtime for BIM. CSE compiles IFC design
 intent into an auditable architectural belief, conditions that belief on
 physical evidence, and returns a fail-closed disposition:
 
@@ -51,7 +51,7 @@ authoritative loader).
 
 ## Start here
 
-Every GAT command is read-only. Nothing in this repository mutates a BIM.
+Every `gat` command is read-only. Nothing in this repository mutates a BIM.
 
 ```bash
 gat audit gat/demo/beam_model.ifc --text      # what can this file become?
@@ -60,7 +60,7 @@ gat inspect gat/demo/model.ifc --var "Level 1.TotalWallCost"
 
 ![gat audit and gat inspect](docs/images/cli-inspect.png)
 
-`audit` answers the only question worth asking first — *can GAT open this
+`audit` answers the only question worth asking first — *can CSE open this
 model at all* — without partially importing it. `inspect` shows the second
 idea, and the two lists under it disagree on purpose. `ClearHeight` has a
 large **sensitivity** (+2873.6 per metre, fifth of six) and contributes 0.7%
@@ -110,7 +110,7 @@ outcomes are the whole fail-closed stance in one command:
   configuration digest; the loader recomputes all three and names the one
   that broke.
 
-Exit codes follow: `0` clean, `1` a finding, `2` input GAT will not accept.
+Exit codes follow: `0` clean, `1` a finding, `2` input CSE will not accept.
 
 ## The instrument and its surfaces
 
@@ -133,7 +133,7 @@ difference is enforced, not stylistic:
 gat console gat/demo/model.ifc -o console.html --variations 3 --ledger ledger.json
 ```
 
-![the GAT Console, FIELD readout](docs/images/console-field.png)
+![the CSE Console, FIELD readout](docs/images/console-field.png)
 
 Laid out the way instruments are: the **specimen** and its identity at the
 top, where you can always see what is loaded; a **function selector** where
@@ -143,13 +143,13 @@ element is a Gaussian, and the sample selector redraws the building under a
 different realization of the same posterior. The uncertainty envelope slider
 is in sigmas, not pixels.
 
-![the GAT Console, RELATIONS readout](docs/images/console-relations.png)
+![the CSE Console, RELATIONS readout](docs/images/console-relations.png)
 
 RELATIONS shows the typed IFC relationship graph the belief is coupled
 through — and states plainly that *position and distance on this canvas are
 not evidence*. Every readout carries that discipline.
 
-![the GAT Console, BELIEF readout](docs/images/console-belief.png)
+![the CSE Console, BELIEF readout](docs/images/console-belief.png)
 
 BELIEF is `N(mu, Sigma)` per entity: every quantity's mean and sigma, raw or
 derived, with the IFC record it came from.
@@ -177,7 +177,7 @@ P = 0.018 against a 301 kN·m demand.
 
 The full report continues into the evidence chain: the certificate's issuer,
 batch, specimen, calibration digest, and a row that reads
-`may_authorize: no`. GAT will tell you the beam fails. It will not tell you
+`may_authorize: no`. CSE will tell you the beam fails. It will not tell you
 that it is therefore safe to act.
 
 ### `gat ledger` — what actually happened
@@ -320,7 +320,7 @@ but a screenshot nobody can reproduce is an illustration, not evidence.
 - [`docs/workflow-deployment-v1.md`](docs/workflow-deployment-v1.md)
 - [`docs/real-ifc-validation-v1.md`](docs/real-ifc-validation-v1.md)
 
-## What GAT is not
+## What This CSE is not
 
 Not Revit, Archicad, CAD, a renderer, an LLM, a generic Gaussian package,
 FEM, IFC, or a twin platform. It is a computational layer that can sit
@@ -333,5 +333,7 @@ visual adjacency presented as evidence. The console declares that limit
 rather than reserving a map view for it.
 
 Repository: [giasonpooni/Gaussian-Architectural-Transformer-for-BIM](https://github.com/giasonpooni/Gaussian-Architectural-Transformer-for-BIM).
-Engine name is GAT; package is `gat-bim`. The repository was previously
-`BIM-State-Transformer-Engine-WIP`; GitHub keeps redirects from the old URL.
+Engine name is CSE; package is `gat-bim` and the Python namespace is `gat`.
+The repository has been `BIM-State-Transformer-Engine-WIP` and
+`Gaussian-Architectural-Transformer-for-BIM`; GitHub keeps redirects from
+each, so rename it again for CSE when you are ready.

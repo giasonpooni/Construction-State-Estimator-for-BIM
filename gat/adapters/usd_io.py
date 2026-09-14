@@ -11,7 +11,7 @@ boundary —
     S_A --encode--> USD stage --decode--> S_B,   S_A ~= S_B
 
 under an explicit invariant suite, with enough structure preserved that a
-receiving GAT runtime can *continue the computation* (apply further
+receiving CSE runtime can *continue the computation* (apply further
 transformations, recompute Jacobians, propagate uncertainty, verify).
 
 Encoding layout (text USDA, hand-emitted like the SPF adapter — the
@@ -367,7 +367,7 @@ def _check_commitments(world: World, recorded: dict[str, str]) -> None:
 
 
 def load_usd(path: str) -> tuple[World, list]:
-    """Reconstruct a world from a GAT USD stage.
+    """Reconstruct a world from a CSE USD stage.
 
     Returns ``(world, imported_trace_events)``.  The belief is restored
     bitwise (repr-round-tripped floats); the dependency DAG, Jacobian

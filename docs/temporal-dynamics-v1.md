@@ -1,8 +1,8 @@
-# GAT temporal dynamics v1
+# CSE temporal dynamics v1
 
 ## Contract
 
-GAT's first explicit process model is a calibrated linear-Gaussian transition
+CSE's first explicit process model is a calibrated linear-Gaussian transition
 over selected raw architectural variables:
 
 ```text
@@ -11,7 +11,7 @@ x[k+1] = A x[k] + b + w,       w ~ N(0, Q)
 
 The operation declares its selected variables, transition matrix `A`, offset
 `b`, PSD process covariance `Q`, elapsed seconds, model id, and calibration
-SHA-256. All other raw variables follow identity dynamics. GAT constructs one
+SHA-256. All other raw variables follow identity dynamics. CSE constructs one
 full transition matrix `F` and applies:
 
 ```text
@@ -78,7 +78,7 @@ generative model or general active-inference agent.
 * Targets must be unique raw variables. Derived variables remain deterministic
   functions and cannot own independent process noise.
 * Matrices must have exact dimensions and finite values. `Q` must be symmetric
-  and PSD within GAT's documented numerical certification tolerance.
+  and PSD within CSE's documented numerical certification tolerance.
 * Elapsed time must be positive. It is an interval carried by the operation,
   not an absolute trusted clock; trusted clock claims belong in event
   provenance.

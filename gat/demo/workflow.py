@@ -96,7 +96,7 @@ def run() -> None:
     print("canonical state digest unchanged across both previews")
 
     print("\n=== WORKFLOW VERDICT ===============================================")
-    print("GAT now separates three decisions: probabilistic fit, evidence-")
+    print("CSE now separates three decisions: probabilistic fit, evidence-")
     print("bound construction acceptance, and explicit human authorization.")
     print("Blender/CI can consume the same read-only headless response.")
 

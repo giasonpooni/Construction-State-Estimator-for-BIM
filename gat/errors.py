@@ -1,4 +1,4 @@
-"""Exception hierarchy for GAT.
+"""Exception hierarchy for CSE.
 
 Every error raised by the engine derives from :class:`GatError`, so callers
 can catch one type at the boundary.  Parse errors carry source locations;
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 
 class GatError(Exception):
-    """Base class for all GAT errors."""
+    """Base class for all CSE errors."""
 
 
 class SpfParseError(GatError):

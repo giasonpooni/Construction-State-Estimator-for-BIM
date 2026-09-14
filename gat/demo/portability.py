@@ -96,7 +96,7 @@ def run_demo(output_directory: str) -> str:
             checkpoint_report.render() + "\n" + continuation_report.render()
         )
 
-    print("GAT STATE-SPACE PORTABILITY")
+    print("CSE STATE-SPACE PORTABILITY")
     print(
         f"T1 checkpoint: {checkpoint.name}  "
         f"snapshot={checkpoint_digest[:12]} world={world_after_t1.digest()[:12]}"

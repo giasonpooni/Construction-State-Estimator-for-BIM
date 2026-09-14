@@ -1,4 +1,4 @@
-"""The GAT Console: six readouts, one specimen, one identity.
+"""The CSE Console: six readouts, one specimen, one identity.
 
 The shell used to wear another project's identity -- a projection triad and
 two selector positions reserved for libraries it does not contain. These
@@ -344,7 +344,7 @@ class WorkbenchDocumentTests(unittest.TestCase):
         for part in ('id="specimen"', 'id="modes"', 'id="panels"', 'id="reading"'):
             self.assertIn(part, self.html)
         self.assertIn("this instrument does not measure", self.html)
-        self.assertIn("GAT Console", self.html)
+        self.assertIn("CSE Console", self.html)
 
     def test_the_shell_carries_no_other_project(self) -> None:
         for foreign in ("Notation", "kepler", "Cesium", "projection triad"):

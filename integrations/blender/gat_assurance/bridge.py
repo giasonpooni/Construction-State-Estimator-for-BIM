@@ -1,4 +1,4 @@
-"""Blender-independent decoder for GAT headless workflow responses."""
+"""Blender-independent decoder for CSE headless workflow responses."""
 
 from __future__ import annotations
 

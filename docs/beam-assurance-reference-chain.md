@@ -93,7 +93,7 @@ observation changes the world identity but reuses the beam computation; a
 yield-strength observation changes the dependency digest and reruns it. The
 result records `recomputed`, changed inputs, and affected descendants.
 
-This claim is intentionally narrow. The generic GAT pushforward currently
+This claim is intentionally narrow. The generic CSE pushforward currently
 rebuilds the dense derived Gaussian view after a transition. The reference
 experiment demonstrates selective scheduling of the structural check, not a
 global incremental sparse propagation engine.
@@ -152,7 +152,7 @@ experiment adds these carrier artifacts:
 
 The snapshot is the continuation artifact. IFC preserves source-backed
 marginals but is not a complete joint-covariance carrier. OpenUSD can carry
-the canonical snapshot and ledger, but OpenUSD does not define GAT's
+the canonical snapshot and ledger, but OpenUSD does not define CSE's
 computational semantics; the core must remain operable without it.
 
 The signed carrier experiment proves the stronger beam-specific condition:
@@ -185,8 +185,8 @@ python -m gat.demo.beam_sp1 out/beam-sp1 \
 ```
 
 That path generates an SP1 core proof, verifies it in the Rust backend, creates
-the backend-neutral GAT manifest, and then asks the backend to verify the exact
-proof again through GAT's fail-closed verifier adapter. The fixed guest proves
+the backend-neutral CSE manifest, and then asks the backend to verify the exact
+proof again through CSE's fail-closed verifier adapter. The fixed guest proves
 the checked, quantized mean-value F2-1 calculation and its deterministic
 `PASS/FAIL`; it does not prove the Gaussian update or the probabilistic
 three-valued engineering decision. See [`sp1-beam-guest-v1.md`](sp1-beam-guest-v1.md).

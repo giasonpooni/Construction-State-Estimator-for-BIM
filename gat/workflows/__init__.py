@@ -1,4 +1,4 @@
-"""Operational workflow boundaries over the authoritative GAT core."""
+"""Operational workflow boundaries over the authoritative CSE core."""
 
 from gat.workflows.acceptance import (
     AcceptanceCase,

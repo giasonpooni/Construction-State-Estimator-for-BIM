@@ -1,4 +1,4 @@
-"""Closed material-certificate ingestion into calibrated GAT evidence.
+"""Closed material-certificate ingestion into calibrated CSE evidence.
 
 Certificate bytes remain distinct from belief state.  This adapter validates a
 small, versioned JSON contract, binds it to one ``IfcBeam`` raw variable, and

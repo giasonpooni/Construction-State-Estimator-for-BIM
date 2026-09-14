@@ -1,4 +1,4 @@
-"""Typed, calibrated observations at GAT's epistemic boundary.
+"""Typed, calibrated observations at CSE's epistemic boundary.
 
 An evidence item is not a state value.  It is an immutable claim about one
 identified state variable, its uncertainty, provenance, and source class.

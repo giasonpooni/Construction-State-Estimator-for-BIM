@@ -1,4 +1,4 @@
-"""Build, persist, and independently replay an authoritative GAT ledger.
+"""Build, persist, and independently replay an authoritative CSE ledger.
 
 Run with::
 

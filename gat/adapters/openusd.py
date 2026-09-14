@@ -1,4 +1,4 @@
-"""OpenUSD carrier for restartable GAT computational state.
+"""OpenUSD carrier for restartable CSE computational state.
 
 The stage has two deliberately different branches beneath its default prim::
 
@@ -9,7 +9,7 @@ The stage has two deliberately different branches beneath its default prim::
 topology and belief indexing are USD relationships, and the raw mean and full
 dense covariance are native numeric arrays.  Closed expression and constraint
 records remain canonical JSON values on their owning prims because they are
-GAT IR syntax, not executable USD behavior. Carrier v3 adds an inspectable
+CSE IR syntax, not executable USD behavior. Carrier v3 adds an inspectable
 ``State/Ledger/Events`` branch and binds its chain head into the optional
 Ed25519 carrier signature.
 
@@ -376,11 +376,11 @@ def read_openusd(
         if not root:
             raise OpenUsdError("OpenUSD carrier has no default prim")
         if _attr(root, "gat:carrierFormat") != OPENUSD_CARRIER_FORMAT:
-            raise OpenUsdError("unsupported GAT OpenUSD carrier format")
+            raise OpenUsdError("unsupported CSE OpenUSD carrier format")
         carrier_version = int(_attr(root, "gat:carrierVersion"))
         if carrier_version not in OPENUSD_SUPPORTED_VERSIONS:
             raise OpenUsdError(
-                f"unsupported GAT OpenUSD carrier version {carrier_version}"
+                f"unsupported CSE OpenUSD carrier version {carrier_version}"
             )
         budget = _ReadBudget(limits)
         state = stage.GetPrimAtPath(root.GetPath().AppendChild("State"))

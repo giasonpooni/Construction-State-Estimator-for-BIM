@@ -468,7 +468,7 @@ def run_demo(
     _write_json(summary_path, summary)
 
     if not quiet:
-        print("GAT BEAM OPENUSD PORTABILITY")
+        print("CSE BEAM OPENUSD PORTABILITY")
         print(
             f"checkpoint: {checkpoint_step.revised.verdict.value} "
             f"world={checkpoint_world.digest()[:12]} ledger={checkpoint_head[:12]}"

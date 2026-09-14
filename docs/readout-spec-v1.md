@@ -1,4 +1,4 @@
-# ReadoutSpec v1 and the GAT Console
+# ReadoutSpec v1 and the CSE Console
 
 `gat console` composes the human surfaces of this repository into one
 offline scientific instrument: a **specimen** whose identity is always

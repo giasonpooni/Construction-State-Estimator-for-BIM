@@ -447,7 +447,7 @@ def build_corpus_inventory_record(corpus_root: str | os.PathLike[str]) -> dict:
 
 
 def build_outcome_log(records: dict[str, dict]) -> dict:
-    """GAT's dispositions beside human decisions, where a human made one."""
+    """CSE's dispositions beside human decisions, where a human made one."""
     rows = [
         {
             "case_id": "opening-fit-demo",
@@ -473,7 +473,7 @@ def build_outcome_log(records: dict[str, dict]) -> dict:
     return {
         "format": "gat-outcome-log-v1",
         "note": (
-            "Only cases where GAT actually returned a disposition through the "
+            "Only cases where CSE actually returned a disposition through the "
             "evaluated pipeline. Human decisions are recorded only when a "
             "reviewer actually made one; empty cells are not implicit "
             "agreement. Every source names a record that exists in this "

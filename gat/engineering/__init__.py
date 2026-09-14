@@ -1,4 +1,4 @@
-"""Deterministic engineering computations over canonical GAT state."""
+"""Deterministic engineering computations over canonical CSE state."""
 
 from gat.engineering.aisc360_22 import (
     AISC360_22_F2_LRFD_METHOD,

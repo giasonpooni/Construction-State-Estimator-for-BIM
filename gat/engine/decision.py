@@ -1,6 +1,6 @@
 """Decision-focused belief assessment and evidence stopping.
 
-GAT's product question is not "which sensor has the most information?" in
+CSE's product question is not "which sensor has the most information?" in
 the abstract.  It is "is a stated architectural criterion resolved at the
 required confidence, and if not, which available observation is worth its
 burden?"  This module makes that contract explicit for a minimum scalar
@@ -14,7 +14,7 @@ stops for a resolved criterion.  For an unresolved criterion, candidate
 observations are scored by the active-inference layer and selected only when
 their decision-relevant information gain exceeds their declared cost.
 
-This probabilistic assessment does not replace GAT's hard invariant
+This probabilistic assessment does not replace CSE's hard invariant
 verification and does not authorize a physical intervention.  It is an
 auditable decision-support boundary over the current immutable world state.
 """

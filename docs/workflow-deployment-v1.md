@@ -1,6 +1,6 @@
 # Construction workflow deployment contract v1
 
-This milestone turns GAT's mathematical assessments into a host-neutral
+This milestone turns CSE's mathematical assessments into a host-neutral
 workflow boundary for four initial use cases:
 
 1. as-built clearance acceptance;
@@ -11,7 +11,7 @@ workflow boundary for four initial use cases:
 The deployment model is deliberately asymmetric:
 
 ```text
-authoritative GAT state + evidence ledger
+authoritative CSE state + evidence ledger
                  |
         gat-headless (read only)
                  |

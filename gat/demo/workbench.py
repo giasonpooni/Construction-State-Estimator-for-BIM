@@ -3,7 +3,7 @@
 Does the available building evidence support routing a duct through the
 party wall at the required clearance?  The engine decides; this demo binds
 its decision, the execution history and the corpus audit into a single
-offline GAT Console page, then asserts what the page must show.
+offline CSE Console page, then asserts what the page must show.
 
 Run with::
 

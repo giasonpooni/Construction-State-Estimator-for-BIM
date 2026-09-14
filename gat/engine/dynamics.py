@@ -7,7 +7,7 @@ variables ``x`` over a declared interval ``dt``::
 
 Untargeted raw variables follow identity dynamics. Cross-covariances are
 transported by the same full transition matrix and ``Q`` is injected only into
-the selected block. The result is an ordinary first-class GAT transformation:
+the selected block. The result is an ordinary first-class CSE transformation:
 derived state is rebuilt, invariants run, the session commits or rolls back,
 and the closed ledger can replay it.
 

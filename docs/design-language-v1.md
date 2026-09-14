@@ -1,6 +1,6 @@
-# GAT design language v1
+# CSE design language v1
 
-Every human surface of GAT — the terminal CLI, the HTML decision report,
+Every human surface of CSE — the terminal CLI, the HTML decision report,
 and the Blender assurance panel — renders the same backend vocabulary the
 same way. This document is the contract those surfaces share; the code
 that enforces it is `gat/report.py` (terminal + HTML) and
@@ -218,7 +218,7 @@ assurance flags render `no` in plain sight and audit statuses like
   while its fill keeps the identity hue, because an audit status describes
   the corpus, not a verdict on the asset. `READY` pieces carry no outline.
 * `gat console model.ifc -o console.html [--decision … --request … --ledger … --no-audit]`
-  — the GAT Console: the six readouts above behind one function selector
+  — the CSE Console: the six readouts above behind one function selector
   (keys 1–6), the viewer embedded in a sandboxed frame as FIELD, the
   relationship graph as RELATIONS, the belief per entity as BELIEF, and the
   report pages as LOG / DECISION / INTAKE. Selecting an element in any

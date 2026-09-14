@@ -1,4 +1,4 @@
-"""Synthetic scale probe for dense and incremental GAT propagation.
+"""Synthetic scale probe for dense and incremental CSE propagation.
 
 This is a measurement harness, not a performance promise. It builds synthetic
 nonlinear dependency chains, changes one raw variable, and compares complete
@@ -15,7 +15,7 @@ Two shapes, because the answer depends entirely on which one you build:
 
 ``coupled``
     ``N`` walls whose areas all ride one storey ``ClearHeight`` -- the coupling
-    GAT is built around, and the one the README singles out. Changing a wall's
+    CSE is built around, and the one the README singles out. Changing a wall's
     own length still invalidates two rows. Changing the shared height
     invalidates ``2N``, and then the incremental path is about 1.5x *slower*
     than simply recomputing everything, because it pays bookkeeping for work it
@@ -402,7 +402,7 @@ def run_probe(
             encoding="utf-8",
         )
     if not quiet:
-        print(f"GAT INCREMENTAL PROPAGATION SCALE PROBE  [{model}]")
+        print(f"CSE INCREMENTAL PROPAGATION SCALE PROBE  [{model}]")
         print(f"changing {measurements[0]['changed_variable']}")
         print(
             "storeys  full vars  complete(s)  incremental(s)  verify(s)  "

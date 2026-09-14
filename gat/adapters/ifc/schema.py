@@ -102,7 +102,7 @@ PRODUCT_CLASSES: dict[str, str] = {
     "IFCDOOR": "IfcDoor",
 }
 
-# Engineering elements become authoritative only when an explicit GAT
+# Engineering elements become authoritative only when an explicit CSE
 # contract property set is present. Keeping these outside PRODUCT_CLASSES
 # prevents ordinary real-world IFC beams from becoming mandatory inputs to
 # the v0 architectural lowering path.

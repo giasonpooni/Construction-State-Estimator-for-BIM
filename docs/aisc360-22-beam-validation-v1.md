@@ -66,7 +66,7 @@ through the same F2-1 expression and binds both the code-validation profile
 digest and independent oracle id into its validation/computation records.
 
 The AISC oracle validates the deterministic nominal and LRFD available-strength
-calculation only. GAT's later probability threshold and three-valued
+calculation only. CSE's later probability threshold and three-valued
 `SATISFIED` / `VIOLATED` / `UNRESOLVED` assessment are an uncertainty-aware
 decision overlay; they are not presented as an AISC-prescribed acceptance
 procedure.

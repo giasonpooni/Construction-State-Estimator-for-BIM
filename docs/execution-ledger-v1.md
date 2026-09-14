@@ -1,15 +1,15 @@
-# GAT execution ledger v1
+# CSE execution ledger v1
 
 ## Purpose
 
 `gat-execution-ledger` is the authoritative history of computational changes
-to one GAT world. It answers a stricter question than the human-readable trace:
+to one CSE world. It answers a stricter question than the human-readable trace:
 
 > Starting from this exact checkpoint, can another compatible runtime reproduce
 > every accepted transition, every rejected attempt, every invariant result,
 > and the complete final joint belief exactly?
 
-Ledger v1 records operations in GAT's closed transformation algebra plus typed
+Ledger v1 records operations in CSE's closed transformation algebra plus typed
 state-preserving causal records. It does not deserialize or execute arbitrary
 code.
 

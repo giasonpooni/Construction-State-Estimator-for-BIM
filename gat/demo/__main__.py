@@ -1,4 +1,4 @@
-"""The GAT v0 milestone demonstration (README §17).
+"""The CSE v0 milestone demonstration (README §17).
 
     python -m gat.demo
 

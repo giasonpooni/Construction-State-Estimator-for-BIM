@@ -1,4 +1,4 @@
-"""Geometry authority codes for GAT checks.
+"""Geometry authority codes for CSE checks.
 
 These codes are part of the public decision contract. Clearance scored from
 Gaussianized boxes with openings unsubtracted is GAUSSIAN_PROXY and cannot

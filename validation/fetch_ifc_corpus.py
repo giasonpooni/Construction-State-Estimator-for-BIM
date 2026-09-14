@@ -27,7 +27,7 @@ def fetch(output_directory: str | Path, *, include_large: bool = False) -> tuple
             raise ValueError(f"unsafe corpus destination {destination!r}")
         request = urllib.request.Request(
             model["url"],
-            headers={"User-Agent": "GAT-IFC-validation/1"},
+            headers={"User-Agent": "CSE-IFC-validation/1"},
         )
         with urllib.request.urlopen(request, timeout=120) as response:
             payload = response.read(int(model["size_bytes"]) + 1)

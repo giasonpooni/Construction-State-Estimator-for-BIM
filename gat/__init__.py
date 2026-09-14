@@ -1,4 +1,4 @@
-"""GAT — a decision-focused, uncertainty-aware BIM state engine.
+"""CSE — a decision-focused, uncertainty-aware BIM state engine.
 
     Design intent + evidence + criteria -> auditable architectural belief
         -> decision or next evidence -> propagated, verified state

@@ -2,7 +2,7 @@
 
 The hand-written ``gat.adapters.ifc`` path remains fail-closed and
 authoritative. This module exists so a later implementation can
-differential-test quantities and pull solids/voids GAT does not yet read.
+differential-test quantities and pull solids/voids CSE does not yet read.
 
 v0 only answers: is IfcOpenShell installed, and if so can it open the file
 without claiming section or clearance authority.

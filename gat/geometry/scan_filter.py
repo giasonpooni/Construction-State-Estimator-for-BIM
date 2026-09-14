@@ -5,7 +5,7 @@ them irrelevant to one clearance case and some of them noise. It has to be
 reduced before it can be registered. The question is not whether to filter but
 whether the filtering is *stated*.
 
-GAT's position: a transformation that changes what the evidence says is part
+CSE's position: a transformation that changes what the evidence says is part
 of the evidence. Every operation here records its method, its parameters, and
 how many points it dropped, and the resulting :class:`FilteredScan` carries
 the digest of the cloud it came from as well as its own. A receipt built on

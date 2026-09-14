@@ -1,4 +1,4 @@
-"""Carrier-independent, restartable snapshots of a GAT computational world.
+"""Carrier-independent, restartable snapshots of a CSE computational world.
 
 The existing JSON export is intentionally a downstream view.  A state
 snapshot has a stronger contract: it must reconstruct the complete

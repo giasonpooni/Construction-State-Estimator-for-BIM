@@ -1074,7 +1074,7 @@ def render_html(report: DecisionReport) -> str:
         '<html lang="en"><head><meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         '<meta name="color-scheme" content="light dark">',
-        f"<title>GAT decision report: {esc(report.subject)}</title>",
+        f"<title>CSE decision report: {esc(report.subject)}</title>",
         f"<style>{_HTML_STYLE}</style></head><body><main>",
     ]
     parts.extend(_html_body_parts(report))

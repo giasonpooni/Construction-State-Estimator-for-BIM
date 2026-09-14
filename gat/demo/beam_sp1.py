@@ -133,7 +133,7 @@ def run_beam_sp1(
     _write_json(output / "beam_assurance_summary.json", summary)
 
     if not quiet:
-        print("=== GAT SP1 BEAM PROOF ===========================================")
+        print("=== CSE SP1 BEAM PROOF ===========================================")
         print(f"fixed computation: {request.claim.computation_digest}")
         print(f"public statement:  {request.public_statement_digest}")
         print(f"program:           {receipt.program_digest}")
@@ -144,7 +144,7 @@ def run_beam_sp1(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate and verify the GAT SP1 beam proof")
+    parser = argparse.ArgumentParser(description="Generate and verify the CSE SP1 beam proof")
     parser.add_argument("output_directory")
     parser.add_argument("--executable", required=True)
     parser.add_argument("--timeout", type=float, default=3600.0)

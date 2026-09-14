@@ -7,7 +7,7 @@ next phase is headless and Blender/Bonsai exposure of that validated chain.
 
 ## Why this exists
 
-GAT's authoritative IFC loader is fail-closed. That protects a decision from
+CSE's authoritative IFC loader is fail-closed. That protects a decision from
 being computed over an incomplete state, but it also means an unfamiliar file
 used to stop at its first incompatibility. `gat audit` is the non-mutating
 discovery boundary: it parses the file, inventories every product in the
@@ -88,7 +88,7 @@ structural model declares metres. The authoritative loader resolves the active
 `IfcProject.UnitsInContext`, converts SI-prefixed source lengths into canonical
 metres, and carries the source scale into export. Their audits therefore
 progress beyond the former unit gate. Schependomlaan contains one storey, 880
-walls, and 205 doors in GAT's current class scope. Every one of those 1,086
+walls, and 205 doors in CSE's current class scope. Every one of those 1,086
 products still lacks at least one quantity required by the v0 state contract;
 1,022 expose geometry that can be used by a future derivation adapter.
 
@@ -101,10 +101,10 @@ Conversion-based units remain fail-closed until their full
 `IfcMeasureWithUnit` chain is implemented and verified.
 
 The clinic model is the first measured structural boundary. It contains
-317,671 IFC instances, 4 storeys, 738 beams, 195 columns, and 13 slabs. GAT
+317,671 IFC instances, 4 storeys, 738 beams, 195 columns, and 13 slabs. CSE
 parses the complete file, inventories all 738 beams as candidates for explicit
 `GAT_Structural` opt-in, and refuses to claim a structural verdict:
-the source has no GAT evidence marker, the current architectural lowering
+the source has no CSE evidence marker, the current architectural lowering
 contract requires one storey, and the storeys do not provide `ClearHeight`.
 That fail-closed result is now a CI baseline rather than an anecdotal manual
 run.

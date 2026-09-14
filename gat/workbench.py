@@ -1,4 +1,4 @@
-"""The GAT Console: one specimen, six readouts, one identity.
+"""The CSE Console: one specimen, six readouts, one identity.
 
 A scientific instrument, laid out the way instruments are: a **specimen**
 you can always see the identity of, a **function selector** for the readouts
@@ -641,7 +641,7 @@ def render_console_html(
         '<html lang="en"><head><meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n'
-        f"<title>GAT Console — {title}</title>\n"
+        f"<title>CSE Console — {title}</title>\n"
         f"<style>{_HTML_STYLE}{_CONSOLE_STYLE}</style></head><body>\n"
         '<div id="console">\n'
         '<header id="head">\n'
@@ -655,7 +655,7 @@ def render_console_html(
         "</div>\n"
         "</div>\n"
         '<div id="mark"><span class="glyph" aria-hidden="true">\u25c9</span>'
-        '<span class="wordmark">GAT<br><b>CONSOLE</b></span></div>\n'
+        '<span class="wordmark">CSE<br><b>CONSOLE</b></span></div>\n'
         "</header>\n"
         '<nav id="modes" role="tablist" aria-label="readouts">'
         f'<span class="label">readout</span>{mode_buttons}</nav>\n'

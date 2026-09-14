@@ -1,4 +1,4 @@
-"""Strict JSON boundary for headless GAT workflow evaluation.
+"""Strict JSON boundary for headless CSE workflow evaluation.
 
 This is intentionally a command handler rather than a web server.  It keeps
 transport, authentication, tenancy, and deployment policy outside the
@@ -627,7 +627,7 @@ def _vector(value: object, label: str, size: int) -> tuple[float, ...]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Evaluate a headless GAT request")
+    parser = argparse.ArgumentParser(description="Evaluate a headless CSE request")
     parser.add_argument("request", nargs="?", default="-", help="JSON request path or -")
     parser.add_argument("-o", "--output", help="response path; stdout when omitted")
     parser.add_argument(

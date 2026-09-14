@@ -209,7 +209,7 @@ def run_beam_assurance(
     _write_json(summary_path, summary)
 
     if not quiet:
-        print("=== GAT BEAM ASSURANCE REFERENCE CHAIN ============================")
+        print("=== CSE BEAM ASSURANCE REFERENCE CHAIN ============================")
         print(f"beam identity: {beam.ifc_class}:{beam.global_id}")
         print(
             f"prior:   fy={before_observation.belief.mean(fy):.3f} +/- "
@@ -243,7 +243,7 @@ def run_beam_assurance(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run the complete GAT beam assurance reference chain"
+        description="Run the complete CSE beam assurance reference chain"
     )
     parser.add_argument(
         "output_directory",

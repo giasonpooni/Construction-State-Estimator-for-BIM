@@ -1,4 +1,4 @@
-"""Explicit IFC project-length normalization into GAT's metre state."""
+"""Explicit IFC project-length normalization into CSE's metre state."""
 
 from __future__ import annotations
 

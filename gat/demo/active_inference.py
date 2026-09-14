@@ -1,4 +1,4 @@
-"""Decision-focused evidence planning over the shipped GAT BIM model.
+"""Decision-focused evidence planning over the shipped CSE BIM model.
 
 Run with ``python -m gat.demo.active_inference``.  The demo asks which
 measurement is worth acquiring to resolve ``Office-A.Volume >= 60 m3`` at

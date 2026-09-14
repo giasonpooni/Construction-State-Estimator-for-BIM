@@ -378,7 +378,7 @@ def render_viewer_html(payload: Mapping[str, object]) -> str:
 _TEMPLATE = r"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GAT as-built viewer</title>
+<title>CSE as-built viewer</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: #f5f4f1;
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: #1c1c1a; }
@@ -425,7 +425,7 @@ label.cls .swatch { display: inline-block; width: 0.7em; height: 0.7em;
 </style></head><body>
 <canvas id="gl"></canvas>
 <div id="hud">
-  <h1>GAT as-built viewer</h1>
+  <h1>CSE as-built viewer</h1>
   <div class="meta" id="meta"></div>
   <div id="decision" hidden></div>
   <div id="selected" hidden></div>

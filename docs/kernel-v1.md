@@ -1,11 +1,11 @@
-# GAT kernel freeze v1
+# CSE kernel freeze v1
 
 Status: project convention. Not a feature freeze of bugs.
 
 ## Why
 
 v0 already answers the original milestone: when one architectural parameter
-changes, GAT can transform state and propagate dependents through mandatory
+changes, CSE can transform state and propagate dependents through mandatory
 verification. Additional layers are useful only when they change a
 disposition, a world digest, or a replay on the construction-acceptance
 slice.

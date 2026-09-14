@@ -10,7 +10,7 @@ particular, Geometry-Grounded-Gaussian-Splatting writes ``recon_post.ply``
 after extracting and post-processing a triangle mesh; its vertices can be
 passed through this adapter without importing its CUDA/PyTorch/Open3D stack.
 Normals, colors, faces, and any extra vertex properties are evidence metadata
-owned by the producer and are ignored by GAT's current point-to-Gaussian
+owned by the producer and are ignored by CSE's current point-to-Gaussian
 registration likelihood.
 
 Supported PLY layouts are ASCII 1.0 and binary little-endian 1.0 with scalar

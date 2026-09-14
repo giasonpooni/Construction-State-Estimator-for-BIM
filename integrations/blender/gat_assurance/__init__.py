@@ -1,4 +1,4 @@
-"""GAT Evidence and Assurance Blender extension.
+"""CSE Evidence and Assurance Blender extension.
 
 This UI consumes read-only responses from ``gat-headless``.  It never edits
 IFC data or executes a proposed transformation.  Bonsai objects can expose a
@@ -16,11 +16,11 @@ from .bridge import load_response
 
 
 bl_info = {
-    "name": "GAT Evidence and Assurance",
+    "name": "CSE Evidence and Assurance",
     "author": "Notation Systems",
     "version": (0, 2, 0),
     "blender": (4, 2, 0),
-    "location": "3D View > Sidebar > GAT",
+    "location": "3D View > Sidebar > CSE",
     "description": "Review evidence-bound BIM and beam assurance decisions",
     "category": "3D View",
 }
@@ -28,7 +28,7 @@ bl_info = {
 
 class GAT_OT_load_workflow_response(Operator):
     bl_idname = "gat.load_workflow_response"
-    bl_label = "Load GAT Decision"
+    bl_label = "Load CSE Decision"
     bl_description = "Load a read-only workflow or beam response from gat-headless"
 
     def execute(self, context):
@@ -88,7 +88,7 @@ class GAT_PT_evidence_assurance(Panel):
     bl_idname = "GAT_PT_evidence_assurance"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "GAT"
+    bl_category = "CSE"
 
     def draw(self, context):
         layout = self.layout
@@ -96,7 +96,7 @@ class GAT_PT_evidence_assurance(Panel):
         layout.prop(scene, "gat_response_path", text="Decision file")
         layout.operator(GAT_OT_load_workflow_response.bl_idname)
         if not scene.gat_disposition:
-            layout.label(text="No GAT decision loaded")
+            layout.label(text="No CSE decision loaded")
             return
         box = layout.box()
         box.label(text=f"{scene.gat_disposition}: {scene.gat_subject}")
@@ -129,7 +129,7 @@ class GAT_PT_evidence_assurance(Panel):
 _CLASSES = (GAT_OT_load_workflow_response, GAT_PT_evidence_assurance)
 _SCENE_PROPERTIES = {
     "gat_response_path": StringProperty(
-        name="GAT response",
+        name="CSE response",
         description="Local gat-headless acceptance response",
         subtype="FILE_PATH",
     ),

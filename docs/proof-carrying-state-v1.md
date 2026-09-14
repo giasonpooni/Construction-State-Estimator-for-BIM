@@ -7,7 +7,7 @@ observations are correct.
 
 ## Purpose
 
-`gat-computation-proof-manifest` is a portable commitment to one accepted GAT
+`gat-computation-proof-manifest` is a portable commitment to one accepted CSE
 state transition and its external proof artifact. It answers:
 
 > Does this proof claim concern this exact accepted operation, prior state,
@@ -32,7 +32,7 @@ The ledger and proof manifest have different jobs:
 
 | Artifact | Establishes |
 |---|---|
-| Execution ledger | Hash-chained history that a compatible GAT runtime can replay |
+| Execution ledger | Hash-chained history that a compatible CSE runtime can replay |
 | OpenUSD signature | Identity-bound publication of an exact snapshot and ledger head |
 | Transition commitment | Exact public statement and proof-artifact commitment for one accepted transition |
 | Backend verifier | Whether the external cryptographic proof verifies |
@@ -151,7 +151,7 @@ backend cryptographic proof. When no verifier is
 supplied, the final check is `NOT_CHECKED`; it can never be reported as passed.
 If an earlier binding check fails, the backend is not invoked.
 
-Proof locators are inert metadata. GAT never dereferences them automatically;
+Proof locators are inert metadata. CSE never dereferences them automatically;
 the host must obtain and supply the exact proof bytes under its own transport
 and size policy.
 
@@ -161,12 +161,12 @@ The schema remains backend-neutral. The repository now contains one pinned SP1
 v6.5.0 Rust guest and host for the bounded beam claim (using SP1 circuit
 version `v6.1.0`); the Python core still
 does not bundle or silently install a zkVM. Proof generation is an explicit
-Linux/macOS deployment step, and GAT accepts a verified claim only through an
+Linux/macOS deployment step, and CSE accepts a verified claim only through an
 explicit backend-verifier callback.
 
 Deployments must enforce an allowed tuple of proof system, proof type, program
 digest, verifying-key digest, and numerical profile. They must also evaluate
-the proof system's actual privacy properties. GAT deliberately does not infer
+the proof system's actual privacy properties. CSE deliberately does not infer
 zero knowledge from a label in the manifest.
 
 ## OpenUSD carrier direction
@@ -174,7 +174,7 @@ zero knowledge from a label in the manifest.
 The proof artifact remains content-addressed and external. A future OpenUSD
 carrier revision may embed the small manifest or a manifest reference beneath
 authoritative state and bind its digest into the carrier signature. It should
-not embed large proofs by default, and it should commit to GAT's canonical
+not embed large proofs by default, and it should commit to CSE's canonical
 semantic state rather than raw `.usdc` file bytes.
 
 That carrier change remains deferred until the beam guest has passed

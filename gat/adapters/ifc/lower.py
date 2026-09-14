@@ -178,7 +178,7 @@ def lower_ifc(
     # audit-only input.
     derived_lengths: dict[int, float] = {}
     #: Beams whose Length slot actually took the axis-derived value. A beam can
-    #: be in ``derived_lengths`` (it arrived with no GAT contract, so the axis
+    #: be in ``derived_lengths`` (it arrived with no CSE contract, so the axis
     #: was derived for it) and still declare an IfcQuantityLength, in which
     #: case the declared quantity wins and nothing about that length was
     #: measured from the solid.
@@ -199,7 +199,7 @@ def lower_ifc(
                 + ", ".join(absent)
             )
 
-        # An in-scope engineering element with no GAT contract is still a
+        # An in-scope engineering element with no CSE contract is still a
         # legitimate subject — as a length-only member, never as capacity
         # state.  This is what lets a real multi-storey model yield a world.
         for sid, (inst, canonical, marker_pset) in annotated_candidates.items():

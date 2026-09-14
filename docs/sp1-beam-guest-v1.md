@@ -2,7 +2,7 @@
 
 ## Claim
 
-The first real GAT proof program is deliberately small. It proves that the SP1
+The first real CSE proof program is deliberately small. It proves that the SP1
 v6.5.0 toolchain, with circuit compatibility version `v6.1.0`, executed this
 checked fixed-point calculation for one ledger-bound
 posterior beam slice:
@@ -61,8 +61,8 @@ python -m gat.demo.beam_sp1 out/beam-sp1 \
 ```
 
 The dedicated Linux CI lane performs this complete sequence with the CPU
-prover. It writes the proof, backend-verification receipt, and GAT computation
-proof manifest, then invokes the SP1 verifier again through GAT's fail-closed
+prover. It writes the proof, backend-verification receipt, and CSE computation
+proof manifest, then invokes the SP1 verifier again through CSE's fail-closed
 backend adapter. Success requires both manifest/ledger binding and actual SP1
 verification.
 
@@ -73,7 +73,7 @@ verification.
 | `beam_sp1_request.json` | Strict guest input, expected public values, and ledger public-statement digest |
 | `beam.sp1-proof` | Binary SP1 core proof generated for the pinned guest ELF |
 | `beam_sp1_receipt.json` | Program, verifying-key, proof, statement, and result commitments returned after backend verification |
-| `beam_sp1_manifest.json` | Backend-neutral GAT manifest binding the proof to the exact ledger transition and later fixed-computation assessment |
+| `beam_sp1_manifest.json` | Backend-neutral CSE manifest binding the proof to the exact ledger transition and later fixed-computation assessment |
 
 The program digest is SHA-256 of the guest ELF. The verifying-key digest is
 SHA-256 of SP1's 32-byte verifying-key commitment. The proof-artifact digest is

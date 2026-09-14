@@ -1,4 +1,4 @@
-"""The Gaussian primitive cloud — GAT's continuous geometric representation.
+"""The Gaussian primitive cloud — CSE's continuous geometric representation.
 
 A :class:`GaussianCloud` is a struct-of-arrays container of 3D Gaussian
 primitives: means, covariances, weights (absolute volumes, so the cloud is

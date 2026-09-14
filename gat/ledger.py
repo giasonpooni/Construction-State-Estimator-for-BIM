@@ -1,4 +1,4 @@
-"""Authoritative, hash-chained history for GAT state transitions.
+"""Authoritative, hash-chained history for CSE state transitions.
 
 The execution trace is intentionally human-oriented.  This module supplies
 the complementary machine contract: every accepted or rejected operation is

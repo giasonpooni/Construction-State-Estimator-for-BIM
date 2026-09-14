@@ -1,4 +1,4 @@
-# GAT treatise
+# CSE treatise
 
 The public entry point is [`README.md`](../README.md).
 
@@ -7,7 +7,7 @@ are preserved on `main` at commit `8147ef41` (file `README.md` before this
 branch). Restore or copy that file here if you want the treatise in-tree
 again; this branch keeps the root README short on purpose.
 
-Naming: GAT is a state transformer, not a learned neural Transformer.
+Naming: CSE is a state transformer, not a learned neural Transformer.
 OpenUSD is an optional restart carrier.
 
 Proof language: a proof manifest binds one accepted transition and, when

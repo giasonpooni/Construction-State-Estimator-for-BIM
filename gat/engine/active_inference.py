@@ -1,6 +1,6 @@
 """One-step active inference for uncertainty-aware BIM observations.
 
-GAT already distinguishes *observations* from *interventions*: an
+CSE already distinguishes *observations* from *interventions*: an
 ``ObserveQuantity`` conditions the Gaussian architectural belief, while a
 ``SetParameter`` changes it.  This module adds the policy that comes before
 an observation: given a decision-relevant quantity, which available
@@ -12,7 +12,7 @@ Principle simulator.  Around the current belief, a candidate sensor obeys
 
     y = h(mu) + H (x - mu) + eps,    eps ~ N(0, r)
 
-where ``x`` is GAT's canonical raw belief.  For a preferred target ``t`` the
+where ``x`` is CSE's canonical raw belief.  For a preferred target ``t`` the
 planner computes the one-step epistemic value
 
     I(t ; y) = 1/2 log(V_t / V_t|y)
@@ -28,7 +28,7 @@ committed through the existing ``ObserveQuantity`` -> propagate -> verify
 pipeline.
 
 All calculations are deterministic and operate in full-rank raw space.  The
-first-order validity limits are the same as GAT's normal derived-observation
+first-order validity limits are the same as CSE's normal derived-observation
 conditioning.
 """
 
@@ -78,7 +78,7 @@ class ObservationCandidate:
         return self.label or str(self.var)
 
     def observe(self, value: float) -> ObserveQuantity:
-        """Turn the selected action and an acquired value into GAT evidence."""
+        """Turn the selected action and an acquired value into CSE evidence."""
         return ObserveQuantity.single(self.var, value, self.noise_sigma)
 
 
@@ -86,7 +86,7 @@ class ObservationCandidate:
 class MinimumPreference:
     """A decision preference expressed as ``target >= minimum``.
 
-    This mirrors GAT's existing compliance-margin convention.  It is an
+    This mirrors CSE's existing compliance-margin convention.  It is an
     *evaluation preference*, not an intervention: choosing to observe cannot
     improve the building state by itself.
     """

@@ -1,4 +1,4 @@
-# GAT causal events v1
+# CSE causal events v1
 
 ## Why these are not transformations
 
@@ -13,7 +13,7 @@ changing that belief:
 | External action | Field work was proposed, authorized, started, or ended | Only returned evidence may later condition belief |
 
 Treating any of these as a state transformation would collapse the causal
-distinctions that GAT relies on. They are therefore typed, hash-chained ledger
+distinctions that CSE relies on. They are therefore typed, hash-chained ledger
 events whose prior and result world digests must be identical.
 
 ## Closed records

@@ -100,7 +100,7 @@ def run_demo(output_directory: str) -> str:
     ):
         raise RuntimeError("OpenUSD did not preserve exact ledger continuation")
 
-    print("GAT OPENUSD COMPUTATIONAL-STATE PORTABILITY")
+    print("CSE OPENUSD COMPUTATIONAL-STATE PORTABILITY")
     print(
         f"T1 carrier: {checkpoint.name}  "
         f"snapshot={carrier_digest[:12]} world={after_t1.digest()[:12]}"

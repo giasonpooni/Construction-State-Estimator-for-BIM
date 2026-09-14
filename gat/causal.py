@@ -1,4 +1,4 @@
-"""Typed, non-mutating causal records for the GAT execution ledger.
+"""Typed, non-mutating causal records for the CSE execution ledger.
 
 Architectural belief changes are transformations. Assessing that belief,
 selecting a policy, approving a proposal, and reporting an external action are

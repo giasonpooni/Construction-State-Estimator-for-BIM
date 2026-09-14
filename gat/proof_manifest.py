@@ -1,4 +1,4 @@
-"""Proof-carrying computation claims bound to GAT ledger transitions.
+"""Proof-carrying computation claims bound to CSE ledger transitions.
 
 The execution ledger proves replayability and hash-chain integrity.  This
 module defines the smaller portable statement that an external verifiable-
@@ -8,7 +8,7 @@ contract.
 
 The manifest deliberately does *not* claim that the engineering model,
 evidence, calibration, or decision policy is valid.  Those remain separate
-GAT responsibilities.  It also does not bundle a zkVM runtime.  A caller may
+CSE responsibilities.  It also does not bundle a zkVM runtime.  A caller may
 provide a backend verifier (for example an SP1 verifier) while the core keeps
 its NumPy-only dependency boundary.
 """
@@ -288,7 +288,7 @@ class ComputationProofManifest:
                 f"unsupported proof manifest schema version {root['schema_version']!r}"
             )
         if root["runtime_contract"] != LEDGER_RUNTIME_CONTRACT:
-            raise ProofManifestError("proof manifest runtime contract differs from GAT")
+            raise ProofManifestError("proof manifest runtime contract differs from CSE")
         if root["claim_scope"] != PROOF_CLAIM_SCOPE:
             raise ProofManifestError("proof manifest overstates its permitted claim scope")
 
@@ -519,7 +519,7 @@ def create_computation_proof_manifest(
 ) -> ComputationProofManifest:
     """Create a manifest for one accepted transition in ``ledger``.
 
-    The caller must already have generated ``proof_artifact``.  GAT binds it
+    The caller must already have generated ``proof_artifact``.  CSE binds it
     to the ledger statement but does not infer that its proof system is valid.
     """
     artifact = _bytes(proof_artifact, "proof_artifact")

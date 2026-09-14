@@ -1,11 +1,11 @@
-# GAT OpenUSD State Carrier v0
+# CSE OpenUSD State Carrier v0
 
 Status: experimental carrier family v0, current contract version 3. Readers
 also accept versions 1 and 2 for explicit migration.
 
-This document defines how GAT transports a restartable computational belief
+This document defines how CSE transports a restartable computational belief
 through OpenUSD. It does not make USD geometry or composed scene opinions the
-canonical GAT state.
+canonical CSE state.
 
 ## Required invariants
 
@@ -19,14 +19,14 @@ An accepted carrier must reconstruct the same:
 - invariant results and architectural configuration digest.
 - hash-chained execution history and its exact final-world binding (v3).
 
-The receiving runtime calls GAT's ordinary snapshot decoder and invariant
+The receiving runtime calls CSE's ordinary snapshot decoder and invariant
 registry. A stage is not accepted merely because USD can parse it.
 
 ## Carrier versus observation
 
-A verified GAT `State` branch is a representation of an already-formed
+A verified CSE `State` branch is a representation of an already-formed
 computational belief. It is not a general rule that incoming USD attributes are
-true or are measurements. Non-GAT scene data, images, point clouds, Gaussian
+true or are measurements. Non-CSE scene data, images, point clouds, Gaussian
 splats, and sensor values must remain quarantined artifacts until an adapter
 classifies their source, binds semantic identity, supplies a measurement model
 and uncertainty, and emits accepted evidence through the normal conditioning
@@ -62,7 +62,7 @@ literal path `/GAT`.
 
 ## Authoritative mapping
 
-| GAT meaning | USD representation |
+| CSE meaning | USD representation |
 |---|---|
 | Entity identity | Entity prim with `gat:ifcClass` and `gat:globalId` |
 | Quantity identity | Quantity prim plus `gat:owner` relationship |
@@ -80,7 +80,7 @@ literal path `/GAT`.
 | Publisher authentication | Optional Ed25519 signature metadata on the default prim |
 
 Relationships are used for entity and variable references so USD namespace
-editing and composition can translate paths without changing GAT identity.
+editing and composition can translate paths without changing CSE identity.
 Identity never depends on a prim name or path.
 
 ## Derived view
@@ -92,7 +92,7 @@ changing reconstruction. No reader may infer belief values from this branch.
 
 Future Gaussian-splat, mesh, material, and simulation views belong under this
 same non-authoritative boundary unless a later carrier version explicitly
-promotes their semantics into GAT IR.
+promotes their semantics into CSE IR.
 
 ## Decode and acceptance
 
@@ -107,7 +107,7 @@ The reader:
    closed when trusted provenance is required;
 7. reconstructs a `GatStateSnapshot v1` value and verifies its integrity digest;
 8. recompiles the closed IR and rebuilds all derived state;
-9. runs the complete GAT invariant registry;
+9. runs the complete CSE invariant registry;
 10. requires module, world, and configuration digests to agree;
 11. requires the ledger head's result world to equal the restored world.
 
@@ -120,7 +120,7 @@ The authoritative subtree may be referenced beneath a different default prim.
 Namespace-aware relationship targets must continue to resolve after prim
 renames or reparenting. Stronger opinions may alter the derived view freely.
 Any stronger opinion that changes authoritative decoded content must also
-produce a valid new snapshot digest and pass GAT verification.
+produce a valid new snapshot digest and pass CSE verification.
 
 The conformance suite validates reference composition, stronger presentation
 opinions, namespace renaming, and variant selections. Derived variants are
@@ -133,7 +133,7 @@ without updating the bound snapshot is rejected.
 entities, quantities, relationships, constraints, raw variables, dense
 covariance values, cumulative embedded JSON characters, trace events, and
 ledger events.
-Limits are checked before GAT reconstruction and before large USD arrays are
+Limits are checked before CSE reconstruction and before large USD arrays are
 copied into Python where the format permits. The byte limit applies to the root
 layer; composed references are additionally constrained by prim and state-data
 budgets.
