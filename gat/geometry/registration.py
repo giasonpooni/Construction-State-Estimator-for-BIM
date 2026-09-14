@@ -111,9 +111,14 @@ class RegistrationResult:
         Derived from the complete-data Gauss-Newton information matrix, so
         these are LOWER bounds on the true pose uncertainty (see module
         docstring).
+
+        An information matrix that does not determine a component reports
+        ``inf`` for it, not zero.  Clipping a negative variance to zero --
+        which is what an inverse of a singular Hessian can produce -- reads
+        an ill-conditioned fit as a pose known exactly, and every threshold
+        downstream would then pass on the strength of the failure.
         """
-        cov = np.linalg.inv(self.info_matrix)
-        return np.sqrt(np.clip(np.diag(cov), 0.0, None))
+        return _marginal_sigma(self.info_matrix)
 
 
 #: Two starts are the same basin when their poses agree this closely. Far
@@ -162,9 +167,54 @@ CONTENDER_WINDOW = 1.0
 #: against the 1.0-nat window that uses them.
 BASIN_SAMPLE_POINTS = 600
 
+#: How uncertain the pose may be and still be an answer. ``pose_sigma`` is a
+#: LOWER bound on the pose uncertainty, so a reading above these is a floor
+#: already too high, not an estimate that might be better than it looks.
+#:
+#: The basin margin and the fit NLL do not cover this. Both are per point:
+#: a handful of returns can separate two basins by 2.2 nats/point and still
+#: not say where the scanner stood. Measured on the demo building, a 10-point
+#: capture was accepted with the pose 10.9 deg and 865 mm wrong, and a
+#: 20-point capture with it 279 mm wrong; both read a yaw sigma above 0.50
+#: deg while every correct acceptance from 20 to 4000 points read 0.43 deg or
+#: below. The information matrix knew, and nothing asked it.
+#:
+#: Half a degree of yaw is about 90 mm at the far corner of this building, the
+#: order of the tolerances the decisions downstream turn on. Like ``accept_nll``
+#: and ``min_basin_margin`` these are declared defaults calibrated on the demo,
+#: overridable per call, and not a claim about every building.
+#:
+#: They complement the basin margin rather than replace it: the information
+#: matrix is local curvature at one optimum and cannot see a rival basin --
+#: the ambiguous single wall reads a comfortable 0.20 deg -- while the margin
+#: cannot see how few points it was measured over.
+MAX_YAW_SIGMA = math.radians(0.5)
+MAX_TRANSLATION_SIGMA = 0.100
+
 CONVERGENCE_ROUNDS = 8
 CONVERGENCE_YAW = BASIN_YAW_TOL / 10.0
 CONVERGENCE_TRANSLATION = BASIN_TRANSLATION_TOL / 10.0
+
+
+def _marginal_sigma(information: np.ndarray) -> np.ndarray:
+    """Marginal standard deviations from an information matrix, fail-closed.
+
+    A component the matrix does not determine reports ``inf``, never zero: an
+    inverse of a singular Hessian can yield a negative variance, and clipping
+    that to zero reads the failure as a pose known exactly.
+    """
+    information = np.asarray(information, dtype=np.float64)
+    if not np.isfinite(information).all():
+        return np.full(information.shape[0], math.inf)
+    try:
+        variance = np.diag(np.linalg.inv(information))
+    except np.linalg.LinAlgError:
+        return np.full(information.shape[0], math.inf)
+    return np.where(
+        np.isfinite(variance) & (variance > 0.0),
+        np.sqrt(np.abs(variance)),
+        math.inf,
+    )
 
 
 def _basin_separation(
@@ -547,6 +597,8 @@ class ScanRegistrar:
         n_starts: int = 8,
         accept_nll: float = 6.0,
         min_basin_margin: float = 0.10,
+        max_yaw_sigma: float = MAX_YAW_SIGMA,
+        max_translation_sigma: float = MAX_TRANSLATION_SIGMA,
     ) -> RegistrationResult:
         """Coarse-to-fine multi-start registration.
 
@@ -571,10 +623,27 @@ class ScanRegistrar:
         and the registrar returns whichever came first.  A margin of 0.10
         over hundreds of points is decisive evidence; below it the scan does
         not determine where it was taken from, and saying so is the answer.
+
+        ``max_yaw_sigma`` and ``max_translation_sigma`` bound the pose
+        uncertainty the fit is willing to call an answer.  That is a separate
+        question from either gate above: both of those are per point, and a
+        scan of a dozen returns can clear both while leaving the pose a
+        degree and a metre out.  See :data:`MAX_YAW_SIGMA`.
+
+        ``n_starts`` must be at least two.  The starts are the only evidence
+        this module has that the winner is unique, so a single start leaves
+        the margin unmeasured -- and an unmeasured margin reads as ``inf``,
+        which passes every threshold.
         """
         scan = _validated_scan(scan)
         if scan.shape[0] < 10:
             raise RegistrationError("scan has too few points")
+        if n_starts < 2:
+            raise RegistrationError(
+                f"n_starts={n_starts} cannot establish that a pose is unique: "
+                "one start has nothing to be compared against and no starts "
+                "have nothing to compare"
+            )
         model_centroid = self.means.mean(axis=0)
         scan_centroid = scan.mean(axis=0)
 
@@ -640,6 +709,21 @@ class ScanRegistrar:
                 f"{min_basin_margin:g}); the scan does not determine where it "
                 "was taken from"
             )
+        yaw_sigma, *translation_sigma = _marginal_sigma(info)
+        worst_translation = max(translation_sigma)
+        if not yaw_sigma <= max_yaw_sigma:
+            refusals.append(
+                f"pose yaw is uncertain to at least {math.degrees(yaw_sigma):.3g} "
+                f"deg (allowed {math.degrees(max_yaw_sigma):g}); the fit is not "
+                "determined well enough to place the scan"
+            )
+        if not worst_translation <= max_translation_sigma:
+            refusals.append(
+                f"pose translation is uncertain to at least "
+                f"{worst_translation * 1000.0:.3g} mm (allowed "
+                f"{max_translation_sigma * 1000.0:g}); the fit is not determined "
+                "well enough to place the scan"
+            )
         return RegistrationResult(
             transform=T,
             nll=nll,
@@ -662,6 +746,8 @@ class ScanRegistrar:
         n_starts: int = 8,
         accept_nll: float = 6.0,
         min_basin_margin: float = 0.10,
+        max_yaw_sigma: float = MAX_YAW_SIGMA,
+        max_translation_sigma: float = MAX_TRANSLATION_SIGMA,
     ) -> RegistrationResult:
         """Register vertices from a standard external PLY artifact.
 
@@ -674,7 +760,12 @@ class ScanRegistrar:
         from gat.geometry.scan_io import load_ply_points
 
         return self.register(
-            load_ply_points(path), n_starts, accept_nll, min_basin_margin
+            load_ply_points(path),
+            n_starts,
+            accept_nll,
+            min_basin_margin,
+            max_yaw_sigma,
+            max_translation_sigma,
         )
 
     def evidence(

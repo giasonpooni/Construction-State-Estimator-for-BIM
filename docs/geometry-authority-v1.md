@@ -43,9 +43,23 @@ so the quantities that qualify it are gates, not annotations:
 | Gate | Refuses | Measured on the demo wall |
 |---|---|---|
 | basin separation | a pose the scan does not determine | yaw 0 and yaw 180 tie within 6.5e-05 nats/point, 10.2 m apart |
+| `max_yaw_sigma` / `max_translation_sigma` | a pose too few returns can locate | a 10-point capture cleared fit and margin with the pose 10.9 deg and 865 mm out, reading 0.77 deg of yaw sigma |
 | `registration.accepted` | a pose that failed its own fit gate | was computed and never read downstream |
 | `min_face_coverage` | returns that span a face without sampling it | two 4 mm clusters read 0.07 against a sweep's 0.35 |
 | `max_residual_sigma_ratio` | a face whose scatter is shape, not noise | a 45 mm bulge scatters 20.7 mm rms, past 15.0 mm |
+
+The pose-uncertainty pair is there because the two gates above it are both
+*means over points*. A dozen returns can separate two basins by 2.2
+nats/point and fit them well and still leave the pose a metre out; there are
+simply not enough of them for either number to mean what it says. The
+information matrix is the one quantity in the registration that counts
+evidence rather than averaging it, and it was computed, reported, and never
+asked. It is added to basin separation rather than replacing it: the matrix
+is local curvature at one optimum and cannot see a rival basin -- on the
+ambiguous single wall it reads a comfortable 0.20 deg -- while the margin
+cannot see how few points it was measured over. Both readings are lower
+bounds on the uncertainty, so passing is the weaker claim and failing is
+decisive.
 
 The last one also states the premise of the noise model: dividing the face
 residual by the return count is the standard error of a mean, which is the

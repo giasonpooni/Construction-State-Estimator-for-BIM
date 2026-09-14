@@ -51,6 +51,7 @@ from gat.geometry import (
     synthesize_scan,
 )
 from gat.geometry.attention import element_payload_means
+from gat.geometry.registration import MAX_TRANSLATION_SIGMA, MAX_YAW_SIGMA
 from gat.geometry.fusion import FrameTransform
 from gat.geometry.objectives import (
     LayoutObjective,
@@ -176,7 +177,10 @@ def main() -> int:
     sig = result.pose_sigma()
     print(
         f"pose information (Gauss-Newton): sigma_yaw {math.degrees(sig[0])*60:.2f} arcmin, "
-        f"sigma_t ({sig[1]*1000:.1f}, {sig[2]*1000:.1f}, {sig[3]*1000:.1f}) mm"
+        f"sigma_t ({sig[1]*1000:.1f}, {sig[2]*1000:.1f}, {sig[3]*1000:.1f}) mm "
+        f"(gated at {math.degrees(MAX_YAW_SIGMA)*60:.0f} arcmin, "
+        f"{MAX_TRANSLATION_SIGMA*1000:.0f} mm; these are lower bounds, so a "
+        "reading above the limit is a floor already too high)"
     )
     for stage in (result.coarse_trace, result.nll_trace):
         assert (np.diff(np.asarray(stage)) <= 1e-9).all(), (

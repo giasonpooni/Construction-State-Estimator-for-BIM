@@ -27,6 +27,9 @@ from gat.geometry.registration import (
     BASIN_TRANSLATION_TOL,
     BASIN_YAW_TOL,
     CONTENDER_WINDOW,
+    MAX_TRANSLATION_SIGMA,
+    MAX_YAW_SIGMA,
+    _marginal_sigma,
     RigidTransformZ,
     ScanRegistrar,
     _basin_separation,
@@ -244,14 +247,26 @@ class TestPlyHandoff(RegistrationTestBase):
 
         self.assertIs(actual, self.result)
         register.assert_called_once()
-        loaded, n_starts, accept_nll, basin_margin = register.call_args.args
+        (
+            loaded,
+            n_starts,
+            accept_nll,
+            basin_margin,
+            yaw_sigma,
+            translation_sigma,
+        ) = register.call_args.args
         # The fixture deliberately serializes float32 PLY coordinates; the
         # loader promotes them to float64 without claiming lost source bits.
         np.testing.assert_allclose(loaded, points, rtol=0.0, atol=1e-6)
         self.assertEqual(n_starts, 4)
         self.assertEqual(accept_nll, 2.5)
-        # A PLY goes through the same gates, basin separation included.
+        # A PLY goes through every gate the native path does, at the same
+        # defaults -- basin separation and pose uncertainty included. A gate
+        # added to register() and not threaded through here would be a hole
+        # under whatever a reconstruction engine hands over.
         self.assertEqual(basin_margin, 0.10)
+        self.assertEqual(yaw_sigma, MAX_YAW_SIGMA)
+        self.assertEqual(translation_sigma, MAX_TRANSLATION_SIGMA)
 
 
 class TestBasinSeparation(RegistrationTestBase):
@@ -450,6 +465,148 @@ class SearchEconomyTests(RegistrationTestBase):
             dense.basin_margin, self.result.basin_margin, delta=0.10
         )
         self.assertGreater(min(dense.basin_margin, self.result.basin_margin), 0.10)
+
+
+class PoseUncertaintyGateTests(RegistrationTestBase):
+    """A fit can clear both per-point gates and still not place the scan.
+
+    ``nll`` and ``basin_margin`` are both means over points. A dozen returns
+    can separate two basins by 2.2 nats/point and fit them well, and still
+    leave the pose a degree and a metre out -- there are simply not enough of
+    them for either number to mean what it says. The information matrix is
+    the one quantity here that counts evidence rather than averaging it, and
+    until now it was computed, reported, and never asked.
+    """
+
+    #: The same demo building, scanned too sparsely to place. Both are
+    #: accepted by the fit and the margin; both have the pose badly wrong.
+    SPARSE = ((10, 5, 10.9, 0.865), (20, 5, 2.1, 0.279))
+
+    def _sparse(self, n_points: int, seed: int) -> np.ndarray:
+        return synthesize_scan(
+            self.scene, n_points=n_points, noise_sigma=0.01,
+            outlier_frac=0.02, transform=TRUTH, seed=seed,
+        )
+
+    def test_a_scan_too_sparse_to_place_is_refused(self) -> None:
+        for n_points, seed, yaw_deg, translation_m in self.SPARSE:
+            with self.subTest(n_points=n_points):
+                scan = self._sparse(n_points, seed)
+                result = self.registrar.register(scan)
+
+                yaw, translation = result.transform.compose_error(TRUTH)
+                self.assertAlmostEqual(math.degrees(yaw), yaw_deg, delta=0.5)
+                self.assertAlmostEqual(translation, translation_m, delta=0.05)
+
+                self.assertFalse(result.accepted)
+                self.assertIn("uncertain to at least", result.refusal)
+
+    def test_the_other_two_gates_would_have_accepted_it(self) -> None:
+        """The point of the gate: without it these scans pass everything.
+
+        Both clear the fit and clear the margin -- one of them by 2.2
+        nats/point, four times what the 4000-point capture manages -- so
+        neither existing gate is what refuses them.
+        """
+        for n_points, seed, _, _ in self.SPARSE:
+            with self.subTest(n_points=n_points):
+                scan = self._sparse(n_points, seed)
+                result = self.registrar.register(
+                    scan, max_yaw_sigma=math.inf, max_translation_sigma=math.inf
+                )
+                self.assertTrue(
+                    result.accepted,
+                    "these scans are refused by the uncertainty gate alone; if "
+                    "another gate now catches them this test proves nothing",
+                )
+                self.assertLess(result.nll, 6.0)
+                self.assertGreaterEqual(result.basin_margin, 0.10)
+
+    def test_the_limits_are_declared_parameters(self) -> None:
+        scan = self._sparse(*self.SPARSE[0][:2])
+        self.assertFalse(self.registrar.register(scan).accepted)
+        self.assertTrue(
+            self.registrar.register(
+                scan, max_yaw_sigma=math.inf, max_translation_sigma=math.inf
+            ).accepted
+        )
+
+    def test_a_scan_dense_enough_to_place_still_passes(self) -> None:
+        """The gate must cost nothing on the captures it is meant to admit."""
+        self.assertTrue(self.result.accepted)
+        self.assertEqual(self.result.refusal, "")
+        yaw_sigma, *translation_sigma = self.result.pose_sigma()
+        self.assertLess(yaw_sigma, MAX_YAW_SIGMA / 5.0)
+        self.assertLess(max(translation_sigma), MAX_TRANSLATION_SIGMA / 5.0)
+
+    def test_the_gate_cannot_see_a_rival_basin(self) -> None:
+        """Why this gate is added to the margin rather than replacing it.
+
+        The information matrix is local curvature at one optimum. On the
+        single wall -- two poses a quadrant and ten metres apart, 6.5e-05
+        nats between them -- it reports a comfortable fraction of a degree,
+        because each optimum on its own is sharp. Only the margin sees that
+        there are two of them.
+        """
+        rng = np.random.default_rng(4)
+        n = 400
+        wall = np.column_stack([
+            np.full(n, 5.1) + rng.normal(0.0, 0.002, n),
+            rng.uniform(0.35, 3.65, n),
+            np.full(n, 2.985) + rng.normal(0.0, 0.003, n),
+        ])
+        result = self.registrar.register(wall)
+        self.assertLess(result.pose_sigma()[0], MAX_YAW_SIGMA)
+        self.assertFalse(result.accepted)
+        self.assertIn("does not determine where it was taken from", result.refusal)
+
+
+class MarginalSigmaTests(unittest.TestCase):
+    """An information matrix that determines nothing must not report certainty."""
+
+    def test_a_healthy_matrix_inverts_normally(self) -> None:
+        sigma = _marginal_sigma(np.diag([4.0, 100.0, 100.0, 100.0]))
+        self.assertAlmostEqual(sigma[0], 0.5)
+        self.assertAlmostEqual(sigma[1], 0.1)
+
+    def test_a_singular_matrix_is_infinitely_uncertain(self) -> None:
+        sigma = _marginal_sigma(np.zeros((4, 4)))
+        self.assertTrue(np.all(np.isinf(sigma)))
+
+    def test_a_negative_variance_is_not_clipped_to_certainty(self) -> None:
+        """Clipping is the dangerous reading: it turns a broken inverse into
+        a pose known exactly, and every threshold downstream then passes."""
+        sigma = _marginal_sigma(np.diag([1.0, -1.0, 1.0, 1.0]))
+        self.assertEqual(sigma[1], math.inf)
+        self.assertAlmostEqual(sigma[0], 1.0)
+
+    def test_a_non_finite_matrix_is_infinitely_uncertain(self) -> None:
+        for bad in (np.nan, np.inf):
+            with self.subTest(value=bad):
+                H = np.eye(4)
+                H[2, 2] = bad
+                self.assertTrue(np.all(np.isinf(_marginal_sigma(H))))
+
+
+class StartCountTests(RegistrationTestBase):
+    """The starts are the only evidence that the winner is unique."""
+
+    def test_a_single_start_cannot_witness_uniqueness(self) -> None:
+        """One start yields one basin, and one basin reports an infinite
+        margin -- 'unopposed', which is the correct reading for eight starts
+        that agree and exactly the wrong one for a start with no opponent."""
+        with self.assertRaises(RegistrationError) as caught:
+            self.registrar.register(self.scan, n_starts=1)
+        self.assertIn("unique", str(caught.exception))
+
+    def test_no_starts_is_a_refusal_not_an_internal_error(self) -> None:
+        with self.assertRaises(RegistrationError):
+            self.registrar.register(self.scan, n_starts=0)
+
+    def test_two_starts_are_enough_to_be_asked(self) -> None:
+        result = self.registrar.register(self.scan, n_starts=2)
+        self.assertEqual(result.basin_count, 2)
+        self.assertEqual(result.basin_margin, self.result.basin_margin)
 
 
 if __name__ == "__main__":
