@@ -34,9 +34,11 @@ runtime dependency stays numpy-only):
   execution trace (provenance).
 
 The stage commits to what it contains.  ``gat_state`` carries a module
-digest, a bytewise world digest, and a configuration digest, and
-``load_usd`` recomputes all three against the reconstruction and refuses a
-stage that does not answer for its own contents.  Without that the carrier
+digest, a bytewise world digest, a configuration digest, and a carrier digest
+over the provenance the world identity deliberately excludes -- the source
+path and the execution trace -- and ``load_usd`` recomputes all four against
+the reconstruction and refuses a stage that does not answer for its own
+contents.  Without that the carrier
 is a text file with a decorative hash: a hand-edited storey height loaded
 clean and ``gat verify`` reported a pass.  The three digests break in
 distinguishable ways, so a refusal names which one did.
@@ -52,8 +54,11 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
+import hashlib
 
 import numpy as np
+
+from typing import Mapping
 
 from gat.engine.configuration import QUANT, configuration_digest
 from gat.engine.executor import World
@@ -87,6 +92,25 @@ LEGACY_FORMATS = frozenset({"gat-usd v0"})
 # ---------------------------------------------------------------------------
 # Encoding
 # ---------------------------------------------------------------------------
+
+
+def carrier_digest(meta: Mapping[str, object], trace: list) -> str:
+    """Commit to what the carrier carries but the world identity does not.
+
+    ``meta["source"]`` is deliberately outside the module digest -- a world is
+    named by its model's bytes, not by the caller's path (see
+    ``docs/world-identity-v2.md``) -- and the execution trace is provenance,
+    not state.  Both travel in the stage anyway, so without this a carrier
+    could be edited to name ``/approved/CERTIFIED-final.ifc`` as its source and
+    carry a fabricated "signed off by engineer" event, and still verify clean:
+    every number it commits to is untouched.  Nothing downstream reads that
+    trace today, which was equally true of ``world_digest`` before it was
+    checked.
+    """
+    payload = json.dumps(
+        {"meta": dict(meta), "trace": trace}, sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _usda_string(payload: str) -> str:
@@ -202,6 +226,7 @@ def export_usd(world: World, path: str, trace_events: list | None = None) -> int
         "constraints": [_constraint_obj(c) for c in module.constraints],
         "trace": trace_events or [],
         "module_digest": module.digest(),
+        "carrier_digest": carrier_digest(module.meta, trace_events or []),
         "world_digest": world.digest(),
         "configuration_digest": configuration_digest(world),
     }
@@ -305,7 +330,12 @@ def _extract_strings(text: str, marker: str) -> list[str]:
 #: different questions — the transferred IR, the belief bytewise, and the
 #: architectural configuration to within ``QUANT`` — so which one breaks says
 #: what was done to the stage.  Ordered narrowest cause first.
-_COMMITMENTS = ("module_digest", "world_digest", "configuration_digest")
+_COMMITMENTS = (
+    "module_digest",
+    "world_digest",
+    "configuration_digest",
+    "carrier_digest",
+)
 
 
 def _recorded_commitments(state: dict) -> dict[str, str]:
@@ -321,7 +351,9 @@ def _recorded_commitments(state: dict) -> dict[str, str]:
     return recorded
 
 
-def _check_commitments(world: World, recorded: dict[str, str]) -> None:
+def _check_commitments(
+    world: World, recorded: dict[str, str], trace: list
+) -> None:
     """Refuse a carrier whose contents are not what it commits to.
 
     The stage is a text file, and nothing stops an editor from changing a
@@ -339,6 +371,7 @@ def _check_commitments(world: World, recorded: dict[str, str]) -> None:
         "module_digest": world.module.digest(),
         "world_digest": world.digest(),
         "configuration_digest": configuration_digest(world),
+        "carrier_digest": carrier_digest(world.module.meta, trace),
     }
     broken = [key for key in _COMMITMENTS if computed[key] != recorded[key]]
     if not broken:
@@ -350,6 +383,11 @@ def _check_commitments(world: World, recorded: dict[str, str]) -> None:
         cause = (
             "the architectural configuration in this stage is not the one it "
             "commits to; a quantity was altered after export"
+        )
+    elif broken == ["carrier_digest"]:
+        cause = (
+            "the state is intact but the provenance around it is not: this "
+            "stage's source or execution trace was edited after export"
         )
     else:
         # Configuration identity quantizes to QUANT and reads means and sigmas
@@ -471,8 +509,9 @@ def load_usd(path: str) -> tuple[World, list]:
     except Exception as exc:
         raise SnapshotError(f"carrier belief could not be restored: {exc}") from exc
 
-    _check_commitments(world, recorded)
-    return world, list(state.get("trace", []))
+    trace = list(state.get("trace", []))
+    _check_commitments(world, recorded, trace)
+    return world, trace
 
 
 # ---------------------------------------------------------------------------

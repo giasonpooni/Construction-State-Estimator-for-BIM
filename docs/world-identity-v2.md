@@ -71,3 +71,18 @@ dispositions changed; only what counts as the world's name.
   would need its own version bump.
 - Treating `source` as untrusted. It remains recorded, and remains useful;
   it simply does not vote on identity.
+
+## What a carrier must still commit to
+
+Excluding `source` from the *world* digest is right — a world is named by its
+model's bytes, not by whoever loaded it — but it leaves a field travelling
+inside every exported artifact that nothing checks. A stage could be edited to
+name `/approved/CERTIFIED-final.ifc` as its source, or to carry a fabricated
+"signed off by engineer" trace event, while every number it commits to stayed
+intact.
+
+So identity and provenance are committed separately. `gat.adapters.usd_io`
+carries a fourth digest, `carrier_digest`, over `meta` in full and the
+execution trace, and refuses a stage whose provenance was rewritten with a
+message that distinguishes it from an edited quantity. A format that carries
+provenance outside the world digest owes its reader the same treatment.

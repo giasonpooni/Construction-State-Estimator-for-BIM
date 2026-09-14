@@ -44,7 +44,13 @@ class TestGeometryDemoSubprocess(unittest.TestCase):
                 cwd=REPO_ROOT,
                 capture_output=True,
                 text=True,
-                timeout=120,
+                # The demo registers a 4000-point scan, and registration now
+                # converges every contender to cluster real basins rather than
+                # the eight starts it began at. That takes ~50 s here against
+                # ~33 s before, so 120 s left barely 2x headroom on a CI runner
+                # slower than this one. The timeout is here to catch a hang,
+                # not to enforce a performance budget.
+                timeout=420,
             )
             self.assertEqual(
                 proc.returncode,

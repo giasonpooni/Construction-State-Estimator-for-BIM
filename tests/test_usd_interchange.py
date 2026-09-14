@@ -165,6 +165,50 @@ class UsdInterchangeTests(unittest.TestCase):
                     )
                 self.assertIn(f"records no {key}", str(caught.exception))
 
+    # -- the carrier answers for its provenance too ------------------------
+
+    def test_a_rewritten_source_is_refused(self) -> None:
+        """``meta["source"]`` is deliberately outside the *world* digest -- a
+        world is named by its model's bytes, not the caller's path -- so
+        without a carrier-level commitment a stage could be edited to name an
+        approved model while carrying a different one, and verify clean."""
+        with self.assertRaises(SnapshotError) as caught:
+            load_usd(
+                self._edited(
+                    "source.usda",
+                    '"source": "' + MODEL.replace("\\", "/"),
+                    '"source": "/approved/CERTIFIED-final.ifc',
+                )
+            )
+        self.assertIn("provenance around it", str(caught.exception))
+
+    def test_an_invented_approval_event_is_refused(self) -> None:
+        """The trace is provenance, not state, so every number stays intact."""
+        forged = (
+            '{"detail": "approved for construction", "digest": "'
+            + "0" * 64
+            + '", "name": "SIGNED OFF BY ENGINEER", "seq": 99, '
+            '"stage": "approval", "verify": "pass"}, '
+        )
+        with self.assertRaises(SnapshotError) as caught:
+            load_usd(self._edited("approval.usda", '"trace": [', '"trace": [' + forged))
+        self.assertIn("provenance around it", str(caught.exception))
+
+    def test_the_provenance_refusal_is_not_a_state_refusal(self) -> None:
+        """A reader must be able to tell 'someone edited a quantity' from
+        'the numbers are intact but the story around them was rewritten'."""
+        with self.assertRaises(SnapshotError) as caught:
+            load_usd(
+                self._edited(
+                    "source2.usda",
+                    '"source": "' + MODEL.replace("\\", "/"),
+                    '"source": "/elsewhere.ifc',
+                )
+            )
+        message = str(caught.exception)
+        self.assertIn("the state is intact", message)
+        self.assertNotIn("altered after export", message)
+
     def test_an_honest_carrier_still_loads(self) -> None:
         world, _ = load_usd(self.usd_path)
         self.assertEqual(world.digest(), self.session.world.digest())
