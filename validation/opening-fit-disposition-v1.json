@@ -1,5 +1,5 @@
 {
-  "case_digest": "eab46ab1cb30a5b74c4b1994485b2fc81b569fae94ac0512821c9f71ee401e84",
+  "case_digest": "89ebf9b7b7adee88ea4ebdd5db15b2ff3d391e1b9105193a85cc892b3d38f3fb",
   "case_id": "opening-fit-demo",
   "checks": [
     {
@@ -10,7 +10,10 @@
         "margin_mean": 0.09999999999999998,
         "margin_sigma": 0.0058309518948453,
         "minimum_margin": 0.05,
-        "rhs": "GATDOR0000000000000210.Width"
+        "rhs": "GATDOR0000000000000210.Width",
+        "target_quantities": [
+          "Width"
+        ]
       },
       "geometry_authority": "QUANTITY_ONLY",
       "kind": "DIFFERENCE",
@@ -18,7 +21,7 @@
       "p_satisfies_upper": 1.0,
       "subject": "Door-1 width fit",
       "verdict": "SATISFIED",
-      "world_digest": "793474abd27d323b8ef69944ef62fa09a83d192c691a9c21d8a5b74e145d39d5"
+      "world_digest": "c9d208204470ae38df254d6c6fbc21af26ab7b173e878d05134c85931d5ab785"
     },
     {
       "check_id": "height",
@@ -28,7 +31,10 @@
         "margin_mean": 0.10000000000000009,
         "margin_sigma": 0.0058309518948453,
         "minimum_margin": 0.05,
-        "rhs": "GATDOR0000000000000210.Height"
+        "rhs": "GATDOR0000000000000210.Height",
+        "target_quantities": [
+          "Height"
+        ]
       },
       "geometry_authority": "QUANTITY_ONLY",
       "kind": "DIFFERENCE",
@@ -36,7 +42,7 @@
       "p_satisfies_upper": 1.0,
       "subject": "Door-1 height fit",
       "verdict": "SATISFIED",
-      "world_digest": "793474abd27d323b8ef69944ef62fa09a83d192c691a9c21d8a5b74e145d39d5"
+      "world_digest": "c9d208204470ae38df254d6c6fbc21af26ab7b173e878d05134c85931d5ab785"
     }
   ],
   "disposition": "REQUEST_EVIDENCE",
@@ -73,5 +79,5 @@
   "unresolved_check_ids": [],
   "variant_constraints": [],
   "workflow": "OPENING_VERIFICATION",
-  "world_digest": "793474abd27d323b8ef69944ef62fa09a83d192c691a9c21d8a5b74e145d39d5"
+  "world_digest": "c9d208204470ae38df254d6c6fbc21af26ab7b173e878d05134c85931d5ab785"
 }

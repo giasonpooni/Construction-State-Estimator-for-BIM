@@ -58,7 +58,15 @@ from gat.trace import TraceEvent
 
 SNAPSHOT_FORMAT = "gat-state-snapshot"
 SNAPSHOT_SCHEMA_VERSION = 1
-RUNTIME_CONTRACT = "gat-world-v1"
+#: The same world-identity contract ``gat.ledger.LEDGER_RUNTIME_CONTRACT``
+#: names, and deliberately the same string. This one read ``gat-world-v1``
+#: long after the ledger moved to v2 for the path-independence change, so a
+#: snapshot written under the superseded identity rules passed this guard and
+#: failed later at the digest comparison -- reported as "reconstructed module
+#: digest differs from source", which describes a corrupt document rather
+#: than an obsolete one. Fail-closed either way, but it named the wrong
+#: cause. Both now move together.
+RUNTIME_CONTRACT = "gat-world-v3"
 INTEGRITY_ALGORITHM = "sha256"
 
 

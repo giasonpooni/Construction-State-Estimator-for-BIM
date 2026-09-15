@@ -34,7 +34,7 @@
     "capacity_sigma_n_m": 7858.912138457841,
     "p_satisfies": 0.9625778267382401,
     "verdict": "SATISFIED",
-    "world_digest": "945c6574e32633871696516a864cddc51187b7a6c39d3fb8f35cd19b1f0eee61"
+    "world_digest": "3eb6b7657c10b3b9b30a845a372d518ea6b45d1651307d4225d9f82f2a7175a7"
   },
   "revised_after_certificate": {
     "acceptance": {
@@ -59,7 +59,7 @@
     "capacity_sigma_n_m": 3417.9874792492296,
     "p_satisfies": 0.017881196157638835,
     "verdict": "VIOLATED",
-    "world_digest": "b6434955f513c614e413b659c94fec0bc495a23b5c5bee62474761bfea4d7da4"
+    "world_digest": "08e7b35b95a7bb7817e59ee220c7cd33cb7d549e42b27f8b4d154faff7d19ca0"
   },
   "support": {
     "beam_geometry_issues": [],

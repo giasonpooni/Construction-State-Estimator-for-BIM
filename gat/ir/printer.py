@@ -9,6 +9,21 @@ Identity is deliberately narrower than metadata.  Keys in
 :data:`PROVENANCE_META` describe how a module was obtained and never enter
 the digest; everything else does.  That is what makes a world digest a
 statement about *the model*, not about the caller's working directory.
+
+"Everything else" includes each constraint's ``tol``.  It did not until
+``gat-ir v2``: the text named a constraint's variables and its shape and
+stopped, so two modules whose only difference was a tolerance of 1e-09
+against one of 1e9 printed the same bytes and carried the same module,
+world, and configuration digest.  A tolerance is not a presentation detail
+-- it is the whole quantitative content of ``CONS-01``, ``CONS-02`` and
+``CONS-03``.  Measured on ``gat/demo/model.ifc``: rewriting every ``tol`` in
+an exported snapshot and recomputing the envelope's own unkeyed SHA-256
+produced a state that loads clean, reports digest
+``793474ab...`` -- byte-identical to the honest one -- and then *accepts* a
+door driven a metre past its opening, where the honest world refuses it with
+``VerificationError: CONS-02``.  Anything bound to a world digest, including
+an evidence receipt's ``result_world_digest``, was bound to both worlds at
+once.
 """
 
 from __future__ import annotations
@@ -35,7 +50,7 @@ def _fmt(value: float) -> str:
 
 
 def print_module(module: Module) -> str:
-    lines: list[str] = ["gat-ir v1"]
+    lines: list[str] = ["gat-ir v2"]
     for key in sorted(module.meta):
         if key in PROVENANCE_META:
             continue
@@ -68,11 +83,23 @@ def print_module(module: Module) -> str:
         lines.append(f"rel {rel.kind.value} {rel.source} -> {rel.target}")
 
     for c in module.constraints:
+        # ``tol`` is emitted unconditionally, including when it equals the
+        # dataclass default. Omitting the default would keep the digests of
+        # every existing module unchanged and would still be lossless today,
+        # but it would silently tie identity to a constant in
+        # ``gat.ir.core``: change that default and two modules written under
+        # the two values collide. The cost of saying it every time is one
+        # short suffix per constraint.
         if isinstance(c, NonNegative):
-            lines.append(f"constraint nonneg {c.var}")
+            lines.append(f"constraint nonneg {c.var} tol={_fmt(c.tol)}")
         elif isinstance(c, LessEqual):
-            lines.append(f"constraint lesseq {c.lhs} <= {c.rhs}")
+            lines.append(
+                f"constraint lesseq {c.lhs} <= {c.rhs} tol={_fmt(c.tol)}"
+            )
         elif isinstance(c, ExprEquals):
-            lines.append(f"constraint expreq {c.var} == {c.expr.to_str()}")
+            lines.append(
+                f"constraint expreq {c.var} == {c.expr.to_str()} "
+                f"tol={_fmt(c.tol)}"
+            )
 
     return "\n".join(lines) + "\n"

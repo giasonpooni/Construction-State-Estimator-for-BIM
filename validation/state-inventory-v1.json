@@ -13,7 +13,7 @@
       },
       "lowers": true,
       "raw_variables": 24,
-      "world_digest": "793474abd27d323b8ef69944ef62fa09a83d192c691a9c21d8a5b74e145d39d5"
+      "world_digest": "c9d208204470ae38df254d6c6fbc21af26ab7b173e878d05134c85931d5ab785"
     },
     {
       "dense_covariance_entries": 16,
@@ -28,7 +28,7 @@
       },
       "lowers": true,
       "raw_variables": 4,
-      "world_digest": "945c6574e32633871696516a864cddc51187b7a6c39d3fb8f35cd19b1f0eee61"
+      "world_digest": "3eb6b7657c10b3b9b30a845a372d518ea6b45d1651307d4225d9f82f2a7175a7"
     }
   ],
   "format": "gat-state-inventory-v1",

@@ -60,10 +60,15 @@ LEDGER_FORMAT = "gat-execution-ledger"
 # verdict and cannot be re-validated against this schema.
 LEDGER_SCHEMA_VERSION = 2
 # v2: world identity is path-independent. The module digest covers the
-# source content hash instead of the caller's path string, so a ledger
-# written by a v1 runtime carries digests this runtime cannot reproduce
-# and is refused on replay rather than silently re-interpreted.
-LEDGER_RUNTIME_CONTRACT = "gat-world-v2"
+# source content hash instead of the caller's path string.
+# v3: the module digest covers each constraint's ``tol``. Under v2 the IR
+# text named a constraint's variables and shape and stopped, so a world
+# whose tolerances had been rewritten 1e-09 -> 1e9 was byte-identical to the
+# honest one and accepted changes the honest one refuses.
+# Either way a ledger written by an older runtime carries digests this
+# runtime cannot reproduce, and is refused on replay rather than silently
+# re-interpreted.
+LEDGER_RUNTIME_CONTRACT = "gat-world-v3"
 LEDGER_HASH_ALGORITHM = "sha256"
 LEDGER_MAX_BYTES = 16 * 1024 * 1024
 LEDGER_MAX_EVENTS = 100_000
