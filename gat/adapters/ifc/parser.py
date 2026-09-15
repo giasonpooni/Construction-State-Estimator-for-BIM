@@ -93,10 +93,27 @@ class IfcFile:
         return max(self.instances) if self.instances else 0
 
 
+#: How deeply an argument list may nest before the file is refused.
+#:
+#: ``parse_arg_list`` and ``parse_value`` are mutually recursive, two Python
+#: frames per level, so against the default 1000-frame limit a file nests
+#: about 500 deep before the interpreter runs out of stack. That arrives as
+#: ``RecursionError`` -- not a ``GatError``, so a caller catching the declared
+#: hierarchy does not catch it, and a crafted file is a cheap way to knock
+#: over anything parsing untrusted uploads.
+#:
+#: MEASURED, real IFC does not go deep: the shipped model nests 2, and the
+#: public buildingSMART corpus nests 3 -- including a 317,671-instance
+#: structural model. 64 is twenty times the deepest real file and an eighth
+#: of what breaks, so it separates "malformed" from "large" without argument.
+MAX_ARG_NESTING = 64
+
+
 class _Parser:
     def __init__(self, tokens: list[Token]):
         self.tokens = tokens
         self.pos = 0
+        self.depth = 0
 
     def peek(self) -> Token:
         if self.pos >= len(self.tokens):
@@ -173,20 +190,32 @@ class _Parser:
         return IfcFile(header, instances, schema)
 
     def parse_arg_list(self) -> tuple:
+        open_paren = self.peek()
         self.expect(TokKind.LPAREN)
-        args: list = []
-        if self.peek().kind is TokKind.RPAREN:
-            self.next()
-            return tuple(args)
-        while True:
-            args.append(self.parse_value())
-            tok = self.next()
-            if tok.kind is TokKind.RPAREN:
+        if self.depth >= MAX_ARG_NESTING:
+            raise SpfParseError(
+                f"argument list nests deeper than {MAX_ARG_NESTING}; refusing "
+                "before the parser runs out of stack",
+                open_paren.line,
+                open_paren.col,
+            )
+        self.depth += 1
+        try:
+            args: list = []
+            if self.peek().kind is TokKind.RPAREN:
+                self.next()
                 return tuple(args)
-            if tok.kind is not TokKind.COMMA:
-                raise SpfParseError(
-                    f"expected ',' or ')', got {tok.value!r}", tok.line, tok.col
-                )
+            while True:
+                args.append(self.parse_value())
+                tok = self.next()
+                if tok.kind is TokKind.RPAREN:
+                    return tuple(args)
+                if tok.kind is not TokKind.COMMA:
+                    raise SpfParseError(
+                        f"expected ',' or ')', got {tok.value!r}", tok.line, tok.col
+                    )
+        finally:
+            self.depth -= 1
 
     def parse_value(self):
         tok = self.peek()

@@ -8,10 +8,12 @@ extraction, by_type ordering, deref/duplicate errors, opaque unknowns.
 
 from __future__ import annotations
 
+import sys
 import unittest
 
 from gat.adapters.ifc.lexer import TokKind, tokenize
 from gat.adapters.ifc.parser import (
+    MAX_ARG_NESTING,
     OMITTED,
     EnumVal,
     Ref,
@@ -249,6 +251,59 @@ class TestParserErrors(unittest.TestCase):
         # A bare value where '#id=' is expected.
         with self.assertRaises(SpfParseError):
             parse_ifc(spf(["FOO();"]))
+
+
+class NestingDepthTests(unittest.TestCase):
+    """A crafted file must not be able to exhaust the interpreter's stack.
+
+    ``parse_arg_list`` and ``parse_value`` are mutually recursive, two Python
+    frames per level, so around 500 levels the parser dies with
+    ``RecursionError``. That is not a ``GatError`` -- a caller catching the
+    declared hierarchy does not catch it -- and against a service parsing
+    untrusted uploads it is a cheap way to knock the process over.
+
+    MEASURED, real IFC does not nest: the shipped model reaches 2 and the
+    public buildingSMART corpus reaches 3, including a 317,671-instance
+    structural model. The limit sits twenty times above the deepest real file
+    and an eighth of the way to what used to break.
+    """
+
+    HEADER = (
+        "ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION((''),'');\n"
+        "FILE_NAME('','',(''),(''),'','','');\nFILE_SCHEMA(('IFC4'));\n"
+        "ENDSEC;\nDATA;\n"
+    )
+
+    def _nested(self, depth: int) -> str:
+        return (
+            self.HEADER
+            + "#1=IFCPROJECT(" + "(" * depth + ")" * depth + ",$,'a');\n"
+            + "ENDSEC;\nEND-ISO-10303-21;\n"
+        )
+
+    def test_a_deeply_nested_file_is_refused_not_a_stack_overflow(self) -> None:
+        for depth in (MAX_ARG_NESTING + 1, 500, 10_000, 200_000):
+            with self.subTest(depth=depth):
+                with self.assertRaises(SpfParseError) as caught:
+                    parse_ifc(self._nested(depth))
+                self.assertIn("nests deeper than", str(caught.exception))
+
+    def test_the_refusal_carries_a_location(self) -> None:
+        """A parse refusal that cannot say where is not much use on a file of
+        three hundred thousand instances."""
+        with self.assertRaises(SpfParseError) as caught:
+            parse_ifc(self._nested(500))
+        self.assertGreater(caught.exception.line, 0)
+
+    def test_nesting_a_real_file_could_contain_still_parses(self) -> None:
+        """The limit separates malformed from large, so it must not fire on
+        anything a producer would write."""
+        parsed = parse_ifc(self._nested(MAX_ARG_NESTING - 2))
+        self.assertEqual(len(parsed.instances), 1)
+
+    def test_the_limit_is_far_above_real_files_and_below_the_crash(self) -> None:
+        self.assertGreaterEqual(MAX_ARG_NESTING, 20 * 3)   # deepest corpus file
+        self.assertLess(MAX_ARG_NESTING * 2, sys.getrecursionlimit() // 2)
 
 
 if __name__ == "__main__":
