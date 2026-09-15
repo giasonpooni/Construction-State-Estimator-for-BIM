@@ -34,11 +34,37 @@ selectivity observable without changing the causal transformation contract.
 ## Equivalence contract
 
 Incremental and complete paths produce bitwise-identical means and covariance
-on the same runtime. For each invalidated covariance block, the incremental
-path evaluates both matrix directions before symmetrization, matching the
-canonical complete pushforward's floating-point order. This stronger condition
-is required because even a sub-ULP difference would change a world digest and
-break exact snapshot/OpenUSD continuation.
+on the same runtime. This stronger condition is required because even a
+sub-ULP difference would change a world digest and break exact snapshot and
+OpenUSD continuation.
+
+Getting it takes more than matching the algebra. The invalidated block used to
+be assembled from row-sliced products — `CL[rows, :] @ J.T` and
+`(CL @ J[rows, :].T).T`, averaged — which is exactly `0.5 * (A + Aᵀ)` on the
+rows in question and therefore the same expression the complete path
+evaluates. It is not the same arithmetic: a row-sliced product reaches BLAS as
+a different kernel from the blocked gemm behind the whole product, with a
+different reduction order along the contracted axis, and entries land a ULP
+apart. Measured on the shipped model, shifting one design parameter by 11 mm
+gave `sigma[27, 27] = 4.368708900000001e-05` complete against
+`4.3687089e-05` incremental, and across 600 randomised edits 81 of them —
+13.5% — committed a world whose digest differed from the same belief
+recompiled. Since `execute` always commits through the incremental path while
+`restore_snapshot` rebuilds through `with_belief`, a legitimate, verified
+session could not reload its own snapshot.
+
+So the block is taken from the whole product: `symmetrize(CL @ Jᵀ)`, sliced
+after the fact. That is bitwise-identical by construction rather than by
+argument, and it costs. At 128 synthetic storeys the local-edit speedup falls
+from 3.4× to 1.8× — roughly half the win, spent on the one property the rest
+of the runtime's identity story rests on. The savings that remain are the
+larger ones: derived values and Jacobian rows outside the dependency closure
+are still not recomputed, and neither are the unaffected rows of `CL`.
+
+A pair of example transformations cannot hold this. `tests/
+test_incremental_propagation.py` walks a few hundred randomised edits forward
+on the incremental world — building on each result, as `execute` does — and
+compares every one against the complete recompute.
 
 Ordinary execution always uses the incremental algorithm, so replay and
 OpenUSD continuation remain deterministic within the stated runtime numerical

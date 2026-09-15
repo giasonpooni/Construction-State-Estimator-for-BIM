@@ -34,7 +34,22 @@ def chol_psd(matrix: np.ndarray) -> tuple[np.ndarray, float]:
     diagonal jitter that was added (0.0 in the healthy case).  Raises
     :class:`NumericalError` when the ladder is exhausted — never repairs
     silently beyond the ladder.
+
+    Non-finite input is refused before the ladder rather than run through it.
+    ``numpy.linalg.cholesky`` does not raise on a matrix containing NaN: it
+    returns a factor full of NaN, so the first rung "succeeded" and this
+    returned that factor with ``jitter_used`` of 0.0 — reporting a covariance
+    of NaN as healthy and needing no repair, which is the opposite of what
+    this function is for.
+
+    Every caller today checks finiteness first (``GaussianState`` refuses a
+    non-finite Sigma at construction, and ``dynamics`` checks its process
+    matrices), so this closes a gap rather than a live hole. That is the
+    reason to close it: the guarantee should be this function's, not an
+    obligation spread across five call sites that the next one may not know.
     """
+    if not np.isfinite(matrix).all():
+        raise NumericalError("matrix contains non-finite entries")
     n = matrix.shape[0]
     scale = max(float(np.trace(matrix)) / max(n, 1), 1.0)
     for rung in JITTER_LADDER:

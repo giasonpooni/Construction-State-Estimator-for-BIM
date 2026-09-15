@@ -194,11 +194,29 @@ def push_forward_incremental(
             )
         covariance_left_rows = len(left_rows)
     if impacted_rows.size:
-        forward = covariance_left[impacted_rows, :] @ jacobian.T
-        reverse = (
-            covariance_left @ jacobian[impacted_rows, :].T
-        ).T
-        block = 0.5 * (forward + reverse)
+        # The block is taken from the *whole* product, not from row-sliced
+        # ones, because the contract in docs/incremental-propagation-v1.md is
+        # bitwise equality with the complete pushforward and slicing does not
+        # round the same way.
+        #
+        # Evaluating both directions and averaging matches the complete path
+        # algebraically -- `symmetrize` is exactly `0.5 * (A + A.T)` -- and
+        # that is what this used to do. It is not enough. A one-row
+        # `CL[rows, :] @ J.T` reaches BLAS as a different kernel from the
+        # blocked gemm behind `CL @ J.T`, with a different reduction order
+        # along the contracted axis, so one entry can land a ULP apart:
+        # MEASURED on the shipped model, shifting a single design parameter by
+        # 11 mm gave sigma[27, 27] = 4.368708900000001e-05 complete against
+        # 4.3687089e-05 incremental.
+        #
+        # One ULP is the whole of it. `execute` always commits through this
+        # path while `World.compile` and `with_belief` use the complete one,
+        # so the committed digest differed from the digest of the same belief
+        # recompiled -- and `restore_snapshot` rebuilds with `with_belief` and
+        # then compares digests. A legitimate, verified session could not
+        # reload its own snapshot after one ordinary edit.
+        symmetric = symmetrize(covariance_left @ jacobian.T)
+        block = symmetric[impacted_rows, :]
         sigma_full[impacted_rows, :] = block
         sigma_full[:, impacted_rows] = block.T
         sigma_full[np.ix_(impacted_rows, impacted_rows)] = block[:, impacted_rows]

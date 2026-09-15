@@ -193,5 +193,117 @@ class ClearanceAssuranceTests(unittest.TestCase):
         )
 
 
+class NothingCheckedIsNotNothingWrongTests(unittest.TestCase):
+    """An assessment that scored no element must not read as a pass.
+
+    ``max(())`` and ``sum(())`` are both 0.0, so with no solid element in the
+    scene the Frechet bounds collapse to [0, 0] and the SATISFIED branch --
+    ``upper <= 1 - confidence`` -- fires at any confidence. The runtime then
+    reported "SATISFIED ... P(any violation) in [0.000000, 0.000000]" for a
+    proposal it had compared against nothing.
+
+    Reachable without contrivance: a storey carrying spaces and no modelled
+    walls is an ordinary early-design IFC, and spaces are not solid.
+    :mod:`gat.geometry.compliance` already refuses the same reading for an
+    empty rule set -- "nothing was checked" is not "nothing is wrong" -- and
+    this is that fix carried to clearance.
+    """
+
+    #: The demo model with every wall, the opening and the door removed.
+    def _spaces_only_scene(self):
+        import re
+        import tempfile
+
+        with open(MODEL, encoding="utf-8") as handle:
+            source = handle.read().splitlines()
+        dropped = {
+            int(m.group(1))
+            for line in source
+            if (m := re.match(
+                r"#(\d+)=(IFCWALLSTANDARDCASE|IFCOPENINGELEMENT|IFCDOOR)\(", line
+            ))
+        }
+        kept = []
+        for line in source:
+            match = re.match(r"#(\d+)=", line)
+            step_id = int(match.group(1)) if match else None
+            if step_id in dropped:
+                continue
+            referenced = {int(r) for r in re.findall(r"#(\d+)", line)}
+            referenced.discard(step_id)
+            if referenced & dropped:
+                upper = line.upper()
+                if any(
+                    tag in upper
+                    for tag in (
+                        "IFCRELDEFINESBYPROPERTIES",
+                        "IFCRELVOIDSELEMENT",
+                        "IFCRELFILLSELEMENT",
+                    )
+                ):
+                    continue
+                if "IFCRELCONTAINEDINSPATIALSTRUCTURE" in upper:
+                    line = re.sub(
+                        r"\((#\d+(?:,#\d+)*)\)",
+                        lambda mm: "("
+                        + ",".join(
+                            t for t in mm.group(1).split(",")
+                            if int(t[1:]) not in dropped
+                        )
+                        + ")",
+                        line,
+                        count=1,
+                    )
+                    if "()" in line:
+                        continue
+            kept.append(line)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "spaces_only.ifc")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("\n".join(kept) + "\n")
+            session = GatSession.load_ifc(path)
+        return derive_scene(session.world)
+
+    def _duct(self):
+        return ClearanceDecision(
+            OrientedBox(origin=(2.0, 2.0, 1.5), angle=0.0, extents=(3.0, 0.4, 0.4)),
+            required_clearance=0.05,
+            confidence=0.95,
+            position_sigma=0.002,
+            label="duct through a storey with no modelled walls",
+        )
+
+    def test_the_scene_really_does_have_no_solid_element(self) -> None:
+        """If a later change makes spaces solid this test proves nothing, so
+        the premise is asserted rather than assumed."""
+        scene = self._spaces_only_scene()
+        self.assertTrue(scene.elements)
+        self.assertEqual([e for e in scene.elements if e.is_solid], [])
+
+    def test_a_proposal_compared_against_nothing_is_unresolved(self) -> None:
+        assessment = assess_clearance(self._spaces_only_scene(), self._duct())
+        self.assertIs(assessment.verdict, DecisionVerdict.UNRESOLVED)
+        self.assertFalse(assessment.resolved)
+        self.assertEqual(assessment.risks, ())
+
+    def test_the_rendering_says_why_rather_than_printing_zero_risk(self) -> None:
+        """Bounds of [0, 0] beside a verdict read as a clean result with an
+        odd label. The reader is told what actually happened."""
+        rendered = assess_clearance(self._spaces_only_scene(), self._duct()).render()
+        self.assertIn("nothing was established", rendered)
+        self.assertIn("no solid element was scored", rendered)
+        self.assertNotIn("0.000000", rendered)
+
+    def test_a_scene_with_solids_is_unaffected(self) -> None:
+        """The guard must only fire on the empty case."""
+        session = GatSession.load_ifc(MODEL)
+        scene = derive_scene(session.world)
+        self.assertTrue([e for e in scene.elements if e.is_solid])
+        assessment = assess_clearance(scene, self._duct())
+        self.assertTrue(assessment.risks)
+        self.assertIn("P(any violation)", assessment.render())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -618,8 +618,14 @@ def evaluate_acceptance_case(
         DecisionVerdict.SATISFIED,
     )
     if len(rejected) + len(unresolved) + len(satisfied) != len(case.checks):
+        # Identity, not equality, to match how the three tuples above were
+        # built. DecisionVerdict is a StrEnum, so the plain string "SATISFIED"
+        # fails `is` but passes `in`: the count check fired and the report
+        # then found nothing stranded, refusing with "verdict(s) [] on []".
         stranded = [
-            check for check in case.checks if check.verdict not in _DISPOSABLE
+            check
+            for check in case.checks
+            if not any(check.verdict is known for known in _DISPOSABLE)
         ]
         raise DecisionError(
             "this policy has no disposition for verdict(s) "

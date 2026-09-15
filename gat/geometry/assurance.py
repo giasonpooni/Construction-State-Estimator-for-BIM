@@ -19,7 +19,10 @@ the assessment reports the valid bounds
 
 The decision is SATISFIED only when the upper bound is below the permitted
 risk and VIOLATED only when the lower bound reaches the requested confidence.
-Everything between those conclusions is UNRESOLVED.
+Everything between those conclusions is UNRESOLVED, and so is an assessment
+that scored no solid element at all: with nothing compared, both bounds are
+the arithmetic of an empty set and collapse to zero, which would otherwise
+read as the strongest possible pass.
 """
 
 from __future__ import annotations
@@ -99,6 +102,15 @@ class ClearanceAssessment:
         return self.risks[0] if self.risks else None
 
     def render(self) -> str:
+        if not self.risks:
+            # Bounds of [0, 0] printed beside UNRESOLVED read as a clean
+            # result with an odd label. Say what happened instead: the
+            # numbers are the arithmetic of an empty set, not a measurement.
+            return (
+                f"{self.verdict}: {self.decision.label}; no solid element was "
+                "scored against this proposal, so nothing was established "
+                f"(required confidence={self.decision.confidence:.6f})"
+            )
         lines = [
             f"{self.verdict}: {self.decision.label}; "
             f"P(any violation) in [{self.p_any_violation_lower:.6f}, "
@@ -222,7 +234,23 @@ def assess_clearance(
     lower = max((risk.p_violates for risk in risks), default=0.0)
     upper = min(1.0, sum(risk.p_violates for risk in risks))
     permitted_risk = 1.0 - decision.confidence
-    if upper <= permitted_risk:
+    if not report.items:
+        # "Nothing was checked" is not "nothing is wrong" -- the same reading
+        # :mod:`gat.geometry.compliance` refuses for an empty rule set. With no
+        # element scored, ``max(())`` and ``sum(())`` are both 0.0, so the
+        # bounds collapse to [0, 0] and the first branch below would report
+        # SATISFIED at any confidence, with P(any violation) of exactly zero.
+        #
+        # It is reachable without contrivance: a storey carrying spaces and no
+        # modelled walls -- an ordinary early-design IFC -- derives a scene
+        # whose elements are all non-solid, and a duct routed straight through
+        # the building came back "SATISFIED ... P(any violation) in [0.000000,
+        # 0.000000]". The geometry gate happens to stop that reaching an
+        # acceptance decision, because a clearance defaults to GAUSSIAN_PROXY
+        # authority, but the assessment is rendered to people long before it
+        # reaches a policy, and it said the duct was clear.
+        verdict = DecisionVerdict.UNRESOLVED
+    elif upper <= permitted_risk:
         verdict = DecisionVerdict.SATISFIED
     elif lower >= decision.confidence:
         verdict = DecisionVerdict.VIOLATED

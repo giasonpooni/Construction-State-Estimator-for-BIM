@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 
@@ -14,7 +15,7 @@ from gat.demo.incremental_scale import (
     run_probe,
     storeys_for_dense_budget,
 )
-from gat.engine.transform import ScaleParameter, ShiftParameter
+from gat.engine.transform import ScaleParameter, SetParameter, ShiftParameter
 from gat.session import GatSession
 
 
@@ -196,6 +197,79 @@ class CoupledShapeTests(unittest.TestCase):
             with self.subTest(walls=bad):
                 with self.assertRaises(ValueError):
                     coupled_storey_module(bad)
+
+
+class BitwiseEquivalenceSweepTests(unittest.TestCase):
+    """The equivalence contract, over a walk rather than two fixed edits.
+
+    ``docs/incremental-propagation-v1.md`` promises bitwise-identical means
+    and covariance between the incremental and complete paths, "because even
+    a sub-ULP difference would change a world digest and break exact
+    snapshot/OpenUSD continuation". That was asserted above, on two
+    transformations of one variable -- and both of them happened to agree.
+
+    They are not representative. Taking the invalidated block from row-sliced
+    products (``CL[rows, :] @ J.T``) instead of from the whole product reaches
+    BLAS as a different kernel with a different reduction order, so entries
+    land a ULP apart on some edits but not others. MEASURED before the fix:
+    81 of 600 randomized edits -- 13.5% -- produced a world digest differing
+    from the same belief recompiled, and ``execute`` commits through the
+    incremental path while ``restore_snapshot`` rebuilds through the complete
+    one. A legitimate session could not reload its own snapshot.
+
+    A sweep is what catches that; a pair of examples is not.
+    """
+
+    EDITS = 200
+
+    def test_a_walk_of_random_edits_stays_bitwise_identical(self) -> None:
+        session = GatSession.load_ifc(MODEL)
+        world = session.world
+        raw_vars = list(world.binding.raw_index.vars)
+        rng = np.random.default_rng(7)
+
+        compared = 0
+        for _ in range(self.EDITS):
+            var = raw_vars[int(rng.integers(len(raw_vars)))]
+            choice = int(rng.integers(3))
+            if choice == 0:
+                transformation = ShiftParameter(var, float(rng.normal(0.0, 0.02)))
+            elif choice == 1:
+                transformation = ScaleParameter(
+                    var, float(1.0 + rng.normal(0.0, 0.01))
+                )
+            else:
+                current = world.belief.mu[world.binding.raw_index.row(var)]
+                transformation = SetParameter(
+                    var, float(current + rng.normal(0.0, 0.02)), 0.01
+                )
+            belief = transformation.apply(world.binding, world.belief)
+            complete = world.with_belief(belief)
+            incremental, _ = world.with_belief_incremental(belief)
+
+            np.testing.assert_array_equal(incremental.full.mu, complete.full.mu)
+            np.testing.assert_array_equal(
+                incremental.full.sigma, complete.full.sigma
+            )
+            self.assertEqual(incremental.digest(), complete.digest())
+            compared += 1
+            # Walk forward on the incremental world, which is what execute
+            # commits: a divergence has to survive being built on.
+            world = incremental
+
+        self.assertEqual(compared, self.EDITS)
+
+    def test_a_committed_session_can_reload_its_own_snapshot(self) -> None:
+        """The consequence, end to end: one ordinary design change, export,
+        restore. This failed with SnapshotError before the fix."""
+        session = GatSession.load_ifc(MODEL)
+        var = session.world.binding.raw_index.vars[1]
+        session.run(ShiftParameter(var, 0.011))
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "state.gat.json")
+            session.export_snapshot(path)
+            restored = GatSession.load_snapshot(path)
+        self.assertEqual(restored.world.digest(), session.world.digest())
 
 
 if __name__ == "__main__":

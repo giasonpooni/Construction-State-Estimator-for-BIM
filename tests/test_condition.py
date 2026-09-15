@@ -16,7 +16,8 @@ import numpy as np
 from gat.errors import ConditioningError
 from gat.gaussian.condition import condition, condition_linear_exact
 from gat.gaussian.linalg import chol_psd, max_asymmetry
-from gat.gaussian.state import GaussianState, VarIndex
+from gat.engine.binding import VarIndex
+from gat.gaussian.state import GaussianState
 from gat.ids import EntityId, VarId
 
 
@@ -236,6 +237,94 @@ class TestVarianceMonotonicityAndValidation(unittest.TestCase):
         H_bad = np.array([[1.0, 0.0, 0.0]])  # 3 columns vs n_raw = 2
         with self.assertRaises(ConditioningError):
             condition(belief, H_bad, np.array([0.0]), np.array([0.5]), np.array([0.1]))
+
+
+class RankDeficientExactObservationTests(unittest.TestCase):
+    """Redundant exact evidence must be refused on the rank of S, not on
+    whether the jitter ladder happened to engage.
+
+    The module promises that "a *redundant* set of exact observations makes
+    ``S`` singular and raises ConditioningError". The detector asked whether
+    ``chol_psd`` had needed jitter — but for a genuinely singular S, whether
+    rung zero succeeds is decided by the sign of a round-off-sized trailing
+    pivot. MEASURED over 400 rank-deficient exact triples, 83 escaped, and
+    every one of those committed a posterior of *zero* variance whose residual
+    against the very evidence it claimed to absorb ran to 13.7 mm.
+
+    The existing test for this used two identical rows, where the trailing
+    pivot is exactly zero and the ladder always engages, so the escape was
+    never exercised.
+    """
+
+    def _belief(self) -> GaussianState:
+        entity = EntityId("IfcWall", "GATWAL" + "0" * 16)
+        names = ("A", "B", "C")
+        index = VarIndex(tuple(VarId(entity, name) for name in names))
+        return GaussianState(
+            index, np.array([3.0, 4.0, 5.0]), np.diag([1e-4, 4e-4, 9e-4])
+        )
+
+    def test_a_rank_deficient_exact_set_is_always_refused(self) -> None:
+        """x, y and x+y, over many priors: the sum is implied by the other
+        two, so S is singular however the arithmetic rounds."""
+        H = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]])
+        noise = np.zeros(3)
+        entity = EntityId("IfcWall", "GATWAL" + "0" * 16)
+        index = VarIndex(tuple(VarId(entity, n) for n in ("A", "B", "C")))
+        rng = np.random.default_rng(3)
+        for trial in range(200):
+            mu = rng.uniform(1.0, 10.0, 3)
+            sd = rng.uniform(1e-3, 5e-2, 3)
+            belief = GaussianState(index, mu, np.diag(sd**2))
+            predicted = H @ mu
+            observed = predicted + np.array([0.0, 0.0, 0.02])
+            with self.subTest(trial=trial):
+                with self.assertRaises(ConditioningError):
+                    condition(belief, H, observed, predicted, noise)
+
+    def test_duplicate_exact_rows_are_still_refused(self) -> None:
+        """The case the old detector did catch must keep being caught."""
+        H = np.array([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+        belief = self._belief()
+        predicted = H @ belief.mu
+        with self.assertRaises(ConditioningError):
+            condition(belief, H, predicted + 1e-3, predicted, np.zeros(2))
+
+    def test_independent_exact_observations_are_still_accepted(self) -> None:
+        """The refusal must be about rank, not about exactness: an exact
+        measurement of a quantity is legal and is the point of R = 0."""
+        belief = self._belief()
+        for label, H, noise in (
+            ("one exact", np.array([[1.0, 0.0, 0.0]]), np.zeros(1)),
+            (
+                "two independent exact",
+                np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+                np.zeros(2),
+            ),
+            ("three independent exact", np.eye(3), np.zeros(3)),
+            (
+                "exact mixed with noisy",
+                np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+                np.array([0.0, 1e-4]),
+            ),
+        ):
+            with self.subTest(case=label):
+                predicted = H @ belief.mu
+                posterior = condition(belief, H, predicted + 1e-3, predicted, noise)
+                state = posterior[0] if isinstance(posterior, tuple) else posterior
+                self.assertTrue(np.isfinite(state.mu).all())
+
+    def test_duplicate_rows_with_noise_are_not_refused(self) -> None:
+        """Two noisy measurements of the same quantity are ordinary evidence:
+        with positive R, S is PD and there is nothing degenerate about it."""
+        belief = self._belief()
+        H = np.array([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+        predicted = H @ belief.mu
+        posterior = condition(
+            belief, H, predicted + 1e-3, predicted, np.array([1e-4, 1e-4])
+        )
+        state = posterior[0] if isinstance(posterior, tuple) else posterior
+        self.assertTrue(np.isfinite(state.sigma).all())
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ from gat.adapters.ifc.units import length_unit_context
 from gat.adapters.ifc.writer import _serialize_instance, _serialize_value
 from gat.engine.transform import SetParameter
 from gat.errors import LoweringError
+from gat.ir.core import Unit
 from gat.session import GatSession
 
 
@@ -184,6 +185,73 @@ class IfcUnitNormalizationTests(unittest.TestCase):
         text = self.metre_text.replace("ENDSEC;\nEND-ISO", extra + "ENDSEC;\nEND-ISO")
         with self.assertRaisesRegex(LoweringError, "ambiguous project length units"):
             GatSession.from_text(text)
+
+
+class DimensionalScalingTests(unittest.TestCase):
+    """Change only the declared unit and every quantity must move by the
+    right POWER of the scale.
+
+    The existing metre-vs-millimetre test rescales the literals too, so both
+    files describe the same building and must agree. That is the right
+    invariant and it cannot see a dimensional error: an area derived from two
+    normalized lengths comes out the same either way even if the adapter
+    treated it as a length. Changing the declaration alone separates them --
+    a length must move by s, an area by s**2, a volume by s**3, and a currency
+    must not move at all.
+    """
+
+    MODEL = os.path.join(os.path.dirname(gat.demo.__file__), "model.ifc")
+
+    POWERS = {Unit.M: 1, Unit.M2: 2, Unit.M3: 3}
+
+    def _redeclared(self, prefix: str) -> GatSession:
+        with open(self.MODEL, encoding="utf-8") as handle:
+            text = handle.read()
+        swapped = text.replace(
+            "IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.)",
+            f"IFCSIUNIT(*,.LENGTHUNIT.,{prefix},.METRE.)",
+        )
+        self.assertNotEqual(swapped, text, "the metre declaration moved")
+        return GatSession.from_text(swapped, source="redeclared.ifc")
+
+    def test_every_quantity_scales_by_the_power_of_its_unit(self) -> None:
+        base = GatSession.load_ifc(self.MODEL)
+        for prefix, scale in ((".MILLI.", 1e-3), (".KILO.", 1e3)):
+            session = self._redeclared(prefix)
+            with self.subTest(prefix=prefix):
+                checked = 0
+                for eid, entity in session.world.module.entities.items():
+                    reference = base.world.module.entities[eid]
+                    for quantity, slot in entity.slots.items():
+                        was = reference.slots[quantity].prior_mu
+                        power = self.POWERS.get(slot.unit, 0)
+                        expected = was * scale**power
+                        self.assertAlmostEqual(
+                            slot.prior_mu,
+                            expected,
+                            delta=max(abs(expected) * 1e-9, 1e-15),
+                            msg=f"{eid.global_id}.{quantity} [{slot.unit.value}]",
+                        )
+                        checked += 1
+                self.assertGreater(checked, 20, "the sweep must cover the model")
+
+    def test_a_currency_quantity_does_not_move_with_the_length_unit(self) -> None:
+        """The guard that would catch a blanket rescale: at least one slot
+        must be dimensionless, or the test above proves nothing about power 0."""
+        base = GatSession.load_ifc(self.MODEL)
+        dimensionless = [
+            (eid, q)
+            for eid, entity in base.world.module.entities.items()
+            for q, slot in entity.slots.items()
+            if slot.unit not in self.POWERS
+        ]
+        self.assertTrue(dimensionless, "model has no dimensionless quantity")
+        session = self._redeclared(".MILLI.")
+        for eid, quantity in dimensionless:
+            self.assertEqual(
+                session.world.module.entities[eid].slots[quantity].prior_mu,
+                base.world.module.entities[eid].slots[quantity].prior_mu,
+            )
 
 
 if __name__ == "__main__":

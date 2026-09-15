@@ -202,9 +202,28 @@ def preview(world: World, t: Transformation) -> ExecutionPreview:
 
     targets = t.target_vars()
     raw_targets = tuple(v for v in targets if world.binding.is_raw(v))
-    affected = world.binding.deps.affected_set(targets)
-
     is_observation = _contains_observation(t)
+
+    # For a parameter edit the declared target IS what moves, so its DAG
+    # descendants are the affected set. A conditioning update is different:
+    # it moves every raw variable correlated with the measured one, not only
+    # the measured one's ancestors, and so moves their descendants too.
+    #
+    # Reading the declared target for an observation reported nothing at all.
+    # MEASURED on the shipped model, observing GrossVolume gave
+    # `affected: []` while 34 of the 39 derived quantities moved, TotalWallCost
+    # among them. A change-impact preview whose whole job is to say what a
+    # change touches said it touched nothing.
+    #
+    # `raw_targets` already resolves this -- its own docstring says "the
+    # affected set of an observation is conservatively all raw vars with
+    # nonzero gain -- resolved by the executor from the actual update" -- and
+    # the executor simply never called it.
+    resolver = getattr(t, "raw_targets", None) if is_observation else None
+    if resolver is not None:
+        affected = world.binding.deps.affected_set(resolver(world.binding))
+    else:
+        affected = world.binding.deps.affected_set(targets)
     if not is_observation:
         _assert_selectivity(world, candidate, raw_targets, affected)
 

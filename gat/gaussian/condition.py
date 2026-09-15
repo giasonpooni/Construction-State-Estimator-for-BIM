@@ -89,17 +89,34 @@ def condition(
         raise ConditioningError(
             f"degenerate innovation covariance (redundant exact observations?): {exc}"
         ) from exc
-    if jitter > 0.0 and (noise == 0.0).any():
-        # With every noise variance positive, S is PD by construction and the
-        # ladder stays at rung zero; needing jitter while an exact (R=0)
-        # observation is present means the exact block is degenerate —
-        # redundant exact measurements must fail loudly, not be silently
-        # regularized into consistency.
-        exact = [k for k, r in enumerate(noise) if r == 0.0]
-        raise ConditioningError(
-            f"redundant exact observations (measurements {exact}): the joint "
-            f"innovation covariance is singular"
-        )
+    if (noise == 0.0).any():
+        # Redundant exact measurements must fail loudly, not be silently
+        # regularized into consistency. With every noise variance positive S
+        # is PD by construction, so the question only arises when some
+        # observation is exact (R = 0) and S can be genuinely rank-deficient.
+        #
+        # Asking whether the jitter ladder engaged is not that question. For a
+        # singular S, whether rung zero succeeds is decided by the sign of a
+        # round-off-sized trailing pivot, so the ladder often does not engage
+        # and the degeneracy passed unnoticed: MEASURED on rank-deficient
+        # exact triples (x, y, x+y with the sum contradicting by 20 mm), 83 of
+        # 400 escaped, and every one committed a posterior of *zero* variance
+        # whose residual against the very evidence it claimed to absorb ran to
+        # 13.7 mm. Contradictory evidence reported as certainty is the exact
+        # failure this refusal exists to prevent.
+        #
+        # So the rank of S is tested directly, at the standard numerical-rank
+        # tolerance (the one numpy.linalg.matrix_rank uses).
+        eigenvalues = np.linalg.eigvalsh(S)
+        largest = float(eigenvalues[-1])
+        tolerance = S.shape[0] * float(np.finfo(np.float64).eps) * max(largest, 0.0)
+        if float(eigenvalues[0]) <= tolerance or jitter > 0.0:
+            exact = [k for k, r in enumerate(noise) if r == 0.0]
+            raise ConditioningError(
+                f"redundant exact observations (measurements {exact}): the "
+                f"joint innovation covariance is singular (smallest eigenvalue "
+                f"{float(eigenvalues[0]):.3e} against {tolerance:.3e})"
+            )
 
     innovation = observed - predicted
     # K = Sigma H^T S^{-1}  computed as  (S^{-1} (H Sigma))^T via Cholesky solves

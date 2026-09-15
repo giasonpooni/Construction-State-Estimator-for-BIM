@@ -245,11 +245,21 @@ ranked request to measure the variable that would settle it.
 - Gaussian clash is a proxy; openings are not subtracted. That support is
   `GAUSSIAN_PROXY` and cannot close an as-built clearance case without scan
   evidence (`SCAN_GMM`) or a later solid adapter.
-- The scan path (`SCAN_GMM`) is a validated mechanism on synthetic,
-  self-consistent data. No real point cloud has been through it end to end,
-  and the registrar measures ~115 points/s, so a real capture must be reduced
-  first — see [`gat/geometry/scan_filter.py`](gat/geometry/scan_filter.py),
-  where that reduction is recorded as evidence rather than performed quietly.
+- The scan path (`SCAN_GMM`) is a validated mechanism on synthetic data. No
+  real point cloud has been through it end to end. A simulated terrestrial
+  survey has — occlusion, range-dependent noise, mixed pixels, clutter, stray
+  returns, through a binary PLY — and it registers 0.15 m out while
+  `pose_sigma` reports 6 mm, because a station inside a building cannot see
+  the outside of its exterior wall. Nothing downstream is fooled: the
+  independent-pose check refuses it at m² of 221 against a gate of 16. See
+  [`tests/test_surface_capture_chain.py`](tests/test_surface_capture_chain.py).
+- A real capture must be reduced before it is registered — see
+  [`gat/geometry/scan_filter.py`](gat/geometry/scan_filter.py), where that
+  reduction is recorded as evidence rather than performed quietly. Throughput
+  is not one number: the pose search is capped at a 600-point probe, so cost
+  per point *falls* with capture size — measured 99 points/s at 700 points,
+  156 at 1500, 193 at 4000 against this eight-element model. It is linear in
+  model size, which is the binding constraint; see `MAX_LIKELIHOOD_BYTES`.
 - A scan measurement now has to survive the quantities that qualify it: a
   pose the scan does not determine, a face the returns span without sampling,
   and a face whose scatter is shape rather than noise are each refused by

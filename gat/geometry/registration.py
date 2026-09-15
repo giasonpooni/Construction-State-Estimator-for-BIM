@@ -191,7 +191,14 @@ BASIN_SAMPLE_POINTS = 600
 MAX_YAW_SIGMA = math.radians(0.5)
 MAX_TRANSLATION_SIGMA = 0.100
 
-#: Ceiling on the largest array one likelihood evaluation allocates.
+#: Ceiling on the largest single array one likelihood evaluation allocates.
+#:
+#: It bounds the ``(M, K, 3)`` difference, which is the biggest thing in the
+#: call, not the call's total footprint: the ``(M, K)`` squared-distance and
+#: the ``(M, K)`` return live alongside it, so peak use runs to roughly
+#: 5/3 of this. The budget is a backstop against a scene the estimator cannot
+#: serve, and is sized with that slack in mind rather than as an accounting
+#: of every temporary.
 #:
 #: :meth:`ScanRegistrar._log_components` forms an ``(M, K, 3)`` difference
 #: between every scan point and every primitive, so its cost is the product of
@@ -670,25 +677,31 @@ class ScanRegistrar:
             yaw, translation = a.compose_error(b)
             return yaw <= CONVERGENCE_YAW and translation <= CONVERGENCE_TRANSLATION
 
-        live = [(self.nll(scan, pose), pose) for pose in starts]
+        # Poses only: the NLL of a *start* is never read. Every round replaces
+        # it with the NLL of where the round arrived, so computing it here paid
+        # one full likelihood evaluation per contender for a number the loop
+        # below shadows on its first pass.
+        live: list[RigidTransformZ] = list(starts)
         done: list[tuple[float, RigidTransformZ]] = []
+        unsettled: list[tuple[float, RigidTransformZ]] = []
         for _ in range(CONVERGENCE_ROUNDS):
             if not live:
                 break
             moved: list[tuple[float, RigidTransformZ, bool]] = []
-            for nll, pose in live:
+            for pose in live:
                 nxt, nxt_nll, _ = self.register_from(scan, pose)
                 yaw, translation = nxt.compose_error(pose)
                 at_rest = yaw <= CONVERGENCE_YAW and translation <= CONVERGENCE_TRANSLATION
                 moved.append((nxt_nll, nxt, at_rest))
 
-            live = []
+            unsettled = []
             for nll, pose, at_rest in sorted(moved, key=lambda i: i[0]):
-                pool = done if at_rest else live
-                if any(_same(pose, other) for _, other in done + live):
+                pool = done if at_rest else unsettled
+                if any(_same(pose, other) for _, other in done + unsettled):
                     continue
                 pool.append((nll, pose))
-        return sorted(done + live, key=lambda item: item[0])
+            live = [pose for _, pose in unsettled]
+        return sorted(done + unsettled, key=lambda item: item[0])
 
     def register(
         self,
