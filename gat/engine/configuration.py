@@ -38,7 +38,6 @@ import math
 
 from gat.engine.executor import World
 from gat.ids import EntityId
-from gat.ir.core import Role
 
 QUANT = 1e-6
 WL_ROUNDS = 3

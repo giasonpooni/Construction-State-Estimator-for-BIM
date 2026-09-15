@@ -27,6 +27,7 @@ from gat.geometry.registration import (
     BASIN_TRANSLATION_TOL,
     BASIN_YAW_TOL,
     CONTENDER_WINDOW,
+    MAX_LIKELIHOOD_BYTES,
     MAX_TRANSLATION_SIGMA,
     MAX_YAW_SIGMA,
     _marginal_sigma,
@@ -607,6 +608,145 @@ class StartCountTests(RegistrationTestBase):
         result = self.registrar.register(self.scan, n_starts=2)
         self.assertEqual(result.basin_count, 2)
         self.assertEqual(result.basin_margin, self.result.basin_margin)
+
+
+class CapacityTests(RegistrationTestBase):
+    """A scene this estimator cannot serve is refused, not attempted.
+
+    ``_log_components`` forms an (M, K, 3) difference between every point and
+    every primitive. Measured on the shipped model and multiples of it, a full
+    ``register`` of a 2000-point scan costs 11.6 s at K=190 and 173 s at
+    K=3040 -- linear in K, about 1.35 s per hundred primitives -- so a
+    thousand-element storey is some twenty minutes and ten thousand needs a
+    3.4 GB intermediate at the probe size alone.
+
+    Ungated that arrives as a swap-thrash or an OOM kill. On Linux the
+    allocation usually succeeds and the process dies later writing to it, so
+    there is no exception to catch: checking before allocating is the only
+    place a refusal can still be made.
+    """
+
+    def test_an_oversized_evaluation_is_refused_by_name(self) -> None:
+        tight = ScanRegistrar(self.scene, max_likelihood_bytes=1024)
+        with self.assertRaises(RegistrationError) as caught:
+            tight.register(self.scan)
+        message = str(caught.exception)
+        self.assertIn("too large for this estimator", message)
+        self.assertIn("primitives", message)
+        # The remedies, so the refusal is actionable rather than only true.
+        self.assertIn("scan_filter", message)
+        self.assertIn("max_likelihood_bytes", message)
+
+    def test_the_refusal_states_a_size_a_reader_can_hold(self) -> None:
+        """A byte count rendered only in GiB reads '0.0 GiB' for every limit
+        below a gigabyte, which is the range a caller most likely set."""
+        tight = ScanRegistrar(self.scene, max_likelihood_bytes=1024)
+        with self.assertRaises(RegistrationError) as caught:
+            tight.register(self.scan)
+        self.assertNotIn("0.0 GiB", str(caught.exception))
+        self.assertIn("1.0 KiB", str(caught.exception))
+
+    def test_the_check_runs_before_the_allocation(self) -> None:
+        """A gate that fires after the array exists has not prevented
+        anything. Refuse a size numpy could never allocate and the error has
+        to be this one, not MemoryError."""
+        huge = ScanRegistrar(self.scene)
+        # A broadcast view: the right shape, no allocation. Building the real
+        # array to test the guard would hit the very failure it prevents --
+        # this test asked numpy for 44.7 GiB on its first attempt.
+        huge.means = np.broadcast_to(np.zeros(3), (2 * 10**9, 3))
+        with self.assertRaises(RegistrationError) as caught:
+            huge.nll(self.scan, self.result.transform)
+        self.assertIn("too large for this estimator", str(caught.exception))
+
+    def test_the_shipped_model_is_nowhere_near_the_limit(self) -> None:
+        """The gate is a backstop, not a budget: it must never fire on work
+        this runtime is meant to do."""
+        needed = (
+            self.scan.shape[0] * self.registrar.means.shape[0]
+            * 3 * np.dtype(np.float64).itemsize
+        )
+        self.assertLess(needed * 100, MAX_LIKELIHOOD_BYTES)
+        self.assertTrue(self.result.accepted)
+
+
+class DeclaredParameterTests(RegistrationTestBase):
+    """Every knob on this instrument is refused when it is not a setting.
+
+    Found by handing each parameter the values a caller mistypes. Most of
+    the gates turned out to be fail-closed already -- nan and negative
+    thresholds make them refuse everything, which is the safe direction --
+    but four settings were read as something other than what was passed,
+    and one switched a gate off.
+    """
+
+    def test_a_negative_smoothing_scale_is_not_its_own_magnitude(self) -> None:
+        """``reg_sigma`` is used only as ``reg_sigma**2``, so -0.08 built an
+        instrument identical to +0.08 and -1.0 one identical to +1.0, with no
+        complaint. A sign error silently changed which instrument answered."""
+        for name in ("reg_sigma", "fine_sigma"):
+            for value in (-0.08, -1.0, 0.0, math.nan, math.inf):
+                with self.subTest(parameter=name, value=value):
+                    with self.assertRaises(RegistrationError) as caught:
+                        ScanRegistrar(self.scene, **{name: value})
+                    self.assertIn(name, str(caught.exception))
+
+    def test_a_mixture_weight_outside_the_unit_interval_is_refused(self) -> None:
+        """0, 1 and negatives reached ``math.log`` and came back as
+        'ValueError: math domain error', naming neither the parameter nor
+        the mistake."""
+        for value in (0.0, 1.0, -0.5, 1.5, math.nan):
+            with self.subTest(outlier_pi=value):
+                with self.assertRaises(RegistrationError) as caught:
+                    ScanRegistrar(self.scene, outlier_pi=value)
+                self.assertIn("outlier_pi", str(caught.exception))
+
+    def test_an_iteration_budget_of_zero_is_refused(self) -> None:
+        """``max_iter=0`` ran no EM at all and returned the centroid-matched
+        start -- 1.5 m from truth -- as a registration. It was refused only
+        because that pose happened to fit badly."""
+        for value in (0, -3):
+            with self.subTest(max_iter=value):
+                with self.assertRaises(RegistrationError):
+                    ScanRegistrar(self.scene, max_iter=value)
+
+    def test_a_gate_threshold_that_could_never_refuse_is_refused(self) -> None:
+        """``basin_margin`` is non-negative by construction, so any negative
+        threshold switches the ambiguity gate off. It was the one gate
+        parameter that failed open on a bad value."""
+        with self.assertRaises(RegistrationError) as caught:
+            self.registrar.register(self.scan, min_basin_margin=-1.0)
+        self.assertIn("could never refuse", str(caught.exception))
+
+    def test_nan_thresholds_are_refused_rather_than_silently_refusing(self) -> None:
+        """A nan threshold makes every comparison false, so the gate refuses
+        everything -- safe, but the refusal then quotes a limit of nan and
+        the caller learns nothing about what they passed."""
+        for name in ("accept_nll", "min_basin_margin", "max_yaw_sigma",
+                     "max_translation_sigma"):
+            with self.subTest(parameter=name):
+                with self.assertRaises(RegistrationError) as caught:
+                    self.registrar.register(self.scan, **{name: math.nan})
+                self.assertIn(name, str(caught.exception))
+
+    def test_infinity_still_stands_a_gate_down_deliberately(self) -> None:
+        """The validation must not take away the documented way to disable a
+        gate for a measurement, which the search-economy tests rely on."""
+        loose = self.registrar.register(
+            self.scan, max_yaw_sigma=math.inf, max_translation_sigma=math.inf
+        )
+        self.assertTrue(loose.accepted)
+
+    def test_a_non_integer_start_count_is_refused(self) -> None:
+        with self.assertRaises(RegistrationError):
+            self.registrar.register(self.scan, n_starts=2.5)
+
+    def test_a_scan_that_is_not_numbers_is_refused_by_name(self) -> None:
+        """An object array reached numpy as 'could not convert string to
+        float', which does not say it was the scan."""
+        with self.assertRaises(RegistrationError) as caught:
+            self.registrar.register(np.array([["a", "b", "c"]] * 20, dtype=object))
+        self.assertIn("scan", str(caught.exception))
 
 
 if __name__ == "__main__":

@@ -24,7 +24,6 @@ from gat.workflows.acceptance import (
 )
 from gat.engine.verify import (  # noqa: F401  (VerificationReport: annotation)
     DEFAULT_INVARIANT_CONFIDENCE,
-    Status,
     VerificationReport,
 )
 from gat.workflows.geometry_authority import (

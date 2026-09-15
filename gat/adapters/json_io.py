@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 
 from gat.engine.executor import World
-from gat.ir.core import Role
 
 #: Correlations below this magnitude are omitted from the export.
 CORR_THRESHOLD = 0.2

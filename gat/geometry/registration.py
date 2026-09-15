@@ -191,9 +191,41 @@ BASIN_SAMPLE_POINTS = 600
 MAX_YAW_SIGMA = math.radians(0.5)
 MAX_TRANSLATION_SIGMA = 0.100
 
+#: Ceiling on the largest array one likelihood evaluation allocates.
+#:
+#: :meth:`ScanRegistrar._log_components` forms an ``(M, K, 3)`` difference
+#: between every scan point and every primitive, so its cost is the product of
+#: the two and nothing in the estimator is sublinear in either. That is fine at
+#: the size this runtime has been measured on and stops being fine well before
+#: a real storey: MEASURED, a full ``register`` of a 2000-point scan takes
+#: 11.6 s against the shipped 8-element model (K=190) and 173 s at 128
+#: elements (K=3040), linear in K throughout at about 1.35 s per hundred
+#: primitives. A thousand elements is therefore some twenty minutes and ten
+#: thousand is hours, with a 3.4 GB intermediate at the probe size alone.
+#:
+#: Left ungated that arrives as a swap-thrash or an OOM kill -- on Linux the
+#: allocation itself usually succeeds and the process dies later writing to
+#: it, so there is no exception to catch and nothing to report. Checking the
+#: size before allocating is the only place a refusal can still be made, and
+#: a refusal that names the number is worth more than a killed process.
+#:
+#: 2 GiB is deliberately generous: it is a backstop against a scene this
+#: estimator cannot serve, not a budget for tuning. Raise it on the registrar
+#: if a machine can genuinely carry more.
+MAX_LIKELIHOOD_BYTES = 2 * 1024**3
+
 CONVERGENCE_ROUNDS = 8
 CONVERGENCE_YAW = BASIN_YAW_TOL / 10.0
 CONVERGENCE_TRANSLATION = BASIN_TRANSLATION_TOL / 10.0
+
+
+def _si_bytes(count: float) -> str:
+    """Byte count at a unit a reader can hold, so a refusal never says 0.0 GiB."""
+    for unit in ("B", "KiB", "MiB"):
+        if count < 1024.0:
+            return f"{count:.0f} {unit}" if unit == "B" else f"{count:.1f} {unit}"
+        count /= 1024.0
+    return f"{count:.1f} GiB"
 
 
 def _marginal_sigma(information: np.ndarray) -> np.ndarray:
@@ -341,7 +373,15 @@ class RegisteredScanPosterior:
 
 
 def _validated_scan(scan: np.ndarray) -> np.ndarray:
-    points = np.asarray(scan, dtype=np.float64)
+    try:
+        points = np.asarray(scan, dtype=np.float64)
+    except (ValueError, TypeError) as exc:
+        # An object or string array reaches numpy as "could not convert
+        # string to float", which tells the caller nothing about what it
+        # handed to a registrar.
+        raise RegistrationError(
+            f"scan is not numeric coordinate data: {exc}"
+        ) from exc
     if points.ndim != 2 or points.shape[1] != 3:
         raise RegistrationError("scan must have shape (n, 3)")
     if not np.isfinite(points).all():
@@ -426,7 +466,48 @@ class ScanRegistrar:
         outlier_pi: float = 0.05,
         max_iter: int = 30,
         tol: float = 1e-9,
+        max_likelihood_bytes: int = MAX_LIKELIHOOD_BYTES,
     ):
+        # A declared parameter that is silently misread is worse than one
+        # that is refused. `reg_sigma` is used only as `reg_sigma**2`, so a
+        # sign error builds a *different instrument* -- -0.08 is 0.08 and
+        # -1.0 is 1.0 -- and reports nothing; `outlier_pi` outside (0, 1)
+        # reached `math.log` and came back as "math domain error", which
+        # names neither the parameter nor the caller's mistake.
+        for name, value in (
+            ("reg_sigma", reg_sigma),
+            ("fine_sigma", fine_sigma),
+        ):
+            if not (math.isfinite(value) and value > 0.0):
+                raise RegistrationError(
+                    f"{name}={value!r} is not a smoothing scale: it must be "
+                    "finite and positive (it is used squared, so a negative "
+                    "value would silently become its own magnitude)"
+                )
+        if not (math.isfinite(outlier_pi) and 0.0 < outlier_pi < 1.0):
+            raise RegistrationError(
+                f"outlier_pi={outlier_pi!r} is not a mixture weight: it must "
+                "lie strictly between 0 and 1"
+            )
+        if not (isinstance(max_iter, (int, np.integer)) and max_iter >= 1):
+            raise RegistrationError(
+                f"max_iter={max_iter!r} would run no EM iterations, so the "
+                "'registered' pose would be the centroid-matched start with "
+                "nothing fitted"
+            )
+        if not (math.isfinite(tol) and tol >= 0.0):
+            raise RegistrationError(
+                f"tol={tol!r} is not a convergence tolerance: it must be "
+                "finite and non-negative"
+            )
+        if not (
+            isinstance(max_likelihood_bytes, (int, np.integer))
+            and max_likelihood_bytes >= 1
+        ):
+            raise RegistrationError(
+                f"max_likelihood_bytes={max_likelihood_bytes!r} must be a "
+                "positive number of bytes"
+            )
         scene.check_fresh(scene.world)
         solid_mask = np.isin(
             scene.cloud.element_index,
@@ -446,6 +527,7 @@ class ScanRegistrar:
         self.fine_sigma = fine_sigma
         self.max_iter = max_iter
         self.tol = tol
+        self.max_likelihood_bytes = max_likelihood_bytes
         self._set_sigma(reg_sigma)
 
     def _set_sigma(self, reg_sigma: float) -> None:
@@ -464,7 +546,24 @@ class ScanRegistrar:
     # -- likelihood --------------------------------------------------------
 
     def _log_components(self, model_points: np.ndarray) -> np.ndarray:
-        """(M, K) log[(1-pi) w_k N_k(x_m)] — the inlier component logs."""
+        """(M, K) log[(1-pi) w_k N_k(x_m)] — the inlier component logs.
+
+        Refuses before allocating rather than after: see
+        :data:`MAX_LIKELIHOOD_BYTES`.
+        """
+        points, primitives = model_points.shape[0], self.means.shape[0]
+        needed = points * primitives * 3 * np.dtype(np.float64).itemsize
+        if needed > self.max_likelihood_bytes:
+            raise RegistrationError(
+                f"this scene is too large for this estimator: {points} scan "
+                f"points against {primitives} primitives needs "
+                f"{_si_bytes(needed)} for one likelihood evaluation (limit "
+                f"{_si_bytes(self.max_likelihood_bytes)}), and the estimator "
+                "is linear in both. Reduce the points with "
+                "gat.geometry.scan_filter, scope the scene to the elements "
+                "the decision needs, or raise max_likelihood_bytes if the "
+                "machine can carry it"
+            )
         d = model_points[:, None, :] - self.means[None, :, :]     # (M, K, 3)
         m2 = np.einsum("mki,kij,mkj->mk", d, self.inv_covs, d)
         return (
@@ -638,12 +737,36 @@ class ScanRegistrar:
         scan = _validated_scan(scan)
         if scan.shape[0] < 10:
             raise RegistrationError("scan has too few points")
+        if not isinstance(n_starts, (int, np.integer)):
+            raise RegistrationError(
+                f"n_starts={n_starts!r} must be a whole number of yaw starts"
+            )
         if n_starts < 2:
             raise RegistrationError(
                 f"n_starts={n_starts} cannot establish that a pose is unique: "
                 "one start has nothing to be compared against and no starts "
                 "have nothing to compare"
             )
+        # NaN makes every one of these gates refuse, which is the safe
+        # direction but an unreadable one: the refusal quotes a threshold of
+        # nan and the caller learns nothing. A negative min_basin_margin is
+        # the one that fails the other way -- the margin is non-negative by
+        # construction, so any negative threshold silently switches the
+        # ambiguity gate off. Infinity stays legal: it is how a caller
+        # deliberately stands a gate down, and it says so.
+        for name, value, floor in (
+            ("accept_nll", accept_nll, None),
+            ("min_basin_margin", min_basin_margin, 0.0),
+            ("max_yaw_sigma", max_yaw_sigma, 0.0),
+            ("max_translation_sigma", max_translation_sigma, 0.0),
+        ):
+            if math.isnan(value):
+                raise RegistrationError(f"{name} must not be nan")
+            if floor is not None and value < floor:
+                raise RegistrationError(
+                    f"{name}={value!r} is below {floor:g}, which no measured "
+                    "value can fall under, so the gate could never refuse"
+                )
         model_centroid = self.means.mean(axis=0)
         scan_centroid = scan.mean(axis=0)
 

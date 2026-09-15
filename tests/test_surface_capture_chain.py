@@ -1,17 +1,32 @@
 """The scan chain end to end on a capture a scanner could have produced.
 
 Every other test in this repository feeds the chain
-:func:`synthesize_scan`, which draws points from the model's own Gaussian
-mixture. That makes the estimator's job well posed by construction: the
-data really does come from the density being fitted. A real capture does
-not, and the difference is not noise, it is a bias.
+:func:`synthesize_scan`, which samples *all six faces* of every element box:
+both sides of every wall, the faces buried between adjacent elements, and
+the outside of the exterior. That is a complete, symmetric shell of the
+model, and it is the right instrument for testing the estimator. It is also
+something no scanner can produce. A scanner sees the faces pointing at it.
 
-The model's elements are solids. A wall is a 0.3 m slab and its Gaussians
-fill that slab; a scanner sees one face of it. Fitting face returns to a
-volume pulls the model toward the side that was measured, by something like
-half the thickness, and the fit's own information matrix cannot see it --
-the optimum is sharp, it is just in the wrong place. Measured here: the
-pose lands ~0.15 m out while ``pose_sigma`` reports ~6 mm.
+Matching a one-sided shell against a model built from a two-sided one
+offsets the fit by about half the element thickness. MEASURED on this
+building, whose exterior walls are 0.30 m: the pose lands 0.150 m out while
+``pose_sigma`` reports 6 mm, and the registration accepts it. Sampling all
+six faces instead, through the same estimator and the same gates, lands at
+2.8 mm.
+
+The mechanism is asserted below rather than assumed, because the obvious
+alternatives are all false here and were each measured:
+
+* not coverage -- a full-sphere sweep from eighteen stations reads 158 mm,
+  no better than four stations over a 80-degree band;
+* not outliers -- injecting 300 uniform stray returns moves it by 1.7 mm;
+* not mixed pixels, clutter, or range-dependent noise -- switching each off
+  leaves it within a few mm;
+* not basin selection -- the winning basin is the correct one every time,
+  0.03 degrees in yaw, with the runner-up a full quadrant away.
+
+What is left is which faces a station can see at all, and no number of
+stations inside the building can see the outside of its exterior wall.
 
 That is the case the chain is built for. ``pose_sigma`` is documented as a
 lower bound, the registration is not trusted on its own, and conditioning a
@@ -172,9 +187,11 @@ class SurfaceBiasTests(SurfaceCaptureTestBase):
         self.assertGreater(self.result.basin_count, 1)
 
     def test_the_pose_is_out_by_far_more_than_it_reports(self) -> None:
-        """Face returns against volume Gaussians pull the model toward the
-        measured side. The information matrix is local curvature at the
-        optimum it found, so it certifies a sharp fit in the wrong place."""
+        """A one-sided shell matched against a two-sided model offsets the
+        fit by about half an element thickness -- 150 mm against this
+        building's 0.30 m walls. The information matrix is local curvature at
+        the optimum it found, so it certifies a sharp fit in the wrong
+        place."""
         _, translation = self.result.transform.compose_error(TRUTH)
         sigma = self.result.pose_sigma()
         worst_sigma = max(sigma[1:])
@@ -191,21 +208,111 @@ class SurfaceBiasTests(SurfaceCaptureTestBase):
         # with too little evidence, not one with biased evidence.
         self.assertLess(worst_sigma, MAX_TRANSLATION_SIGMA)
 
-    def test_a_volumetric_scan_of_the_same_model_is_not_biased(self) -> None:
-        """The bias belongs to surface capture, not to the registrar. Drawn
-        from the mixture being fitted, the same estimator lands an order of
-        magnitude closer with a comparable sigma."""
+    def test_sampling_every_face_of_the_same_model_is_not_biased(self) -> None:
+        """The offset belongs to the one-sidedness, not to the registrar.
+        Given all six faces of every box -- the complete shell no scanner can
+        deliver -- the same estimator, gates and scene land an order of
+        magnitude closer."""
         drawn = synthesize_scan(
             self.scene, n_points=4000, noise_sigma=0.01,
             outlier_frac=0.02, transform=TRUTH, seed=7,
         )
-        volumetric = self.registrar.register(drawn)
-        _, volumetric_error = volumetric.transform.compose_error(TRUTH)
+        every_face = self.registrar.register(drawn)
+        _, every_face_error = every_face.transform.compose_error(TRUTH)
         _, surface_error = self.result.transform.compose_error(TRUTH)
 
-        self.assertTrue(volumetric.accepted)
-        self.assertLess(volumetric_error, 0.03)
-        self.assertGreater(surface_error, 3.0 * volumetric_error)
+        self.assertTrue(every_face.accepted)
+        self.assertLess(every_face_error, 0.03)
+        self.assertGreater(surface_error, 3.0 * every_face_error)
+
+
+class MechanismTests(SurfaceCaptureTestBase):
+    """The offset is what the module docstring says it is, and not the
+    likelier-sounding alternatives.
+
+    A mechanism nobody tried to falsify is a story. Each of these was the
+    first explanation reached for, and each is wrong: they are kept as tests
+    so the claim above cannot quietly become a story again.
+    """
+
+    def _register(self, raw: np.ndarray):
+        frame = (raw - np.asarray(TRUTH.t)) @ rot_z(TRUTH.theta)
+        filtered = scan_filter.prepare_for_pose(frame, voxel_m=POSE_VOXEL_M)
+        return self.registrar.register(filtered.points)
+
+    def _offset(self, result) -> float:
+        _, translation = result.transform.compose_error(TRUTH)
+        return translation
+
+    def test_it_is_not_the_stray_returns(self) -> None:
+        """Injecting 300 uniform outliers on top of the capture -- more than
+        a third of the points that survive filtering -- moves the pose by
+        millimetres."""
+        rng = np.random.default_rng(0)
+        low, high = self.survey.min(axis=0), self.survey.max(axis=0)
+        noisy = np.vstack(
+            [self.survey, low + rng.random((300, 3)) * (high - low)]
+        )
+        self.assertAlmostEqual(
+            self._offset(self._register(noisy)),
+            self._offset(self.result),
+            delta=0.02,
+        )
+
+    def test_it_is_not_the_mixed_pixels(self) -> None:
+        """Switching the depth-edge returns off entirely leaves it."""
+        clean = np.vstack(
+            [
+                capture_station(
+                    self.boxes, station, seed=11 + index,
+                    mixed_pixel_fraction=0.0,
+                )
+                for index, station in enumerate(STATIONS)
+            ]
+        )
+        self.assertGreater(self._offset(self._register(clean)), 0.05)
+
+    def test_it_is_not_the_coverage(self) -> None:
+        """Eighteen stations sweeping the full sphere see far more of the
+        building and read no better.
+
+        This is the test that settles it: if the offset were about how much
+        surface was measured, this would fix it. What it cannot change is
+        *which* surfaces exist to be measured -- no station inside the
+        building can see the outside of its exterior wall.
+        """
+        grid = [
+            (x, y, 1.55)
+            for x in (1.2, 2.6, 4.0, 6.0, 7.4, 8.6)
+            for y in (0.8, 2.0, 3.2)
+        ]
+        thorough = np.vstack(
+            [
+                capture_station(
+                    self.boxes, station, seed=101 + index,
+                    elevation_deg=(-89.0, 89.0),
+                    mixed_pixel_fraction=0.0, stray_fraction=0.0,
+                )
+                for index, station in enumerate(grid)
+            ]
+        )
+        result = self._register(thorough)
+        self.assertGreater(len(grid), 4 * len(STATIONS))
+        self.assertGreater(self._offset(result), 0.05)
+
+    def test_it_is_not_which_basin_won(self) -> None:
+        """The winner is the correct optimum every time -- hundredths of a
+        degree in yaw -- with the runner-up a full quadrant and metres away.
+        The offset is inside the right basin, not a choice between basins."""
+        yaw, _ = self.result.transform.compose_error(TRUTH)
+        self.assertLess(math.degrees(yaw), 0.5)
+
+        rivals = [
+            pose.compose_error(self.result.transform)
+            for pose in self.result.converged_poses[1:]
+        ]
+        self.assertTrue(rivals, "one basin proves nothing about basin choice")
+        self.assertGreater(min(math.degrees(y) for y, _ in rivals), 30.0)
 
 
 class IndependentPoseRefusalTests(SurfaceCaptureTestBase):

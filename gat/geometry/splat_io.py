@@ -14,7 +14,6 @@ which makes the export a legible inspection artifact, not just a blob.
 from __future__ import annotations
 
 import math
-import struct
 
 import numpy as np
 

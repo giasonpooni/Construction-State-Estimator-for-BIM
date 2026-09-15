@@ -35,7 +35,6 @@ from gat.errors import LedgerError, OpenUsdError, SnapshotError
 from gat.geometry.stateio import derive_scene
 from gat.ledger import ExecutionLedger
 from gat.state_snapshot import (
-    SnapshotLoadResult,
     capture_snapshot,
     reconstruct_snapshot,
 )

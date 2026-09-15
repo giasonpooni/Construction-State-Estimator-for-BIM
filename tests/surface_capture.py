@@ -1,12 +1,13 @@
 """A terrestrial laser scan of the shipped model, for tests that need one.
 
 Every scan in this repository until now came from
-:func:`gat.geometry.registration.synthesize_scan`, which draws points *from
-the model's own Gaussian mixture* -- that is, from the volume the elements
-fill.  It is the right instrument for testing the estimator against its own
-likelihood, and it is not what a scanner produces.  A scanner produces
-returns from the surfaces it can see, from where it stood, and the two
-differ in a way that shows up in the pose: see
+:func:`gat.geometry.registration.synthesize_scan`, which samples *all six
+faces* of every element box, area-weighted -- both sides of every wall,
+including the faces buried between adjacent elements and the outside of the
+exterior.  It is the right instrument for testing the estimator against a
+complete, symmetric shell of the model, and no scanner can produce one: a
+scanner sees the faces pointing at it and nothing else.  That difference
+shows up in the pose, by about half a wall thickness; see
 :mod:`tests.test_surface_capture_chain`.
 
 What this simulates, and why each part is here:
@@ -93,6 +94,7 @@ def capture_station(
     seed: int,
     n_azimuth: int = 300,
     n_elevation: int = 56,
+    elevation_deg: tuple[float, float] = (-38.0, 42.0),
     sigma_0_m: float = 0.004,
     sigma_per_m: float = 0.0009,
     mixed_pixel_fraction: float = 0.004,
@@ -101,7 +103,9 @@ def capture_station(
     """One station's returns, in the model frame."""
     rng = np.random.default_rng(seed)
     azimuth = np.linspace(0.0, 2.0 * math.pi, n_azimuth, endpoint=False)
-    elevation = np.linspace(math.radians(-38.0), math.radians(42.0), n_elevation)
+    elevation = np.linspace(
+        math.radians(elevation_deg[0]), math.radians(elevation_deg[1]), n_elevation
+    )
     grid_a, grid_e = np.meshgrid(azimuth, elevation, indexing="ij")
     grid_a, grid_e = grid_a.ravel(), grid_e.ravel()
     directions = np.column_stack(
@@ -123,12 +127,16 @@ def capture_station(
         raise ValueError("station sees nothing")
 
     # Mixed pixels sit at depth discontinuities, so pick the rays whose range
-    # jumps hardest against their neighbour and pull them short.
-    count = max(1, int(mixed_pixel_fraction * distance.size))
-    jump = np.abs(np.diff(distance, prepend=distance[0]))
-    edges = np.argsort(jump, kind="stable")[-4 * count:]
-    chosen = rng.choice(edges, size=min(count, edges.size), replace=False)
-    distance[chosen] *= rng.uniform(0.35, 0.9, chosen.size)
+    # jumps hardest against their neighbour and pull them short. Zero means
+    # zero: an earlier `max(1, ...)` floor here injected one mixed pixel --
+    # the single worst edge in the capture -- however small the fraction, so
+    # "no mixed pixels" was never actually measured.
+    count = int(mixed_pixel_fraction * distance.size)
+    if count > 0:
+        jump = np.abs(np.diff(distance, prepend=distance[0]))
+        edges = np.argsort(jump, kind="stable")[-4 * count:]
+        chosen = rng.choice(edges, size=min(count, edges.size), replace=False)
+        distance[chosen] *= rng.uniform(0.35, 0.9, chosen.size)
 
     distance = distance + rng.normal(0.0, sigma_0_m + sigma_per_m * distance)
     points = origin + directions * distance[:, None]

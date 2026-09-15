@@ -28,7 +28,6 @@ import os
 import subprocess
 import sys
 
-import numpy as np
 
 from gat.adapters.usd_io import state_equivalence
 from gat.engine.transform import ObserveQuantity, SetParameter

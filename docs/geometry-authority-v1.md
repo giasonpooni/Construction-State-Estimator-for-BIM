@@ -70,18 +70,32 @@ its mean one.
 ## What a surface capture does that a drawn scan does not
 
 Every scan this runtime was measured against until now came from
-`synthesize_scan`, which draws points from the model's own Gaussian mixture.
-That makes the estimator's job well posed by construction: the data really
-does come from the density being fitted. A scanner does not oblige.
+`synthesize_scan`, which samples **all six faces** of every element box:
+both sides of every wall, the faces buried between adjacent elements, and
+the outside of the exterior. That is a complete, symmetric shell of the
+model, and it is the right instrument for testing the estimator. It is also
+something no scanner can produce — a scanner sees the faces pointing at it.
 
-The elements are solids. A wall is a 0.3 m slab whose Gaussians fill it; a
-scanner sees one face. Fitting face returns to a volume pulls the model
-toward the side that was measured, and the fit's own information matrix
-cannot see it — the optimum is sharp, it is simply in the wrong place.
-Measured on a four-station simulated survey of the shipped model, with
-occlusion, range-dependent noise, mixed pixels, clutter and stray returns:
-the pose lands 0.15 m out while `pose_sigma` reports 6 mm, and the
-registration accepts it.
+Matching a one-sided shell against a model built from a two-sided one
+offsets the fit by about half the element thickness. Measured on a
+four-station simulated survey of the shipped model, whose exterior walls are
+0.30 m: the pose lands 0.150 m out while `pose_sigma` reports 6 mm, and the
+registration accepts it. Sampling every face instead, through the same
+estimator and the same gates, lands at 2.8 mm.
+
+That mechanism is asserted rather than assumed, because the likelier-sounding
+explanations are all false here and were each measured:
+
+| Suspected cause | Test | Result |
+|---|---|---|
+| too little coverage | 18 stations, full sphere | 158 mm — no better than 4 |
+| stray returns | +300 uniform outliers | moves it 1.7 mm |
+| mixed pixels at depth edges | switched off | within a few mm |
+| clutter, range-dependent noise | switched off | within a few mm |
+| the wrong basin won | inspect the converged poses | winner is correct to 0.03°, runner-up a quadrant away |
+
+What is left is which faces exist to be measured at all, and no number of
+stations inside a building can see the outside of its exterior wall.
 
 Nothing downstream is fooled, because nothing downstream trusts it. The
 independent pose is what the measurement is taken at; the fit is used for
@@ -97,6 +111,9 @@ one gate:
 | 0.50 m voxel | 729 | 150 mm | independent pose, m² 221 |
 | 0.30 m voxel | 2017 | 88 mm | independent pose, m² 183 |
 | 0.12 m voxel | 11949 | 42 mm | face scatter — 21.7 mm rms against a declared 10 mm sensor |
+
+(The pose error varies down the table because a finer reduction weights the
+visible faces differently, not because any reduction escapes the offset.)
 
 The last row is the declared-sensor gate doing exactly what it says: the
 simulated instrument delivers range-dependent error the declaration does not

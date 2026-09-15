@@ -22,7 +22,6 @@ inflation would silently drop those cross terms.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -43,7 +42,6 @@ from gat.geometry.primitives import (
     GaussianCloud,
 )
 from gat.ids import EntityId, VarId
-from gat.ir.core import RelKind
 
 #: Constant leaf thickness for doors (not a state variable in v0).
 DOOR_LEAF_THICKNESS = 0.05
