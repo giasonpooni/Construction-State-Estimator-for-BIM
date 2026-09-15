@@ -250,6 +250,12 @@ def minimum_check(check_id: str, assessment: DecisionAssessment) -> AcceptanceCh
             "target_mean": assessment.target_mean,
             "target_sigma": assessment.target_sigma,
             "minimum": assessment.decision.minimum,
+            # What the check is ABOUT, not just what it evaluated to. The
+            # geometry gate derived a check's support from its kind label
+            # alone, so a capacity criterion relabelled as a minimum took the
+            # dimensional-quantity default and became authorizable. The gate
+            # cannot ask the right question without the target.
+            "target_quantities": [str(assessment.decision.target.quantity)],
         },
     )
 
@@ -306,6 +312,13 @@ def difference_check(check_id: str, assessment: DifferenceAssessment) -> Accepta
             "minimum_margin": assessment.decision.minimum_margin,
             "margin_mean": assessment.margin_mean,
             "margin_sigma": assessment.margin_sigma,
+            # See minimum_check: the gate needs what the check is about.
+            "target_quantities": sorted(
+                {
+                    str(assessment.decision.lhs.quantity),
+                    str(assessment.decision.rhs.quantity),
+                }
+            ),
         },
     )
 

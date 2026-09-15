@@ -173,3 +173,55 @@ not a default: a capacity verdict is only as good as the section property
 behind it. A capacity check that declares no authority reads as
 `INSUFFICIENT`, because dimensional quantities do not establish a section
 modulus.
+
+## Support follows the target, not the label
+
+A check's authority used to be derived from its `AcceptanceCheckKind`:
+`CLEARANCE` meant `GAUSSIAN_PROXY`, `CAPACITY` meant `INSUFFICIENT`, and
+everything else took `QUANTITY_ONLY`. The default was written for `MINIMUM`
+and `DIFFERENCE` checks over dimensional quantities — a width, a height, a
+length — where IFC quantities really are the support.
+
+But nothing stops a `MINIMUM` check naming a declared structural quantity as
+its target. Submitted that way, the same criterion the capacity route
+refuses:
+
+| Route | Kind | Authority | Verdict | Disposition | `may_authorize` |
+|---|---|---|---|---|---|
+| A | `CAPACITY` | `DECLARED_PROPERTY` | `SATISFIED` | `REQUEST_EVIDENCE` | false |
+| B | `MINIMUM` | `QUANTITY_ONLY` | `SATISFIED` | `ACCEPT` | **true** |
+
+Same world, same `target_mean` to the last bit (315000.00000000006 N·m),
+same `p_satisfies` (0.9625778267382401). Only the label differed. The
+accepted case then recorded `QUANTITY_ONLY` — a positive claim of
+dimensional support — for a verdict resting on a section modulus nobody
+measured.
+
+The route was reachable from outside. `gat.headless` accepts a `minimum`
+check over any `{entity_name, quantity}` pair and offers no capacity kind at
+all, so relabelling was the *only* way to put a capacity question to that
+boundary — and it answered `ACCEPT`, `may_authorize: true`, "all checks are
+satisfied and required evidence is verified", with zero evidence requests.
+
+So authority now follows what the check is **about**:
+
+- `minimum_check()` and `difference_check()` record their targets in
+  `details["target_quantities"]`.
+- A check naming any member of
+  `gat.engineering.beam.DECLARATION_BACKED_QUANTITIES`
+  (`YieldStrengthMPa`, `PlasticSectionModulusMajorM3`,
+  `NominalMomentCapacity`, `DesignMomentCapacity`) reads as
+  `DECLARED_PROPERTY` whatever kind it arrived under. One such target on
+  either side of a difference is enough — the declaration is still on one
+  side of the subtraction.
+- A `MINIMUM` or `DIFFERENCE` check that names no target at all reads as
+  `INSUFFICIENT`. Unknown is not a licence: a check that reaches the gate
+  without saying what it is about cannot be shown to be dimensional, and
+  treating unknown as dimensional is precisely the assumption that caused
+  this. Every check built through this library's own constructors carries
+  its target, so falling closed costs nothing on any real path.
+- An explicit `details["geometry_authority"]` still wins, so the
+  corroborated route keeps the `DECLARED_CORROBORATED` it earned.
+
+The `QUANTITY_ONLY` default therefore applies only to checks that have
+actually named dimensional targets.

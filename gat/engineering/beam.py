@@ -170,6 +170,30 @@ class _CachedCalculation:
     computation_digest: str
 
 
+#: The quantities a bending verdict rests on, none of which is measured.
+#:
+#: They arrive from a ``GAT_Structural`` property set: a yield strength and a
+#: plastic section modulus asserted by whoever authored the IFC, and the two
+#: capacities computed from them. No geometry is consulted, so unless the
+#: declaration is bracketed against the model's own swept solid
+#: (``DECLARED_CORROBORATED``) a verdict over any of them has
+#: ``DECLARED_PROPERTY`` support and closes nothing.
+#:
+#: Exported because the acceptance gate has to know it. A check's support was
+#: derived from its *kind* label, so the identical criterion submitted as a
+#: MINIMUM check instead of a CAPACITY one took the dimensional-quantity
+#: default and reached ACCEPT -- see
+#: :func:`gat.workflows.geometry_gate.check_geometry_authority`.
+DECLARATION_BACKED_QUANTITIES: frozenset[str] = frozenset(
+    {
+        "YieldStrengthMPa",
+        "PlasticSectionModulusMajorM3",
+        "NominalMomentCapacity",
+        "DesignMomentCapacity",
+    }
+)
+
+
 class BeamBendingEvaluator:
     """Dependency-keyed evaluator proving when the beam check did or did not run."""
 
@@ -189,13 +213,7 @@ class BeamBendingEvaluator:
             raise ValueError(f"beam {check.beam.global_id} is absent from the world")
         if entity.attrs.get("structural_method") != BEAM_BENDING_METHOD:
             raise ValueError("beam does not carry the supported structural contract")
-        required = {
-            "YieldStrengthMPa",
-            "PlasticSectionModulusMajorM3",
-            "NominalMomentCapacity",
-            "DesignMomentCapacity",
-        }
-        if not required.issubset(entity.slots):
+        if not DECLARATION_BACKED_QUANTITIES.issubset(entity.slots):
             raise ValueError("beam structural state is incomplete")
         expected_scope = AISC360_22_F2_LRFD_VALIDATION_PROFILE["required_scope"]
         actual_scope = {key: entity.attrs.get(key) for key in expected_scope}

@@ -197,6 +197,11 @@ class VerdictExhaustivenessTests(unittest.TestCase):
             p_satisfies_lower=0.99,
             p_satisfies_upper=0.99,
             world_digest=self.DIGEST,
+            # A dimensional target, so the geometry gate stays out of the way
+            # and these tests measure verdict disposal alone. A MINIMUM check
+            # that names no target at all falls closed -- that is
+            # ``TargetDrivenAuthorityTests``, not this.
+            details={"target_quantities": ["Width"]},
         )
 
     def _case(self, *checks) -> AcceptanceCase:

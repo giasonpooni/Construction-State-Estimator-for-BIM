@@ -26,9 +26,15 @@ from gat.engine.verify import (  # noqa: F401  (VerificationReport: annotation)
     DEFAULT_INVARIANT_CONFIDENCE,
     VerificationReport,
 )
+from gat.engineering.beam import DECLARATION_BACKED_QUANTITIES
 from gat.workflows.geometry_authority import (
     GeometryAuthority,
     geometry_sufficient,
+)
+
+#: Check kinds whose target can be a declaration-backed structural quantity.
+_STRUCTURAL_KINDS = frozenset(
+    {AcceptanceCheckKind.MINIMUM, AcceptanceCheckKind.DIFFERENCE}
 )
 
 
@@ -43,6 +49,30 @@ def check_geometry_authority(check: AcceptanceCheck) -> GeometryAuthority:
         # quantities do not establish a section modulus, so an undeclared
         # capacity check is insufficient rather than QUANTITY_ONLY.
         return GeometryAuthority.INSUFFICIENT
+
+    # A check's support follows from what it is ABOUT, not from the label it
+    # arrived under. Deriving it from the kind alone meant the identical
+    # criterion -- P(DesignMomentCapacity >= factored demand), the object
+    # BeamBendingEvaluator uses internally -- reached ACCEPT with
+    # may_authorize True when submitted as a MINIMUM check, while the CAPACITY
+    # route on the same world said REQUEST_EVIDENCE. Same target mean to the
+    # last bit, same p_satisfies; only the kind differed. The stored check
+    # then positively asserted QUANTITY_ONLY -- dimensional-quantity support
+    # -- for a verdict resting on an asserted section modulus.
+    #
+    # It was reachable at the untrusted gat.headless JSON boundary, which
+    # accepts a "minimum" check over any {entity_name, quantity} and offers no
+    # capacity kind at all, so relabelling was the only way to ask a capacity
+    # question there.
+    targets = check.details.get("target_quantities")
+    if isinstance(targets, (list, tuple)):
+        if any(str(q) in DECLARATION_BACKED_QUANTITIES for q in targets):
+            return GeometryAuthority.DECLARED_PROPERTY
+    elif check.kind in _STRUCTURAL_KINDS:
+        # An older stored check carries no target. Unknown is not a licence:
+        # for the kinds that can express a capacity question, fall closed.
+        return GeometryAuthority.INSUFFICIENT
+
     return GeometryAuthority.QUANTITY_ONLY
 
 
