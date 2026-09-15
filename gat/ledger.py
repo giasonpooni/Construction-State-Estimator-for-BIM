@@ -926,9 +926,15 @@ class ExecutionLedger:
         self,
         before: World,
         transformation: Transformation,
-        error: GatError,
+        error: BaseException,
         provenance: Mapping[str, object] | None = None,
     ) -> LedgerEvent:
+        """Record an attempt that did not commit.
+
+        ``error`` is typed as ``BaseException`` rather than ``GatError``
+        because an undeclared failure inside ``execute`` is still an attempt
+        that was made against this world, and the record is what says so.
+        """
         if self._events[-1].result_world_digest != before.digest():
             raise LedgerError("ledger head does not describe the session's prior world")
         report = error.report if isinstance(error, VerificationError) else None

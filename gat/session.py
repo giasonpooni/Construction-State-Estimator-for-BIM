@@ -214,6 +214,28 @@ class GatSession:
                 before.digest(),
             )
             raise
+        except Exception as exc:
+            # Anything that is not a declared refusal is a failure of this
+            # runtime, not of the operation -- but the attempt was still made
+            # against this world, and the ledger is what says what was
+            # attempted. Catching only GatError left an undeclared failure
+            # with no trace at all: the state was safe (it is only assigned
+            # on success) and the record was silently short one event.
+            #
+            # Recorded as what it is, then re-raised unchanged. A failure to
+            # record must not replace the failure being reported.
+            try:
+                self.ledger.record_rejection(before, t, exc, provenance)
+                self.trace.add(
+                    "reject",
+                    t.describe()[:44],
+                    f"undeclared {type(exc).__name__}: {exc}",
+                    "FAIL",
+                    before.digest(),
+                )
+            except Exception:
+                pass
+            raise
         if not result.committed:
             rejection = VerificationError(result.report)
             self.ledger.record_rejection(before, t, rejection, provenance)

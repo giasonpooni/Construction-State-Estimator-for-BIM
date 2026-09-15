@@ -31,6 +31,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import math
+
 import numpy as np
 
 from gat.geometry.overlap import log_product_integral
@@ -61,6 +63,16 @@ class AttentionConfig:
     def __post_init__(self) -> None:
         if not 0.0 < self.lam <= 1.0:
             raise ValueError("lam must be in (0, 1] for the maximum principle to hold")
+        # Used only as length_scale**2, so a negative bandwidth would build a
+        # different kernel and report nothing -- the same trap reg_sigma had.
+        if not math.isfinite(self.length_scale) or self.length_scale <= 0.0:
+            raise ValueError(
+                "length_scale must be a finite positive bandwidth in metres "
+                "(it is used squared, so a negative value would silently "
+                "become its own magnitude)"
+            )
+        if not isinstance(self.rounds, (int, np.integer)) or self.rounds < 1:
+            raise ValueError("rounds must be a whole number of diffusion steps, at least 1")
 
 
 def attention_weights(scene: GeometryScene, config: AttentionConfig) -> np.ndarray:

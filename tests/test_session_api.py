@@ -11,7 +11,12 @@ from __future__ import annotations
 
 import inspect
 import unittest
+from unittest.mock import patch
 
+import gat.session as session_module
+from gat.engine.transform import SetParameter
+from gat.errors import GatError
+from gat.ids import VarId
 from gat.session import GatSession
 
 
@@ -89,6 +94,80 @@ class SessionSurfaceTests(unittest.TestCase):
         signature = inspect.signature(GatSession.load_ifc)
         self.assertIn("scope", signature.parameters)
         self.assertIsNone(signature.parameters["scope"].default)
+
+
+class RejectionRecordTests(unittest.TestCase):
+    """Every attempt reaches the ledger, including the ones that crash.
+
+    ``run`` caught ``GatError`` and nothing else. A declared refusal was
+    recorded; an undeclared failure inside ``execute`` propagated with no
+    event written at all. The state was never at risk -- ``self.world`` is
+    only assigned on success -- but the ledger is what says what was
+    attempted against this world, and it was silently short one event.
+    """
+
+    def _session(self):
+        return GatSession.load_ifc("gat/demo/model.ifc")
+
+    def test_an_undeclared_failure_is_still_recorded(self) -> None:
+        session = self._session()
+        transformation = SetParameter(
+            session.var("Wall-South", "Length"), 5.0, 0.01
+        )
+        before = len(session.ledger.events)
+        digest = session.world.digest()
+
+        with patch.object(
+            session_module, "execute", side_effect=ValueError("engine fault")
+        ):
+            with self.assertRaises(ValueError) as caught:
+                session.run(transformation)
+
+        # Re-raised as itself: a runtime fault must not be dressed up as a
+        # decision the operation earned.
+        self.assertEqual(str(caught.exception), "engine fault")
+        self.assertNotIsInstance(caught.exception, GatError)
+
+        self.assertEqual(len(session.ledger.events), before + 1)
+        event = session.ledger.events[-1]
+        self.assertEqual(event.kind, "rejection")
+        self.assertEqual(event.error_type, "ValueError")
+        self.assertEqual(session.world.digest(), digest)
+
+    def test_a_failure_to_record_does_not_replace_the_failure(self) -> None:
+        """If the ledger itself cannot take the event, the caller must still
+        see what actually went wrong."""
+        session = self._session()
+        transformation = SetParameter(
+            session.var("Wall-South", "Length"), 5.0, 0.01
+        )
+        with patch.object(
+            session_module, "execute", side_effect=ValueError("engine fault")
+        ):
+            with patch.object(
+                session.ledger, "record_rejection",
+                side_effect=RuntimeError("ledger is unavailable"),
+            ):
+                with self.assertRaises(ValueError) as caught:
+                    session.run(transformation)
+        self.assertEqual(str(caught.exception), "engine fault")
+
+    def test_a_commit_and_a_declared_refusal_are_recorded_as_before(self) -> None:
+        """The widened boundary must not change what already worked."""
+        session = self._session()
+        before = len(session.ledger.events)
+
+        session.run(SetParameter(session.var("Wall-South", "Length"), 5.0, 0.01))
+        self.assertEqual(len(session.ledger.events), before + 1)
+        self.assertEqual(session.ledger.events[-1].kind, "transition")
+
+        ghost = VarId(session.entity_by_name("Wall-South"), "NotAQuantity")
+        with self.assertRaises(GatError):
+            session.run(SetParameter(ghost, 1.0, 0.01))
+        self.assertEqual(len(session.ledger.events), before + 2)
+        event = session.ledger.events[-1]
+        self.assertEqual(event.kind, "rejection")
+        self.assertEqual(event.error_type, "BindingError")
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ Demo model facts used below (gat/demo/model.ifc): 5 walls, 2 spaces,
 from __future__ import annotations
 
 import os
+import math
 import unittest
 
 import numpy as np
@@ -129,6 +130,34 @@ class TestAttentionConfig(unittest.TestCase):
 
     def test_accepts_lam_one(self):
         self.assertEqual(AttentionConfig(lam=1.0).lam, 1.0)
+
+
+class AttentionConfigValidationTests(unittest.TestCase):
+    """A bandwidth used squared must not accept its own negative.
+
+    ``length_scale`` reaches the kernel only as ``length_scale**2``, so -1.5
+    built the same kernel as +1.5 and said nothing -- the trap ``reg_sigma``
+    had in the registrar. ``rounds`` reached ``range`` and came back as a
+    TypeError.
+    """
+
+    def test_a_bandwidth_must_be_a_finite_positive_length(self) -> None:
+        for value in (math.nan, math.inf, -1.5, 0.0):
+            with self.subTest(length_scale=value):
+                with self.assertRaises(ValueError) as caught:
+                    AttentionConfig(length_scale=value)
+                self.assertIn("length_scale", str(caught.exception))
+
+    def test_a_round_count_must_be_a_whole_positive_number(self) -> None:
+        for value in (0, -2, 2.5):
+            with self.subTest(rounds=value):
+                with self.assertRaises(ValueError):
+                    AttentionConfig(rounds=value)
+
+    def test_the_defaults_are_still_valid(self) -> None:
+        config = AttentionConfig()
+        self.assertGreater(config.length_scale, 0.0)
+        self.assertGreaterEqual(config.rounds, 1)
 
 
 if __name__ == "__main__":

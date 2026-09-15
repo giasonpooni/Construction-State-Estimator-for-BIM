@@ -1,8 +1,29 @@
 """Exception hierarchy for CSE.
 
-Every error raised by the engine derives from :class:`GatError`, so callers
-can catch one type at the boundary.  Parse errors carry source locations;
-verification errors carry the full report that rejected the transformation.
+:class:`GatError` is the *domain* boundary: a condition the runtime declares
+about the work -- a gate refused, a file would not parse, a carrier did not
+answer for itself, a transformation failed verification.  Catching it is how
+a caller distinguishes "this evidence does not support that decision" from
+"this program is wrong".  Parse errors carry source locations; verification
+errors carry the full report that rejected the transformation.
+
+Argument validation is deliberately NOT in this hierarchy.  A caller who
+hands an API a non-finite sigma, a digest that is not a digest, or a matrix
+of the wrong shape gets ``ValueError`` or ``TypeError``, as anywhere else in
+Python: that is a defect in the calling code, not a finding about the
+building.  Two hundred-odd such checks across the engine follow this rule,
+and a boundary that promised to cover them too would be inviting callers to
+swallow their own bugs as evidence.
+
+:mod:`gat.geometry.registration` is the exception, and it is deliberate: it
+raises :class:`RegistrationError` for its own settings as well as for its
+refusals, because "``reg_sigma`` is not a smoothing scale" and "this scan
+does not determine where it was taken from" are both statements about
+whether the instrument can answer, and the module has treated them alike
+since it was written.
+
+A caller that must not miss anything -- the CLI at its top level, a session
+recording to the ledger -- catches ``Exception`` and says which kind it was.
 """
 
 from __future__ import annotations
