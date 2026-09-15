@@ -94,6 +94,44 @@ LEGACY_FORMATS = frozenset({"gat-usd v0"})
 # ---------------------------------------------------------------------------
 
 
+def _decode_embedded(
+    text: str, label: str, required: tuple[str, ...] = ()
+) -> dict:
+    """Decode a JSON *object* embedded in a stage, refusing anything else.
+
+    The stage is untrusted text and three things can go wrong with a block
+    inside it, none of which used to arrive as a carrier error:
+
+    * it does not decode -- a bare ``JSONDecodeError``;
+    * it decodes but exhausts the stack on the way. ``json`` recurses once
+      per nesting level and has no depth limit, so a hundred thousand
+      brackets -- two hundred kilobytes inside a string literal -- raises
+      ``RecursionError``, which is not a ``GatError`` at all;
+    * it decodes to valid JSON of the wrong shape. ``[1,2,3]``, ``42``,
+      ``"hi"`` and ``null`` are all legal JSON, and every one of them reached
+      ``state.get(...)`` and came back as ``AttributeError: 'list' object has
+      no attribute 'get'``.
+
+    The decoder wants an object at both call sites, so that is what it asks
+    for and what it says when it does not get one. ``required`` extends that
+    to the keys the caller is about to subscript: ``{}`` is a perfectly good
+    JSON object and reached ``record["ifc_class"]``, which came back as a
+    bare ``KeyError`` naming a field but not the carrier.
+    """
+    try:
+        decoded = json.loads(text)
+    except (json.JSONDecodeError, RecursionError, UnicodeError) as exc:
+        raise SpfParseError(f"{label} is not decodable JSON: {exc}") from exc
+    if not isinstance(decoded, dict):
+        raise SpfParseError(
+            f"{label} decodes to {type(decoded).__name__}, not a JSON object"
+        )
+    missing = [key for key in required if key not in decoded]
+    if missing:
+        raise SpfParseError(f"{label} is missing {missing}")
+    return decoded
+
+
 def carrier_digest(meta: Mapping[str, object], trace: list) -> str:
     """Commit to what the carrier carries but the world identity does not.
 
@@ -420,7 +458,7 @@ def load_usd(path: str) -> tuple[World, list]:
     states = _extract_strings(text, "gat_state")
     if len(states) != 1:
         raise SpfParseError(f"expected exactly one gat_state block, found {len(states)}")
-    state = json.loads(states[0])
+    state = _decode_embedded(states[0], "gat_state block")
     declared = state.get("format")
     layer_formats = _extract_strings(text, "gat_format")
     if layer_formats != [declared]:
@@ -442,7 +480,11 @@ def load_usd(path: str) -> tuple[World, list]:
 
     entities: dict[EntityId, Entity] = {}
     for record_text in _extract_strings(text, "gat_entity"):
-        record = json.loads(record_text)
+        record = _decode_embedded(
+            record_text,
+            "gat_entity record",
+            ("ifc_class", "global_id", "slots", "name", "attrs", "source_ref"),
+        )
         eid = EntityId(record["ifc_class"], record["global_id"])
         slots: dict[str, QtySlot] = {}
         for s in record["slots"]:

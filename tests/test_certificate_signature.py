@@ -9,16 +9,22 @@ store to be named.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import tempfile
 import unittest
 
 import gat.demo
 from gat.engineering.certificate_signature import (
     TEST_KEY_ID,
+    CertificateSignature,
+    read_signature,
     sign_certificate_bytes,
     fixture_trust_store,
     verify_certificate_bytes,
+    write_signature,
 )
+from gat.errors import CertificateIngestionError
 from gat.engineering.material_certificate import read_material_certificate
 
 
@@ -95,6 +101,55 @@ class TrustStoreIsRequiredTests(unittest.TestCase):
         store = fixture_trust_store()
         self.assertEqual(list(store), [TEST_KEY_ID])
         self.assertIn(b"not-for-production", store[TEST_KEY_ID])
+
+
+class HostileSignatureDocumentTests(unittest.TestCase):
+    """A signature file comes from outside; reading one must not raise builtins.
+
+    ``read_signature`` took the path straight to ``json.loads`` and
+    subscripted the result, so every way of getting it wrong named neither
+    the file nor the field: a malformed document as ``JSONDecodeError``;
+    ``null``, ``[]``, ``42`` and ``"hi"`` -- all legal JSON -- as ``TypeError:
+    'NoneType' object is not subscriptable``; ``{}`` as ``KeyError:
+    'key_id'``; and a nested array as ``RecursionError``, since ``json``
+    recurses per level with no depth limit. Nine of nine escaped the declared
+    hierarchy.
+    """
+
+    HOSTILE = {
+        "empty": "",
+        "not json": "{{{",
+        "json null": "null",
+        "json array": "[]",
+        "json number": "42",
+        "json string": '"hi"',
+        "empty object": "{}",
+        "partial object": '{"key_id": "k"}',
+        "deeply nested": "[" * 100_000 + "]" * 100_000,
+    }
+
+    def test_every_malformed_document_is_a_declared_refusal(self) -> None:
+        for label, text in self.HOSTILE.items():
+            with self.subTest(document=label):
+                with tempfile.TemporaryDirectory() as directory:
+                    path = os.path.join(directory, "sig.json")
+                    with open(path, "w", encoding="utf-8") as handle:
+                        handle.write(text)
+                    with self.assertRaises(CertificateIngestionError):
+                        read_signature(path)
+
+    def test_a_missing_file_is_a_declared_refusal_too(self) -> None:
+        with self.assertRaises(CertificateIngestionError):
+            read_signature("/nonexistent/none.json")
+
+    def test_an_honest_signature_still_reads(self) -> None:
+        signature = CertificateSignature(
+            key_id="k1", algorithm="hmac-sha256", digest="d" * 64, mac="m" * 64
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "sig.json")
+            write_signature(path, signature)
+            self.assertEqual(read_signature(path), signature)
 
 
 if __name__ == "__main__":

@@ -192,5 +192,53 @@ class StateSnapshotTests(unittest.TestCase):
             )
 
 
+class HostileDocumentTests(unittest.TestCase):
+    """A snapshot is an artifact from outside; nothing it contains may crash.
+
+    ``json`` recurses once per nesting level and has no depth limit, so a
+    hundred thousand brackets -- two hundred kilobytes -- exhausts the
+    interpreter and raises ``RecursionError``. That is not a ``GatError``, so
+    a caller catching the declared hierarchy does not catch it, and against a
+    service reading uploaded snapshots it is a cheap way to end the process.
+    """
+
+    def _load(self, text: str) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "hostile.gat.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(text)
+            GatSession.load_snapshot(path)
+
+    def test_a_deeply_nested_document_is_refused(self) -> None:
+        with self.assertRaises(SnapshotError):
+            self._load("[" * 100_000 + "]" * 100_000)
+
+    def test_the_usual_malformed_documents_are_refused(self) -> None:
+        for label, text in (
+            ("empty", ""),
+            ("not json", "{{{"),
+            ("json null", "null"),
+            ("json array", "[]"),
+            ("json number", "42"),
+            ("empty object", "{}"),
+        ):
+            with self.subTest(document=label):
+                with self.assertRaises(SnapshotError):
+                    self._load(text)
+
+    def test_a_valid_snapshot_still_loads(self) -> None:
+        """The guard must not fire on anything this runtime writes."""
+        session = GatSession.load_ifc(
+            os.path.join(os.path.dirname(gat.demo.__file__), "model.ifc")
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "good.gat.json")
+            session.export_snapshot(path)
+            self.assertEqual(
+                GatSession.load_snapshot(path).world.digest(),
+                session.world.digest(),
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

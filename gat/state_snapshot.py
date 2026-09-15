@@ -305,7 +305,7 @@ def read_snapshot(path: str | Path) -> SnapshotLoadResult:
             document = json.load(stream, parse_constant=reject_constant)
     except SnapshotError:
         raise
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, RecursionError) as exc:
         raise SnapshotError(f"cannot read state snapshot: {exc}") from exc
     return reconstruct_snapshot(_mapping(document, "snapshot"))
 

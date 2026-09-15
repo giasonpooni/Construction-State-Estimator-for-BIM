@@ -21,6 +21,8 @@ import hmac
 import json
 from pathlib import Path
 
+from gat.errors import CertificateIngestionError
+
 
 ALGORITHM = "hmac-sha256-v1"
 
@@ -113,11 +115,35 @@ def write_signature(path: str | Path, signature: CertificateSignature) -> None:
     )
 
 
+#: Fields a signature document must carry to be one.
+_SIGNATURE_FIELDS = ("key_id", "algorithm", "digest", "mac")
+
+
 def read_signature(path: str | Path) -> CertificateSignature:
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    return CertificateSignature(
-        payload["key_id"],
-        payload["algorithm"],
-        payload["digest"],
-        payload["mac"],
-    )
+    """Read a signature document, refusing anything that is not one.
+
+    This reader took an external file straight to ``json.loads`` and
+    subscripted the result. Every way of getting it wrong came back as a
+    Python builtin that named neither the file nor the field it wanted: a
+    malformed document as ``JSONDecodeError``; ``null``, ``[]``, ``42`` and
+    ``"hi"`` -- all legal JSON -- as ``TypeError: 'NoneType' object is not
+    subscriptable``; ``{}`` as ``KeyError: 'key_id'``; and a deeply nested
+    array as ``RecursionError``, since ``json`` recurses per level with no
+    depth limit. None of them is a ``GatError``.
+    """
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError, RecursionError) as exc:
+        raise CertificateIngestionError(
+            f"could not read certificate signature: {exc}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise CertificateIngestionError(
+            f"certificate signature is {type(payload).__name__}, not a JSON object"
+        )
+    missing = [field for field in _SIGNATURE_FIELDS if field not in payload]
+    if missing:
+        raise CertificateIngestionError(
+            f"certificate signature is missing {missing}"
+        )
+    return CertificateSignature(*(payload[field] for field in _SIGNATURE_FIELDS))

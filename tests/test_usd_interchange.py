@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import filecmp
+import re
 import math
 import os
 import tempfile
@@ -212,6 +213,78 @@ class UsdInterchangeTests(unittest.TestCase):
     def test_an_honest_carrier_still_loads(self) -> None:
         world, _ = load_usd(self.usd_path)
         self.assertEqual(world.digest(), self.session.world.digest())
+
+
+class EmbeddedJsonTests(unittest.TestCase):
+    """The stage is untrusted text and its embedded JSON is untrusted too.
+
+    Both ``json.loads`` calls in the decoder were bare: a malformed
+    ``gat_state`` block raised ``JSONDecodeError`` and a deeply nested one
+    ``RecursionError``. Neither is a ``GatError``, and neither said it was
+    the carrier that was wrong.
+    """
+
+    def _stage(self, mutate) -> str:
+        session = GatSession.load_ifc(MODEL)
+        directory = tempfile.mkdtemp()
+        good = os.path.join(directory, "good.usda")
+        session.export_usd(good)
+        with open(good, encoding="utf-8") as handle:
+            text = handle.read()
+        path = os.path.join(directory, "hostile.usda")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(mutate(text))
+        return path
+
+    def test_a_malformed_state_block_is_refused_by_name(self) -> None:
+        path = self._stage(
+            lambda text: text.replace('{"carrier_digest"', '{{{"carrier_digest"', 1)
+        )
+        with self.assertRaises(SpfParseError) as caught:
+            load_usd(path)
+        self.assertIn("gat_state block", str(caught.exception))
+
+    def test_valid_json_of_the_wrong_shape_is_refused(self) -> None:
+        """``[1,2,3]``, ``42``, ``"hi"`` and ``null`` are all legal JSON and
+        all reached ``state.get(...)``, arriving as "'list' object has no
+        attribute 'get'" -- which names neither the carrier nor the block."""
+        for replacement in ("[1,2,3]", "42", '\\"hi\\"', "null"):
+            with self.subTest(block=replacement):
+                path = self._stage(
+                    lambda text, r=replacement: re.sub(
+                        r"gat_state = '.*'", f"gat_state = '{r}'", text, count=1
+                    )
+                )
+                with self.assertRaises(SpfParseError) as caught:
+                    load_usd(path)
+                self.assertIn("not a JSON object", str(caught.exception))
+
+    def test_an_entity_record_missing_its_fields_is_refused(self) -> None:
+        """``{}`` is a perfectly good JSON object and reached
+        ``record["ifc_class"]``, arriving as a bare ``KeyError`` that named a
+        field but not the carrier it came out of."""
+        for replacement in ("{}", '{\\"ifc_class\\": \\"IFCWALL\\"}'):
+            with self.subTest(record=replacement):
+                path = self._stage(
+                    lambda text, r=replacement: re.sub(
+                        r"gat_entity = '.*'", f"gat_entity = '{r}'", text, count=1
+                    )
+                )
+                with self.assertRaises(SpfParseError) as caught:
+                    load_usd(path)
+                self.assertIn("gat_entity record is missing", str(caught.exception))
+
+    def test_a_deeply_nested_state_block_is_refused(self) -> None:
+        path = self._stage(
+            lambda text: text.replace(
+                '{"carrier_digest"',
+                "[" * 60_000 + "]" * 60_000 + ',{"carrier_digest"',
+                1,
+            )
+        )
+        with self.assertRaises(SpfParseError) as caught:
+            load_usd(path)
+        self.assertIn("gat_state block", str(caught.exception))
 
 
 if __name__ == "__main__":

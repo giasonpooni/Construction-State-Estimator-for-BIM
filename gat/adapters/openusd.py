@@ -1088,7 +1088,7 @@ def _decode_json(value: object, label: str) -> object:
         return json.loads(value, parse_constant=reject_constant)
     except OpenUsdError:
         raise
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, RecursionError) as exc:
         raise OpenUsdError(f"{label} is invalid JSON: {exc}") from exc
 
 

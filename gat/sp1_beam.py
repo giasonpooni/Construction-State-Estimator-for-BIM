@@ -572,7 +572,7 @@ def write_sp1_beam_request(request: Sp1BeamRequest, path: str | Path) -> str:
 def read_sp1_beam_request(path: str | Path) -> Sp1BeamRequest:
     try:
         value = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, RecursionError) as exc:
         raise ProofManifestError(f"could not read SP1 beam request: {exc}") from exc
     return Sp1BeamRequest.from_dict(value)
 
@@ -662,7 +662,7 @@ class Sp1BeamProofReceipt:
 def read_sp1_beam_receipt(path: str | Path) -> Sp1BeamProofReceipt:
     try:
         value = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, RecursionError) as exc:
         raise ProofManifestError(f"could not read SP1 beam receipt: {exc}") from exc
     return Sp1BeamProofReceipt.from_dict(value)
 

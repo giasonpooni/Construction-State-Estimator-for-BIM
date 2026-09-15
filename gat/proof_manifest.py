@@ -736,7 +736,7 @@ def read_computation_proof_manifest(path: str | Path) -> ComputationProofManifes
         document = json.loads(raw.decode("utf-8"), parse_constant=reject_constant)
     except ProofManifestError:
         raise
-    except (UnicodeError, json.JSONDecodeError) as exc:
+    except (UnicodeError, json.JSONDecodeError, RecursionError) as exc:
         raise ProofManifestError(f"invalid proof manifest JSON: {exc}") from exc
     return ComputationProofManifest.from_dict(document)
 

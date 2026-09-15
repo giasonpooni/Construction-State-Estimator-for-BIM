@@ -228,7 +228,10 @@ def parse_material_certificate(source_bytes: bytes) -> MaterialCertificate:
         )
     except CertificateIngestionError:
         raise
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
+        # RecursionError: json recurses per nesting level with no depth limit,
+        # so 100k brackets -- 200 KB -- exhausts the interpreter, and it is
+        # not a GatError.
         raise CertificateIngestionError(f"invalid certificate JSON: {exc}") from exc
     root = _mapping(document, "certificate")
     _exact_keys(

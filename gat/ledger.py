@@ -1147,6 +1147,6 @@ def read_ledger(path: str | Path) -> ExecutionLedger:
         raise LedgerError(f"ledger exceeds {LEDGER_MAX_BYTES} encoded bytes")
     try:
         value = json.loads(source.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, RecursionError) as exc:
         raise LedgerError(f"could not read ledger: {exc}") from exc
     return ExecutionLedger.from_dict(value)
