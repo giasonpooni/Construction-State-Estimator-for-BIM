@@ -50,9 +50,14 @@ from gat.workflows.acceptance import (
     assess_difference,
     clearance_check,
     difference_check,
-    evaluate_acceptance_case,
     minimum_check,
 )
+# Explicitly the geometry- and invariant-gated evaluator, not the numerical
+# policy alone. `gat.workflows.acceptance` exposes a name that resolves to the
+# gated one too, but only because `geometry_gate` rebinds it on import (see
+# the note at the foot of that module). This boundary takes untrusted JSON and
+# must not depend on an import side effect for the gate to run at all.
+from gat.workflows import evaluate_acceptance_case
 from gat.workflows.change_impact import preview_change
 
 

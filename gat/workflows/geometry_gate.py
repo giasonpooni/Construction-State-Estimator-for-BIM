@@ -281,6 +281,32 @@ def evaluate_acceptance_case(
     )
 
 
+# -- why the base module's name is rebound ---------------------------------
+#
+# `acceptance.evaluate_acceptance_case` applies the numerical policy and
+# nothing else: it scores verdicts and evidence coverage, and it neither
+# knows nor asks whether a check had the geometric authority to close the
+# case. On its own that is a correct layer and a dangerous export -- the two
+# functions share a name, and `from gat.workflows.acceptance import
+# evaluate_acceptance_case` reads exactly like the safe one.
+#
+# So the base name is rebound to the gated evaluator, and the numerical layer
+# stays reachable under the explicit name `evaluate_acceptance_case_ungated`,
+# which is captured above before this line runs. Importing
+# `gat.workflows.acceptance` at all executes `gat/workflows/__init__.py`
+# first, which imports this module, so the rebinding is in place before any
+# caller can see the original.
+#
+# It is a safety net for callers who reach past the package, not a mechanism
+# anything should rely on: a caller that wants the gate should ask for it by
+# name, from `gat.workflows`. `gat.headless` does exactly that, because a
+# boundary taking untrusted JSON must not need an import side effect to be
+# safe. `tests.test_geometry_authority` holds both halves -- that every public
+# path is gated, and that the boundary stays gated with this line undone.
+#
+# Note the return type changes with the name: callers of the rebound name get
+# a `GatedAcceptanceOutcome`, which carries `AcceptanceOutcome`'s fields plus
+# the geometry and invariant findings.
 import gat.workflows.acceptance as _acceptance_module
 
 _acceptance_module.evaluate_acceptance_case = evaluate_acceptance_case  # type: ignore[misc]

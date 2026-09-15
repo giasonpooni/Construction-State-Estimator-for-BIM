@@ -13,6 +13,8 @@ from gat.errors import DecisionError
 from gat.session import GatSession
 from gat.workflows import (
     AcceptanceCase,
+    AcceptanceCheck,
+    AcceptanceCheckKind,
     AcceptanceDisposition,
     AcceptancePolicy,
     DifferenceDecision,
@@ -169,6 +171,70 @@ class WorkflowAcceptanceTests(unittest.TestCase):
             (changed_check, self.case.checks[1]),
         )
         self.assertNotEqual(self.case.scope_digest, changed.scope_digest)
+
+
+class VerdictExhaustivenessTests(unittest.TestCase):
+    """A verdict the policy cannot dispose of must not be read as satisfied.
+
+    ``evaluate_acceptance_case`` sorts checks into violated, unresolved and
+    satisfied and then tests those three in order, so a verdict in none of
+    them reaches no refusal branch and falls through to ACCEPT. Today
+    ``DecisionVerdict`` has exactly those three members and the partition is
+    exact -- which is why nothing caught it -- but the failure direction of a
+    fourth is acceptance, silently, with every existing test still green.
+    The same shape once let a MARGINAL compliance row pass as a clean one.
+    """
+
+    DIGEST = "a" * 64
+
+    def _check(self, check_id: str, verdict) -> AcceptanceCheck:
+        return AcceptanceCheck(
+            check_id=check_id,
+            kind=AcceptanceCheckKind.MINIMUM,
+            subject="subject",
+            verdict=verdict,
+            confidence=0.95,
+            p_satisfies_lower=0.99,
+            p_satisfies_upper=0.99,
+            world_digest=self.DIGEST,
+        )
+
+    def _case(self, *checks) -> AcceptanceCase:
+        return AcceptanceCase(
+            "case-1", WorkflowKind.AS_BUILT_CLEARANCE, "subject", checks
+        )
+
+    def test_the_three_known_verdicts_still_dispose_normally(self) -> None:
+        policy = AcceptancePolicy(require_verified_evidence_for_accept=False)
+        for verdict, expected in (
+            (DecisionVerdict.SATISFIED, AcceptanceDisposition.ACCEPT),
+            (DecisionVerdict.VIOLATED, AcceptanceDisposition.REJECT),
+            (DecisionVerdict.UNRESOLVED, AcceptanceDisposition.REQUEST_EVIDENCE),
+        ):
+            with self.subTest(verdict=verdict):
+                case = self._case(self._check("C1", verdict))
+                self.assertIs(
+                    evaluate_acceptance_case(case, policy=policy).disposition,
+                    expected,
+                )
+
+    def test_a_verdict_the_policy_cannot_dispose_of_is_refused(self) -> None:
+        """Written past the dataclass guard on purpose: the point is what the
+        evaluator does with a verdict it was never taught, not whether the
+        constructor would have built one."""
+        good = self._check("C1", DecisionVerdict.SATISFIED)
+        stranded = self._check("C2", DecisionVerdict.SATISFIED)
+        case = self._case(good, stranded)
+        object.__setattr__(stranded, "verdict", "MARGINAL")
+
+        with self.assertRaises(DecisionError) as caught:
+            evaluate_acceptance_case(
+                case, policy=AcceptancePolicy(require_verified_evidence_for_accept=False)
+            )
+        message = str(caught.exception)
+        self.assertIn("MARGINAL", message)
+        self.assertIn("C2", message)
+        self.assertNotIn("C1", message)
 
 
 if __name__ == "__main__":

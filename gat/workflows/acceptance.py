@@ -606,6 +606,29 @@ def evaluate_acceptance_case(
         for check in case.checks
         if check.verdict is DecisionVerdict.SATISFIED
     )
+    # VIOLATED / UNRESOLVED / SATISFIED are the whole of DecisionVerdict
+    # today, and the branches below lean on that: a verdict in none of the
+    # three falls past every test and lands on ACCEPT. That is the direction
+    # a fourth member would fail in -- silently, with every existing test
+    # still green -- so the partition is checked rather than assumed. The
+    # same shape once let a MARGINAL compliance row pass as a clean one.
+    _DISPOSABLE = (
+        DecisionVerdict.VIOLATED,
+        DecisionVerdict.UNRESOLVED,
+        DecisionVerdict.SATISFIED,
+    )
+    if len(rejected) + len(unresolved) + len(satisfied) != len(case.checks):
+        stranded = [
+            check for check in case.checks if check.verdict not in _DISPOSABLE
+        ]
+        raise DecisionError(
+            "this policy has no disposition for verdict(s) "
+            f"{sorted({str(check.verdict) for check in stranded})} on "
+            f"{sorted(check.check_id for check in stranded)}; an unclassified "
+            "check reaches none of the refusal branches and would be accepted "
+            "as though it had been satisfied"
+        )
+
     uncovered = (
         tuple(check_id for check_id in satisfied if check_id not in covered)
         if policy.require_verified_evidence_for_accept
