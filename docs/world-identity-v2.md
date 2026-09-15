@@ -86,3 +86,32 @@ carries a fourth digest, `carrier_digest`, over `meta` in full and the
 execution trace, and refuses a stage whose provenance was rewritten with a
 message that distinguishes it from an edited quantity. A format that carries
 provenance outside the world digest owes its reader the same treatment.
+
+## What that provenance discloses
+
+The consequence, stated so it is a known property rather than a discovery:
+**an exported artifact contains the exporter's local paths.** `meta["source"]`
+is the path the model was loaded from, verbatim, and every `export`, `resume`
+and `import` trace event records the path it was given. Both travel inside
+every snapshot and USD carrier, and both are integrity-protected, which means
+they are preserved exactly and not sanitised.
+
+Measured: loading the same model from `/tmp/clientname_x/copy.ifc` yields a
+world digest identical to loading it from `gat/demo/model.ifc` — identity is
+path-independent as designed — while the exported snapshot names the temp
+directory in `payload.module.meta.source` and in its trace. In a real project
+that reads as a client name and a directory layout.
+
+This is deliberate and it is a trade. The path is the honest record of where
+the model came from, it is useful to the operator who wrote it, and
+`carrier_digest` means nobody can rewrite it to claim a different provenance.
+It is also not verifiable by a reader — a path on someone else's disk cannot
+be checked and may not exist — so it buys the recipient nothing that the
+digests do not already give them.
+
+Two things follow. An operator handing an artifact to a counterparty should
+know it carries these paths. And if a project would rather it did not, the
+change is to record basenames at every `trace.add` site and in `meta`, which
+is a carrier-format change: it moves what `carrier_digest` commits to, so it
+needs a format version bump, not a patch. Trimming only the trace would
+achieve nothing while making the two disagree.
