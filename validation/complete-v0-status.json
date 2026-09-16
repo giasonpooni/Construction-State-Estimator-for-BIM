@@ -1,0 +1,16 @@
+{
+  "schema": "cse-complete-v0",
+  "released": false,
+  "complete": true,
+  "field_evidence": false,
+  "forced_common_world": false,
+  "opening_component_connected": true,
+  "opening_lambda2": 1.0,
+  "full_atlas_connected": false,
+  "ieee754_guest": false,
+  "sp1_cycles": null,
+  "sp1_invoked": false,
+  "sum_product": false,
+  "sheaf": false,
+  "riscv_flashed": false
+}
