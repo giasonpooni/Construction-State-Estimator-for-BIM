@@ -22,6 +22,17 @@ _NON_CLAIMS = (
     "pace thesis is not a measured result",
 )
 
+TICKET_INSTRUMENT = {
+    "bind.point_to_guid": "total-station-or-layout",
+    "evidence.as_built": "calibrated-observation",
+    "evidence.scan_gmm": "terrestrial-scan",
+    "frame.station_setup": "total-station",
+    "accessory.prism_height": "prism-pole",
+    "frame.level_loop": "digital-level",
+    "identity.space": "ifc-space-entity",
+    "case.missing": "case-receipt",
+}
+
 
 @dataclass(frozen=True)
 class InspectabilityIndex:
@@ -40,6 +51,15 @@ class InspectabilityIndex:
             encoding="utf-8",
         )
         return target
+
+
+@dataclass(frozen=True)
+class CrewTicket:
+    space_id: str
+    code: str
+    asks_for: str
+    instrument_class: str
+    presentable: bool = False
 
 
 def _as_dict(raw: object) -> dict[str, object] | None:
@@ -130,6 +150,7 @@ def fold_inspectability(
     receipts: Iterable[tuple[Mapping[str, object], str | None]] = (),
     commitments: Iterable[tuple[Mapping[str, object], str | None]] = (),
     binds: Iterable[tuple[Mapping[str, object], str | None]] = (),
+    extra_requests: Iterable[Mapping[str, str]] = (),
 ) -> InspectabilityIndex:
     receipt_list = list(receipts)
     commitment_list = list(commitments)
@@ -175,6 +196,12 @@ def fold_inspectability(
                 "asks_for": "ledger-bound ObserveLinearized or ObserveQuantity digest",
             }
         )
+    for extra in extra_requests:
+        code = extra.get("code")
+        asks_for = extra.get("asks_for")
+        if not isinstance(code, str) or not code or not isinstance(asks_for, str) or not asks_for:
+            raise ValueError("extra_requests entries need code and asks_for")
+        requests.append({"code": code, "asks_for": asks_for})
     case_dispositions = [row.get("disposition") for row in cases]
     rejected = any(
         value in {"REJECT", "VIOLATED"} for value in case_dispositions
@@ -211,3 +238,28 @@ def fold_inspectability(
         "digest": canonical_digest(payload),
     }
     return InspectabilityIndex(document)
+
+
+def tickets_from_index(index: InspectabilityIndex) -> tuple[CrewTicket, ...]:
+    """Work orders from open requests. Presentable spaces emit no tickets."""
+    if index.inspectability == "ACCEPT":
+        return ()
+    space_id = str(index.document.get("space_id") or "space:unidentified")
+    tickets = []
+    for raw in index.document.get("open_requests") or ():
+        if not isinstance(raw, dict):
+            continue
+        code = str(raw.get("code") or "")
+        asks_for = str(raw.get("asks_for") or "")
+        if not code:
+            continue
+        tickets.append(
+            CrewTicket(
+                space_id=space_id,
+                code=code,
+                asks_for=asks_for,
+                instrument_class=TICKET_INSTRUMENT.get(code, "unspecified"),
+                presentable=False,
+            )
+        )
+    return tuple(tickets)
