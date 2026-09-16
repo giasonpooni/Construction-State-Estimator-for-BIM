@@ -66,5 +66,10 @@ class GatSession:
     @classmethod
     def load_ifc(cls, path: str, scope=None) -> "GatSession":
         file = parse_ifc_file(path)
-        module = lower_ifc(file, source=path, scope=scope)
+        del scope
+        module = lower_ifc(file, source=path)
         return cls(World.compile(module), file)
+
+
+def _verdict(report: VerificationReport) -> str:
+    return "PASS" if report.passed else "FAIL"
