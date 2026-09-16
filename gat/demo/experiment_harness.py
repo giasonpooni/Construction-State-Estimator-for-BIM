@@ -2,9 +2,11 @@
 
     python -m gat.demo.experiment_harness --demo -o out/harness-bundle.json
     python -m gat.demo.experiment_harness --inspectability --demo -o out/inspectability.json
+    python -m gat.demo.experiment_harness --demo --request-satellite sp1_zkvm
 
 Does not run SP1. Does not condition Beam-B1 on a millimetre.
 Does not treat a digest as a point-to-IfcGuid bind.
+Does not open CUDA or Rust because a planner asked.
 """
 
 from __future__ import annotations
@@ -17,11 +19,13 @@ from gat.harness.bundle import (
     bind_commitment_file,
     load_json,
 )
+from gat.harness.effort import decide_satellite, load_effort_table
 from gat.harness.inspectability import fold_inspectability
 
 _FIXTURE_DIR = Path(__file__).resolve().parent / "harness_fixtures"
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DISPOSITION = _REPO_ROOT / "validation" / "beam-b1-disposition-v1.json"
+_DEFAULT_EFFORT = _REPO_ROOT / "validation" / "satellite-effort-v1.json"
 _DEMO_COMMITS = (
     _FIXTURE_DIR / "rci-example-commitment-v1.json",
     _FIXTURE_DIR / "torus-example-commitment-v1.json",
@@ -37,15 +41,33 @@ def run_experiment_harness(
     output_path: str | Path,
     sp1_status: str = "NOT_REQUESTED",
     quiet: bool = False,
+    effort_path: str | Path | None = None,
+    request_satellites: list[str] | None = None,
+    hole: str | None = None,
+    expected_information_nats: float | None = None,
 ) -> dict[str, object]:
     disposition = load_json(disposition_path) if disposition_path else None
     commitments = [
         (bind_commitment_file(path), str(path)) for path in commitment_paths
     ]
+    table_path = effort_path or _DEFAULT_EFFORT
+    table = load_effort_table(table_path)
+    decisions = [
+        decide_satellite(
+            table,
+            name,
+            hole=hole,
+            expected_information_nats=expected_information_nats,
+        )
+        for name in (request_satellites or ())
+    ]
     bundle = assemble_bundle(
         commitments=commitments,
         disposition=disposition,
         sp1_status=sp1_status,
+        effort_table=table,
+        effort_source=str(table_path),
+        effort_decisions=decisions,
     )
     written = bundle.write(output_path)
     if not quiet:
@@ -53,13 +75,15 @@ def run_experiment_harness(
         print(f"bundle digest {bundle.digest}")
         print(f"bound records {len(commitments)}")
         print("SP1 not invoked; claim_scope=record-integrity-only")
+        for row in decisions:
+            print(f"effort {row.satellite} {row.disposition} ({row.reason})")
         if disposition is not None:
             prior = disposition.get("prior")
             revised = disposition.get("revised_after_certificate")
             if isinstance(prior, dict) and isinstance(revised, dict):
                 print(
                     f"disposition {prior.get('verdict')} -> {revised.get('verdict')} "
-                    "(unchanged by bound records)"
+                    "(unchanged by bound records or effort policy)"
                 )
     return bundle.document
 
@@ -143,6 +167,27 @@ def main() -> None:
         default="NOT_REQUESTED",
         choices=("NOT_REQUESTED", "BACKEND_REQUIRED", "UNAVAILABLE"),
     )
+    parser.add_argument(
+        "--effort",
+        default=str(_DEFAULT_EFFORT),
+        help="satellite-effort-v1.json table",
+    )
+    parser.add_argument(
+        "--request-satellite",
+        action="append",
+        default=[],
+        help="Ask the effort gate about a satellite (sp1_zkvm, cuda_jspt, rust_ingest, ...). Repeatable.",
+    )
+    parser.add_argument(
+        "--hole",
+        help="Named REQUEST_EVIDENCE code the satellite would address.",
+    )
+    parser.add_argument(
+        "--information-nats",
+        type=float,
+        default=None,
+        help="Declared expected information on that hole. Not inferred from tokens.",
+    )
     args = parser.parse_args()
     if args.inspectability:
         space = args.space
@@ -175,6 +220,10 @@ def main() -> None:
         commitment_paths=commits,
         output_path=output,
         sp1_status=args.sp1_status,
+        effort_path=args.effort,
+        request_satellites=list(args.request_satellite),
+        hole=args.hole,
+        expected_information_nats=args.information_nats,
     )
 
 
