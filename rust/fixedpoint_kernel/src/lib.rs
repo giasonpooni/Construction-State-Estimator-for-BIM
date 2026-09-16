@@ -28,7 +28,8 @@ pub fn chain_jvp_i32(j1: Mat2, dx: Vec2, j2: Mat2) -> Result<Vec2, &'static str>
 }
 
 pub fn quadratic_i32(p: Mat2, x: Vec2) -> Result<i32, &'static str> {
-    dot(x.0, mv(p, x)?.0)
+    let px = mv(p, x)?;
+    dot(x.0, px)
 }
 
 #[derive(Debug, PartialEq, Eq)]
