@@ -1,0 +1,23 @@
+{
+  "schema": "cse-disposition-world-cite-v1",
+  "claim_scope": "record-integrity-only",
+  "entity_id": "IfcBeam:GATBEAMELEMENT00000100",
+  "worlds": {
+    "beam-b1-ifc": {
+      "kind": "live-ifc",
+      "world_digest": "14f95cba0d60914025d2b35aa15ba12e02e7b98491f3d1f044ac9633aec54450"
+    },
+    "beam-b1-pin-prior": {
+      "kind": "certificate-pin",
+      "world_digest": "34626a4da11d2e6289cd2b5592396edc6d2e6bebf2b301057ede6988986486c1",
+      "verdict": "SATISFIED"
+    },
+    "beam-b1-pin-revised": {
+      "kind": "certificate-pin",
+      "world_digest": "4527394c888ca06b5b781b87dcf741a937ef1fbede675e90405c5320849c7a0b",
+      "verdict": "VIOLATED"
+    }
+  },
+  "same_entity": true,
+  "same_world": false
+}

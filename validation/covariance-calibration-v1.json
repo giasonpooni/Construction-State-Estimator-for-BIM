@@ -1,0 +1,16 @@
+{
+  "schema": "cse-covariance-calibration-v1",
+  "claim_scope": "record-integrity-only",
+  "law": "P' = T P T^T via JSPT push_covariance",
+  "observation_id": "office-a-p204:1",
+  "slot": "IfcOpeningElement:GATOPN0000000000000200.Width[m]",
+  "sigma_m": 0.005,
+  "variance_m2": 2.5e-05,
+  "T": 1000.0,
+  "c": 0.0,
+  "variance_mm2": 25.0,
+  "sigma_mm": 5.0,
+  "mean_mm": 1002.0,
+  "fused": false,
+  "note": "Chart calibrates the 1x1 variance. This is not a Kalman update."
+}
