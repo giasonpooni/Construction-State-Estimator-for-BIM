@@ -2,5 +2,6 @@
   "case_id": "opening-17",
   "workflow": "OPENING_VERIFICATION",
   "disposition": "REQUEST_EVIDENCE",
-  "subject": "Door D-204 into Opening O-204"
+  "subject": "Door-1 into Opening-1",
+  "space_id": "space:ifc:GATSPC0000000000000300"
 }

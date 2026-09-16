@@ -1,18 +1,18 @@
 {
   "format": "cse-inspectability-index-v1",
-  "project_id": "proj:example-hall",
-  "building_id": "bldg:hall-a",
-  "space_id": "space:ifc:3AbcOfficeA00000000000000",
+  "project_id": "proj:cse-demo",
+  "building_id": "bldg:demo",
+  "space_id": "space:ifc:GATSPC0000000000000300",
   "space_ref": {
     "ifc_class": "IfcSpace",
-    "global_id": "3AbcOfficeA00000000000000",
-    "name": "L3-Office-A"
+    "global_id": "GATSPC0000000000000300",
+    "name": "Office-A"
   },
   "inspectability": "REQUEST_EVIDENCE",
   "open_requests": [
     {
       "code": "bind.point_to_guid",
-      "asks_for": "layout point for opening O-204 bound to an IfcGuid"
+      "asks_for": "layout point bound to Opening-1 IfcGuid GATOPN0000000000000200"
     },
     {
       "code": "evidence.as_built",

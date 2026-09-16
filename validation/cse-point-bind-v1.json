@@ -1,0 +1,10 @@
+{
+  "schema": "cse-point-bind-v1",
+  "claim_scope": "identity-bind-only",
+  "point_id": "P-Opening-1",
+  "ifc_class": "IfcOpeningElement",
+  "global_id": "GATOPN0000000000000200",
+  "name": "Opening-1",
+  "space_id": "space:ifc:GATSPC0000000000000300",
+  "note": "Example bind file. Not field evidence. A harness --commit digest cannot stand in for this record."
+}

@@ -1,10 +1,11 @@
 {
-  "project_id": "proj:example-hall",
-  "building_id": "bldg:hall-a",
-  "space_id": "space:ifc:3AbcOfficeA00000000000000",
+  "project_id": "proj:cse-demo",
+  "building_id": "bldg:demo",
+  "space_id": "space:ifc:GATSPC0000000000000300",
   "space_ref": {
     "ifc_class": "IfcSpace",
-    "global_id": "3AbcOfficeA00000000000000",
-    "name": "L3-Office-A"
-  }
+    "global_id": "GATSPC0000000000000300",
+    "name": "Office-A"
+  },
+  "source_ifc": "gat/demo/model.ifc"
 }
