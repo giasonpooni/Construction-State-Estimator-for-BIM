@@ -1,24 +1,27 @@
 # Point-to-IfcGuid bind v1
 
-Satellite. See [inspectability-index-v1.md](inspectability-index-v1.md)
-and [kernel-v1.md](kernel-v1.md).
+Satellite. See inspectability-index and kernel-v1.
 
 ## Job
 
-Name one layout point as the same object as one IFC entity. Close the
-`bind.point_to_guid` hole on an inspectability index.
+Name one layout point as the same object as one IFC entity.
 
-This is not an observation. It does not condition belief. It does
-not make a DWG layer into `SCAN_GMM`.
+A **survey bind** (`gat.geometry.survey_bind`) additionally requires the
+measurement constitution:
 
-`frame_id`, `epoch`, `sigma`, `sigma_unit`, and `sigma_reason` are required.
-A bind without uncertainty is refused. Coordinates without a GlobalId are
-not a bind. Mesh proximity is not a bind. Display names are refused.
-`frame_id` may name a survey setup; it is not a JSPT chart.
+`project_space_id`, `chart_id`, `installation_id` (HI / prism height),
+`session_id`, `sequence`, raw tuple.
+
+`frame_id` is a setup name. It is not a JSPT chart. Covariance on the
+bind is `gat.adapters.jspt.chart_covariance`.
+
+Dropped or unavailable ticks stay in the pack. They do not bind.
+Empty raw is refused (no last-value fill). Binding does not condition
+belief and does not change Beam-B1 or opening-fit replay.
 
 ## Non-claims
 
 - Not as-built evidence.
 - Not a station resection.
 - Not an occupancy permit.
-- Binding P-204 does not change Beam-B1 or opening-fit replay.
+- Not a new IFC class for HI.
