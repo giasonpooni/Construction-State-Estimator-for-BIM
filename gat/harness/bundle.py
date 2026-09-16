@@ -17,8 +17,10 @@ from gat.adapters.external_commitment import (
     bind_external_commitment,
     canonical_digest,
 )
+from gat.harness.merkle import merkle_proof, merkle_root, verify_merkle_proof
 
 BUNDLE_SCHEMA = "notation-systems-harness-bundle-v1"
+DEFAULT_PROJECT_SPACE_ID = "unspecified-project-space"
 ALLOWED_SP1_STATUS = frozenset(
     {"NOT_REQUESTED", "BACKEND_REQUIRED", "UNAVAILABLE"}
 )
@@ -96,34 +98,62 @@ def assemble_bundle(
     disposition: Mapping[str, object] | None = None,
     sp1_status: str = "NOT_REQUESTED",
     note: str | None = None,
+    project_space_id: str | None = None,
 ) -> HarnessBundle:
     if sp1_status not in ALLOWED_SP1_STATUS:
         raise ValueError(
             "sp1_status must be NOT_REQUESTED, BACKEND_REQUIRED, or UNAVAILABLE"
         )
+    space = (project_space_id or DEFAULT_PROJECT_SPACE_ID).strip()
+    if not space:
+        raise ValueError("project_space_id must be non-empty")
     records = [_bound_record(bound, source) for bound, source in commitments]
     for record in records:
         if record["usable_as_calibrated_observation"]:
             raise ValueError("harness refuses to promote a record into GAT evidence")
+    leaves = [str(record["digest"]) for record in records]
+    root = merkle_root(leaves)
+    inclusion = []
+    for record in records:
+        path = merkle_proof(leaves, str(record["digest"]))
+        if not verify_merkle_proof(str(record["digest"]), path, root):
+            raise ValueError("merkle inclusion check failed for a bound digest")
+        inclusion.append({"digest": record["digest"], "path": path})
     payload = {
         "schema": BUNDLE_SCHEMA,
         "status": "in-development",
         "released": False,
         "claim_scope": CLAIM_SCOPE,
+        "project_space_id": space,
         "disposition": _disposition_slice(disposition),
         "commitments": records,
+        "merkle": {
+            "algorithm": "sha256-sorted-odd-self-pair-v1",
+            "root": root,
+            "leaf_count": len(set(leaves)),
+            "inclusion": inclusion,
+            "note": "Inclusion in this snapshot. Not a ledger replay. Not a safety claim.",
+        },
         "sp1": {
             "invoked": False,
             "proof_verified": False,
             "status": sp1_status,
             "note": "A guest may attest one already-computed arithmetic claim. It does not prove A2-A5, Sigma, or a physical stream.",
         },
+        "build_order": [
+            "Keep dense Beam-B1 and the ledger.",
+            "Keep RCI as telemetry records with sigma and quality.",
+            "Keep OpenUSD as signed carrier plus visual, not the estimator.",
+            "Open factor-graph belief only after incremental_scale shows dense memory is the bottleneck.",
+            "Open pose or odometry factors only when a joint frame is a real IR slot.",
+        ],
         "refusals": [
             "Does not import JSPT into a guest.",
             "Does not prove on an instrument.",
             "Does not treat an RCI millimetre as YieldStrengthMPa.",
             "Does not treat a torus length as a covariance.",
             "Does not fuse axioms, Sigma, and a bench into one theorem.",
+            "Does not treat a Merkle path as an inspection.",
         ],
         "note": note
         or "Bundle of independently replayable records. Alignment is digest binding, not fusion.",

@@ -2,24 +2,22 @@
 
 from gat.harness.bundle import (
     BUNDLE_SCHEMA,
+    DEFAULT_PROJECT_SPACE_ID,
     HarnessBundle,
     assemble_bundle,
     bind_commitment_file,
     load_json,
 )
-from gat.harness.inspectability import (
-    INDEX_FORMAT,
-    InspectabilityIndex,
-    fold_inspectability,
-)
+from gat.harness.merkle import merkle_proof, merkle_root, verify_merkle_proof
 
 __all__ = [
     "BUNDLE_SCHEMA",
-    "INDEX_FORMAT",
+    "DEFAULT_PROJECT_SPACE_ID",
     "HarnessBundle",
-    "InspectabilityIndex",
     "assemble_bundle",
     "bind_commitment_file",
-    "fold_inspectability",
     "load_json",
+    "merkle_proof",
+    "merkle_root",
+    "verify_merkle_proof",
 ]

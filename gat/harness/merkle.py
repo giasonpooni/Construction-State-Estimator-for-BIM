@@ -8,7 +8,7 @@ An empty set hashes the empty JSON array.
 from __future__ import annotations
 
 import hashlib
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from gat.adapters.external_commitment import canonical_digest
 
@@ -35,7 +35,7 @@ def merkle_leaves(digests: Iterable[str]) -> tuple[str, ...]:
         if item != item.lower():
             raise ValueError("merkle leaf must be lowercase hex")
         leaves.append(item)
-    return tuple(sorted(leaves))
+    return tuple(sorted(set(leaves)))
 
 
 def merkle_root(digests: Iterable[str]) -> str:
@@ -80,14 +80,16 @@ def merkle_proof(digests: Iterable[str], leaf: str) -> list[dict[str, str]]:
     return path
 
 
-def verify_merkle_proof(leaf: str, path: Sequence[Mapping], root: str) -> bool:
+def verify_merkle_proof(
+    leaf: str, path: Sequence[Mapping[str, object]], root: str
+) -> bool:
     current = leaf
     for step in path:
-        sibling = step["digest"]
+        sibling = str(step["digest"])
         if step["side"] == "left":
-            current = _pair(str(sibling), current)
+            current = _pair(sibling, current)
         elif step["side"] == "right":
-            current = _pair(current, str(sibling))
+            current = _pair(current, sibling)
         else:
             raise ValueError("path side must be left or right")
     return current == root
