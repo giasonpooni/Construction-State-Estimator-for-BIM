@@ -1,0 +1,24 @@
+{
+  "schema": "cse-calibration-v1",
+  "claim_scope": "record-integrity-only",
+  "calibration_id": "tank-t1-level-declared",
+  "status": "declared",
+  "subject": {
+    "ifc_class": "IndustrialSlot",
+    "global_id": "TANK-T1",
+    "quantity": "Level"
+  },
+  "indicated_unit": "m",
+  "canonical_unit": "m",
+  "model": {
+    "form": "affine",
+    "scale": 1.0,
+    "offset": 0.0
+  },
+  "sigma": 0.01,
+  "sigma_unit": "m",
+  "sigma_reason": "Declared hydrostatic stand-in. Not a wet calibration.",
+  "source_reason": "Second noun: tank level. Same contract as Office-A.",
+  "not_traceable": true,
+  "digest": "abc4b5589b2552b4b974d0af2bd662a62cc14dce60fadbff1ffc32ed9ccba584"
+}

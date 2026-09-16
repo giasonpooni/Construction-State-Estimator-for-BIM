@@ -1,0 +1,25 @@
+{
+  "schema": "cse-calibration-v1",
+  "claim_scope": "record-integrity-only",
+  "calibration_id": "layout-point-p204-declared-width",
+  "status": "declared",
+  "subject": {
+    "ifc_class": "IfcOpeningElement",
+    "global_id": "GATOPN0000000000000200",
+    "quantity": "Width"
+  },
+  "indicated_unit": "m",
+  "canonical_unit": "m",
+  "model": {
+    "form": "affine",
+    "scale": 1.0,
+    "offset": 0.0
+  },
+  "sigma": 0.005,
+  "sigma_unit": "m",
+  "sigma_reason": "Declared layout tolerance for P-204. Not a field resection.",
+  "source_reason": "Layout note P-204; source_digest is SHA-256 of p204-layout-note.txt. Still not_traceable until an instrument log exists.",
+  "source_digest": "63593ec23b4e7de91de5b6e09dd4fb391c01197911dbbedd0cfcec203ace642f",
+  "not_traceable": true,
+  "digest": "a0a4350014141811bf1f67ac45fe5a728768ad283f3feb059138399b22beffbf"
+}
