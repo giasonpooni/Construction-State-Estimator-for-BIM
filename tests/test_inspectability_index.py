@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
+from gat.adapters.ifcopenshell_adapter import inventory_identities_cse
 from gat.demo.experiment_harness import (
     _DEMO_COMMITS,
     _DEMO_RECEIPT,
@@ -14,11 +16,40 @@ from gat.demo.experiment_harness import (
 )
 from gat.harness.inspectability import fold_inspectability, tickets_from_index
 
+OFFICE_A = "GATSPC0000000000000300"
+OPENING_1 = "GATOPN0000000000000200"
+DEMO_IFC = Path(__file__).resolve().parents[1] / "gat" / "demo" / "model.ifc"
+EXAMPLE_BIND = Path(__file__).resolve().parents[1] / "validation" / "cse-point-bind-v1.json"
+
 
 class InspectabilityIndexTests(unittest.TestCase):
-    def test_demo_fold_requests_evidence_without_a_bind(self) -> None:
+    def test_demo_fold_uses_office_a_guid_from_model(self) -> None:
         self.assertTrue(_DEMO_SPACE.is_file())
         self.assertTrue(_DEMO_RECEIPT.is_file())
+        inventory = inventory_identities_cse(DEMO_IFC)
+        self.assertIn(OFFICE_A, inventory.space_global_ids)
+        names = {row.global_id: row.name for row in inventory.products}
+        self.assertEqual(names.get(OFFICE_A), "Office-A")
+        with tempfile.TemporaryDirectory() as raw:
+            output = Path(raw) / "index.json"
+            document = run_inspectability(
+                space_path=_DEMO_SPACE,
+                receipt_paths=[_DEMO_RECEIPT],
+                commitment_paths=list(_DEMO_COMMITS),
+                bind_paths=[],
+                output_path=output,
+                quiet=True,
+            )
+        self.assertEqual(document["space_ref"]["global_id"], OFFICE_A)
+        self.assertEqual(document["space_ref"]["name"], "Office-A")
+        self.assertEqual(document["space_id"], f"space:ifc:{OFFICE_A}")
+        self.assertEqual(document["inspectability"], "REQUEST_EVIDENCE")
+        codes = {row["code"] for row in document["open_requests"]}
+        self.assertIn("bind.point_to_guid", codes)
+        self.assertIn("evidence.as_built", codes)
+        self.assertNotIn("identity.space", codes)
+
+    def test_demo_fold_requests_evidence_without_a_bind(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             output = Path(raw) / "index.json"
             document = run_inspectability(
@@ -31,13 +62,46 @@ class InspectabilityIndexTests(unittest.TestCase):
             )
         self.assertEqual(document["format"], "cse-inspectability-index-v1")
         self.assertEqual(document["inspectability"], "REQUEST_EVIDENCE")
-        codes = {row["code"] for row in document["open_requests"]}
-        self.assertIn("bind.point_to_guid", codes)
-        self.assertIn("evidence.as_built", codes)
-        self.assertNotIn("identity.space", codes)
         self.assertEqual(document["bound_cases"][0]["case_id"], "opening-17")
         self.assertEqual(len(document["cited"]), 2)
         self.assertIn("not an occupancy permit", document["non_claims"])
+
+    def test_harness_commit_cannot_satisfy_a_point_bind(self) -> None:
+        space = json.loads(_DEMO_SPACE.read_text())
+        commits = [json.loads(path.read_text()) for path in _DEMO_COMMITS]
+        fake = {"schema": "cse-point-bind-v1", "note": "schema only"}
+        index = fold_inspectability(
+            space=space,
+            receipts=[
+                (
+                    {
+                        "case_id": "opening-17",
+                        "disposition": "ACCEPT",
+                        "evidence_digest": "a" * 16,
+                    },
+                    "r.json",
+                )
+            ],
+            commitments=[(row, "c.json") for row in commits],
+            binds=[(fake, "fake-bind.json"), (commits[0], "rci-as-bind.json")],
+        )
+        self.assertEqual(index.inspectability, "REQUEST_EVIDENCE")
+        codes = {row["code"] for row in index.document["open_requests"]}
+        self.assertIn("bind.point_to_guid", codes)
+
+    def test_example_bind_file_closes_only_the_bind_hole(self) -> None:
+        space = json.loads(_DEMO_SPACE.read_text())
+        bind = json.loads(EXAMPLE_BIND.read_text())
+        self.assertEqual(bind["global_id"], OPENING_1)
+        index = fold_inspectability(
+            space=space,
+            receipts=[({"case_id": "opening-17", "disposition": "ACCEPT"}, "r.json")],
+            binds=[(bind, str(EXAMPLE_BIND))],
+        )
+        codes = {row["code"] for row in index.document["open_requests"]}
+        self.assertNotIn("bind.point_to_guid", codes)
+        self.assertIn("evidence.as_built", codes)
+        self.assertEqual(index.inspectability, "REQUEST_EVIDENCE")
 
     def test_missing_space_identity_is_a_named_hole(self) -> None:
         index = fold_inspectability(
@@ -52,8 +116,8 @@ class InspectabilityIndexTests(unittest.TestCase):
         space = {
             "space_ref": {
                 "ifc_class": "IfcSpace",
-                "global_id": "3AbcOfficeA00000000000000",
-                "name": "L3-Office-A",
+                "global_id": OFFICE_A,
+                "name": "Office-A",
             }
         }
         index = fold_inspectability(
@@ -77,13 +141,13 @@ class InspectabilityIndexTests(unittest.TestCase):
         space = {
             "space_ref": {
                 "ifc_class": "IfcSpace",
-                "global_id": "3AbcOfficeA00000000000000",
+                "global_id": OFFICE_A,
             }
         }
         bind = {
             "schema": "cse-point-bind-v1",
-            "point_id": "P-204",
-            "global_id": "2OpeningO2040000000000000",
+            "point_id": "P-Opening-1",
+            "global_id": OPENING_1,
             "ifc_class": "IfcOpeningElement",
         }
         index = fold_inspectability(
@@ -108,13 +172,13 @@ class InspectabilityIndexTests(unittest.TestCase):
         space = {
             "space_ref": {
                 "ifc_class": "IfcSpace",
-                "global_id": "3AbcOfficeA00000000000000",
+                "global_id": OFFICE_A,
             }
         }
         bind = {
             "schema": "cse-point-bind-v1",
-            "point_id": "P-204",
-            "global_id": "2OpeningO2040000000000000",
+            "point_id": "P-Opening-1",
+            "global_id": OPENING_1,
         }
         index = fold_inspectability(
             space=space,
@@ -151,13 +215,13 @@ class InspectabilityIndexTests(unittest.TestCase):
         space = {
             "space_ref": {
                 "ifc_class": "IfcSpace",
-                "global_id": "3AbcOfficeA00000000000000",
+                "global_id": OFFICE_A,
             }
         }
         bind = {
             "schema": "cse-point-bind-v1",
-            "point_id": "P-204",
-            "global_id": "2OpeningO2040000000000000",
+            "point_id": "P-Opening-1",
+            "global_id": OPENING_1,
         }
         index = fold_inspectability(
             space=space,
