@@ -1,0 +1,63 @@
+{
+  "format": "notation-systems-cross-reference-v1",
+  "status": "in-development",
+  "released": false,
+  "rule": "A function is not out of development until its pinned file recomputes to the same digest. Chat output is not a pin.",
+  "claim_scope": "record-integrity-only",
+  "tools": [
+    {
+      "id": "torus-first-release",
+      "repo": "giasonpooni/Flat-Torus-Moduli-and-Geodesic-Explorer",
+      "file": "validation/STATUS.md",
+      "schema": "torus-report-commitment-v1",
+      "digest": "0876328236195eb2a8f8a34725a63e9e57babd8ad5d5dc7d8cb4d993da488bdc",
+      "passed": true,
+      "object": "area-one flat torus, winding (1,1), tau=4i",
+      "simulates_physics": false
+    },
+    {
+      "id": "torus-fold",
+      "repo": "giasonpooni/Flat-Torus-Moduli-and-Geodesic-Explorer",
+      "file": "validation/STATUS.md",
+      "schema": "torus-report-commitment-v1",
+      "digest": "d8018af15a5fc000624a7ed70ef20eb73b51c0db0a67c120cd8033f5224e0d11",
+      "passed": true,
+      "object": "SL(2,Z) word fold, exact lengths",
+      "simulates_physics": false
+    },
+    {
+      "id": "gat-beam-b1-disposition",
+      "repo": "giasonpooni/Construction-State-Estimator-for-BIM",
+      "file": "validation/beam-b1-disposition-v1.json",
+      "schema": "gat-beam-disposition-v1",
+      "prior_verdict": "SATISFIED",
+      "revised_verdict": "VIOLATED",
+      "prior_world_digest": "34626a4da11d2e6289cd2b5592396edc6d2e6bebf2b301057ede6988986486c1",
+      "revised_world_digest": "4527394c888ca06b5b781b87dcf741a937ef1fbede675e90405c5320849c7a0b",
+      "sp1_required": false
+    },
+    {
+      "id": "rci-displacement-host-stand-in",
+      "repo": "giasonpooni/Retrofitted-Computational-Instrumentation",
+      "file": "validation/rci-displacement-digests-v1.json",
+      "first_digest": "74f175d2d81dc306b357321d547de14c2e7db9036c36138fb44f71553f61bd8a",
+      "n_records": 7,
+      "not_field_evidence": true,
+      "simulates_physics": true
+    },
+    {
+      "id": "jspt-axioms",
+      "repo": "giasonpooni/Jacobian-Sensitivity-Propagation-Testbed",
+      "file": "docs/KERNEL.md",
+      "benchmark_file": null,
+      "note": "No observation digest. No guest."
+    },
+    {
+      "id": "sp1-beam-guest",
+      "repo": "giasonpooni/Construction-State-Estimator-for-BIM",
+      "file": "docs/sp1-beam-guest-v1.md",
+      "status": "satellite-not-rerun-here",
+      "note": "Do not invent a proof artifact."
+    }
+  ]
+}
