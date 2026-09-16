@@ -23,6 +23,7 @@ Status: experimental v0. License: MIT. Core dependency: `numpy`.
 
 Architecture notes, research questions, and naming live in
 [`docs/treatise.md`](docs/treatise.md).
+Seating chart: [`docs/MAP.md`](docs/MAP.md).
 
 ## Loop
 
@@ -32,6 +33,16 @@ IFC design intent + physical evidence
     → SATISFIED / VIOLATED / UNRESOLVED
     → stop, or select the next worthwhile measurement
     → condition → propagate → verify → export
+```
+
+```mermaid
+flowchart LR
+  IFC[IFC] --> W[World + ledger]
+  W --> E[evidence records]
+  E --> D[disposition]
+  D --> IA[inspectability]
+  D --> HD[headless]
+  W --> USD[USD suitcase]
 ```
 
 First deployment slice: construction acceptance (as-built clearance,
@@ -149,6 +160,7 @@ satellite. See [`docs/kernel-v1.md`](docs/kernel-v1.md).
 ## Docs
 
 - [`docs/treatise.md`](docs/treatise.md) — public name, architecture, proof language
+- [`docs/MAP.md`](docs/MAP.md) — seating chart
 - [`docs/geometry-authority-v1.md`](docs/geometry-authority-v1.md)
 - [`docs/kernel-v1.md`](docs/kernel-v1.md)
 - [`docs/experiment-index-v1.md`](docs/experiment-index-v1.md) — how to try each tool
