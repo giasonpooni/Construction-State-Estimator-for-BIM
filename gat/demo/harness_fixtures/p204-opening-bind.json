@@ -1,12 +1,20 @@
 {
   "schema": "cse-point-bind-v1",
   "claim_scope": "record-integrity-only",
+  "point_id": "P-204",
+  "global_id": "GATOPN0000000000000200",
+  "ifc_class": "IfcOpeningElement",
   "payload": {
     "point_id": "P-204",
     "ifc_class": "IfcOpeningElement",
     "global_id": "GATOPN0000000000000200",
+    "frame_id": "office-a-layout-v0",
+    "epoch": "design-declared",
+    "sigma": 0.005,
+    "sigma_unit": "m",
+    "sigma_reason": "Declared layout tolerance for P-204. Not a field resection.",
     "name": "Opening-1",
     "space_id": "space:ifc:GATSPC0000000000000300"
   },
-  "digest": "bafbc43f25230e831d866de20f35dc44b475de8414b036a47f4cb8bc7751064b"
+  "digest": "8eb9e62d0e9524cbc22019eb83caa44de58c7259cb9714a280d3bee9aba06f65"
 }

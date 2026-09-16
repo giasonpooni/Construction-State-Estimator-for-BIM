@@ -13,6 +13,7 @@ from typing import Mapping
 
 from gat.adapters.external_commitment import canonical_digest
 from gat.harness.bundle import DEFAULT_PROJECT_SPACE_ID
+from gat.harness.identity import identity_from_disposition
 
 PROJECTION_SCHEMA = "notation-systems-usd-projection-v1"
 CLAIM_SCOPE = "record-integrity-only"
@@ -92,11 +93,13 @@ def project_canonical_state(
         if isinstance(raw_merkle, dict):
             merkle_root = raw_merkle.get("root")
 
+    ident = identity_from_disposition(disposition or {}, project_space_id=space)
     payload = {
         "schema": PROJECTION_SCHEMA,
         "claim_scope": CLAIM_SCOPE,
         "mutates_source": False,
         "project_space_id": space,
+        "identity": ident,
         "demonstrator": "bim-construction-acceptance",
         "service_class": "maintained-evidence-service",
         "canonical_world_digest": world,

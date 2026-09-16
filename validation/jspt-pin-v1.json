@@ -1,0 +1,8 @@
+{
+  "schema": "notation-systems-jspt-pin-v1",
+  "repo": "https://github.com/giasonpooni/Jacobian-Sensitivity-Propagation-Testbed",
+  "sha": "55d710e83e869682fc5efc5df1c553e5e09e9866",
+  "owns": ["jacobian_at", "jvp", "first_order_covariance", "chart law A3"],
+  "consumption": "one-way",
+  "forbidden": ["third finite_difference", "sensitivity in guest", "flatten FSRT fidelity"]
+}
