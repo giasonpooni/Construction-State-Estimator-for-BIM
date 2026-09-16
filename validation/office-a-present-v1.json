@@ -1,0 +1,45 @@
+{
+  "awaiting": [
+    "si-traceable-calibration",
+    "field-observation-replaces-lab",
+    "human-verification"
+  ],
+  "bind": {
+    "present": true
+  },
+  "calibration": {
+    "calibration_id": "lab-opening-width-proto",
+    "present": true,
+    "sigma": 0.005,
+    "traceable": false
+  },
+  "format": "cse-present-space-v1",
+  "headless_acceptance": "REQUEST_EVIDENCE",
+  "headless_may_authorize": false,
+  "inspectability": "ACCEPT",
+  "inventory_office_a": "GATSPC0000000000000300",
+  "lab_observation_applied": true,
+  "may_authorize": false,
+  "non_claims": [
+    "not an occupancy permit",
+    "declared calibration is not SI-traceable",
+    "lab observation is not field evidence"
+  ],
+  "open_requests": [],
+  "space_id": "space:ifc:GATSPC0000000000000300",
+  "space_ref": {
+    "global_id": "GATSPC0000000000000300",
+    "ifc_class": "IfcSpace",
+    "name": "Office-A"
+  },
+  "status": "AWAITING_CALIBRATION_AND_VERIFICATION",
+  "verification": {
+    "counts": [
+      12,
+      0,
+      0
+    ],
+    "passed": true
+  },
+  "world_digest": "d85d28b4ec888d648a7b36fa728b0e031e33507712dd45fdebc35554e11aae32"
+}
