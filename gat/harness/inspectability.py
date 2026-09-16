@@ -30,6 +30,7 @@ TICKET_INSTRUMENT = {
     "accessory.prism_height": "prism-pole",
     "frame.level_loop": "digital-level",
     "identity.space": "ifc-space-entity",
+    "calibration.declared": "declared-calibration",
     "case.missing": "case-receipt",
 }
 
@@ -71,15 +72,25 @@ def _space_from(document: Mapping[str, object] | None) -> dict[str, object]:
         return {}
     ref = _as_dict(document.get("space_ref")) or {}
     space_id = document.get("space_id")
+    ifc_class = ref.get("ifc_class")
     global_id = ref.get("global_id")
-    ifc_class = ref.get("ifc_class") or document.get("ifc_class")
     name = ref.get("name")
-    if space_id is None and isinstance(global_id, str) and global_id:
+    if ifc_class is None and document.get("ifc_class") == "IfcSpace":
+        ifc_class = "IfcSpace"
+        if global_id is None:
+            global_id = document.get("global_id")
+        if name is None:
+            name = document.get("name")
+    if ifc_class not in (None, "IfcSpace"):
+        ifc_class = None
+        global_id = None
+        name = None
+    if space_id is None and ifc_class == "IfcSpace" and isinstance(global_id, str) and global_id:
         space_id = f"space:ifc:{global_id}"
     out: dict[str, object] = {}
     if isinstance(space_id, str) and space_id:
         out["space_id"] = space_id
-    if ifc_class or global_id or name:
+    if ifc_class == "IfcSpace" and (global_id or name):
         out["space_ref"] = {
             "ifc_class": ifc_class,
             "global_id": global_id,
@@ -100,7 +111,8 @@ def _merge_space(*documents: Mapping[str, object] | None) -> dict[str, object]:
             continue
         ref = _as_dict(merged.get("space_ref")) or {}
         incoming = _as_dict(piece.get("space_ref")) or {}
-        ref = {**ref, **{k: v for k, v in incoming.items() if v not in (None, "")}}
+        if incoming.get("ifc_class") == "IfcSpace":
+            ref = {**ref, **{k: v for k, v in incoming.items() if v not in (None, "")}}
         merged.update({k: v for k, v in piece.items() if k != "space_ref"})
         if ref:
             merged["space_ref"] = ref
