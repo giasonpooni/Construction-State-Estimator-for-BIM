@@ -125,8 +125,6 @@ jobs:
           gat sample gat/demo/model.ifc --n 100
 
   test-sp1-beam:
-    # Satellite. Does not run on ordinary push/PR. A red 45-minute zkVM
-    # job must not make the kernel look broken.
     if: >
       (github.event_name == 'workflow_dispatch' && inputs.run_sp1) ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[sp1]'))
@@ -160,17 +158,17 @@ jobs:
           cargo test --manifest-path rust/Cargo.toml -p cse-fixedpoint-kernel
           cargo test --manifest-path sp1/kernel/Cargo.toml -p gat-sp1-kernel-lib
 
-      - name: Execute the i32 chain-JVP guest and print cycles
-        env:
-          SP1_PROVER: cpu
-        run: cargo run --release --manifest-path sp1/kernel/Cargo.toml -p gat-sp1-kernel -- execute
+      - name: Build the kernel guest host
+        run: cargo build --release --manifest-path sp1/kernel/Cargo.toml -p gat-sp1-kernel
 
-      - name: Prove and verify the i32 chain-JVP guest
+      - name: Second callback prove (statement_digest, integrity-only)
         env:
           SP1_PROVER: cpu
-        run: |
-          mkdir -p ci-sp1-out
-          cargo run --release --manifest-path sp1/kernel/Cargo.toml -p gat-sp1-kernel -- prove --proof ci-sp1-out/kernel-chain-jvp.proof
+        run: >-
+          python -m gat.demo.kernel_sp1 ci-sp1-out
+          --executable sp1/kernel/target/release/gat-sp1-kernel
+          --prove
+          --timeout 2400
 
       - name: Validate Python/Rust fixed-point agreement (beam lib)
         run: cargo test --locked --manifest-path sp1/beam/Cargo.toml -p gat-sp1-beam-lib
