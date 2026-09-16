@@ -1,6 +1,7 @@
 """Declared effort table for satellite gates.
 
-Satellite. May only invoke, defer, or refuse a named gate.
+Satellite. Python is dry-run authority for python_uv only.
+Live INVOKE for rust/cuda/sp1 belongs to rust/effort_gate.
 Does not run SP1, CUDA, or Rust. Does not touch Beam-B1.
 """
 
@@ -15,6 +16,8 @@ from typing import Mapping
 from gat.adapters.external_commitment import canonical_digest
 
 EFFORT_FORMAT = "satellite-effort-v1"
+PYTHON_AUTHORITY = "python"
+RUST_AUTHORITY = "rust-effort-gate"
 KNOWN_SATELLITES = frozenset(
     {
         "python_uv",
@@ -38,6 +41,7 @@ class EffortDecision:
     hole: str | None
     reason: str
     allowed: bool
+    authority: str
 
     def as_policy(self) -> dict[str, object]:
         return {
@@ -49,6 +53,7 @@ class EffortDecision:
             "hole": self.hole,
             "reason": self.reason,
             "allowed": self.allowed,
+            "authority": self.authority,
             "world_digest_unchanged": True,
             "invoked": False,
         }
@@ -90,6 +95,7 @@ def decide_satellite(
     *,
     hole: str | None = None,
     expected_information_nats: float | None = None,
+    caller_authority: str = PYTHON_AUTHORITY,
 ) -> EffortDecision:
     if name not in KNOWN_SATELLITES:
         return EffortDecision(
@@ -100,12 +106,25 @@ def decide_satellite(
             hole=hole,
             reason="unknown satellite",
             allowed=False,
+            authority=caller_authority,
         )
     entry = _entry(table, name)
+    row_authority = str(entry.get("authority") or PYTHON_AUTHORITY)
     allowed = bool(entry.get("allowed"))
     cost = entry.get("cost_nats")
     cost_ok = isinstance(cost, (int, float)) and math.isfinite(float(cost)) and float(cost) >= 0.0
     cost_value = float(cost) if cost_ok else None
+    if row_authority != caller_authority:
+        return EffortDecision(
+            satellite=name,
+            disposition="REFUSE",
+            cost_nats=cost_value,
+            expected_information_nats=expected_information_nats,
+            hole=hole,
+            reason=f"authority is {row_authority}",
+            allowed=allowed,
+            authority=caller_authority,
+        )
     if not cost_ok:
         return EffortDecision(
             satellite=name,
@@ -115,6 +134,7 @@ def decide_satellite(
             hole=hole,
             reason="cost_nats missing or not finite",
             allowed=False,
+            authority=caller_authority,
         )
     if not allowed:
         return EffortDecision(
@@ -125,6 +145,7 @@ def decide_satellite(
             hole=hole,
             reason="allowed is false",
             allowed=False,
+            authority=caller_authority,
         )
     info_ok = (
         expected_information_nats is not None
@@ -140,6 +161,7 @@ def decide_satellite(
             hole=hole,
             reason="need a named hole and finite expected information",
             allowed=True,
+            authority=caller_authority,
         )
     assert cost_value is not None
     if expected_information_nats - cost_value <= 0.0:
@@ -151,6 +173,7 @@ def decide_satellite(
             hole=hole,
             reason="I - c <= 0",
             allowed=True,
+            authority=caller_authority,
         )
     return EffortDecision(
         satellite=name,
@@ -160,6 +183,7 @@ def decide_satellite(
         hole=hole,
         reason="declared information exceeds declared cost",
         allowed=True,
+        authority=caller_authority,
     )
 
 
@@ -177,6 +201,6 @@ def effort_slice(
             {k: v for k, v in table.items() if k != "digest"}
         ),
         "decisions": [row.as_policy() for row in decisions],
-        "note": "Policy only. Does not invoke the gate. Does not change Beam-B1.",
+        "note": "Python is dry-run. rust-effort-gate is live authority for rust-gated satellites.",
     }
     return payload

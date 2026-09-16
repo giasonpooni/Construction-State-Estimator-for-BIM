@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,7 +13,12 @@ from gat.demo.experiment_harness import (
     _DEMO_COMMITS,
     run_experiment_harness,
 )
-from gat.harness.effort import decide_satellite, load_effort_table
+from gat.harness.effort import (
+    PYTHON_AUTHORITY,
+    RUST_AUTHORITY,
+    decide_satellite,
+    load_effort_table,
+)
 
 
 class SatelliteEffortTests(unittest.TestCase):
@@ -24,7 +30,43 @@ class SatelliteEffortTests(unittest.TestCase):
         self.assertEqual(sp1.disposition, "REFUSE")
         self.assertEqual(cuda.disposition, "REFUSE")
         self.assertEqual(rust.disposition, "REFUSE")
+        self.assertEqual(sp1.reason, "authority is rust-effort-gate")
         self.assertFalse(sp1.as_policy()["invoked"])
+        self.assertEqual(sp1.as_policy()["authority"], PYTHON_AUTHORITY)
+
+    def test_python_cannot_invoke_even_if_allowed_is_flipped(self) -> None:
+        table = copy.deepcopy(load_effort_table(_DEFAULT_EFFORT))
+        satellites = table["satellites"]
+        assert isinstance(satellites, dict)
+        cuda = satellites["cuda_jspt"]
+        assert isinstance(cuda, dict)
+        cuda["allowed"] = True
+        decision = decide_satellite(
+            table,
+            "cuda_jspt",
+            hole="bind.point_to_guid",
+            expected_information_nats=100.0,
+        )
+        self.assertEqual(decision.disposition, "REFUSE")
+        self.assertEqual(decision.reason, "authority is rust-effort-gate")
+
+    def test_rust_authority_may_score_a_flipped_row_without_invoking(self) -> None:
+        table = copy.deepcopy(load_effort_table(_DEFAULT_EFFORT))
+        satellites = table["satellites"]
+        assert isinstance(satellites, dict)
+        rust = satellites["rust_ingest"]
+        assert isinstance(rust, dict)
+        rust["allowed"] = True
+        decision = decide_satellite(
+            table,
+            "rust_ingest",
+            hole="bind.point_to_guid",
+            expected_information_nats=20.0,
+            caller_authority=RUST_AUTHORITY,
+        )
+        self.assertEqual(decision.disposition, "INVOKE")
+        self.assertFalse(decision.as_policy()["invoked"])
+        self.assertEqual(decision.authority, RUST_AUTHORITY)
 
     def test_python_path_defers_without_a_named_hole(self) -> None:
         table = load_effort_table(_DEFAULT_EFFORT)
@@ -65,6 +107,7 @@ class SatelliteEffortTests(unittest.TestCase):
         decisions = {row["satellite"]: row for row in document["effort"]["decisions"]}
         self.assertEqual(decisions["sp1_zkvm"]["disposition"], "REFUSE")
         self.assertEqual(decisions["cuda_jspt"]["disposition"], "REFUSE")
+        self.assertEqual(decisions["sp1_zkvm"]["reason"], "authority is rust-effort-gate")
         self.assertTrue(decisions["sp1_zkvm"]["world_digest_unchanged"])
         self.assertFalse(decisions["sp1_zkvm"]["invoked"])
 
