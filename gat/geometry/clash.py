@@ -25,6 +25,7 @@ space against its bounding walls) are exempt: expected contact, not clash.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 
 import numpy as np
 
@@ -178,26 +179,80 @@ def score_pair(
     )
 
 
+def _broadphase_margin(max_clearance: float | None) -> float | None:
+    """Half the clearance window each AABB is padded by, or None: no pruning.
+
+    A negative window is not a stricter filter, it is a degenerate one: at
+    margin -0.5 Wall-Party's own bounds invert (lo [5.65 2.05 0.5] > hi
+    [4.7 1.95 1.5]), so ``(lo_a > hi_b).any()`` rejects every pair.
+    ``gat check --max-clearance -0.01`` dropped the demo from 6 scored
+    pairs to 0 and published worst p_clash 0.0 with exit 0 -- "nothing was
+    checked" read as "nothing is wrong".  Both entry points here share this
+    guard so one flag cannot mean two things on one invocation.
+    """
+    if max_clearance is None:
+        return None
+    value = float(max_clearance)
+    if not math.isfinite(value) or value < 0.0:
+        raise ValueError(
+            "max_clearance must be non-negative or None "
+            f"(None disables broad-phase pruning), got {max_clearance!r}"
+        )
+    return 0.5 * value
+
+
+def _check_proposed_box(box, position_sigma: float) -> None:
+    """Refuse a proposed box whose geometry the scorer cannot represent.
+
+    Mirroring a box names the same occupied region -- origin (7.0, 2.2, 3.0)
+    extents (-3.0, -0.4, -0.4) has the centre and AABB of origin
+    (4.0, 1.8, 2.6) extents (3.0, 0.4, 0.4) -- but support_radius returns
+    -1.5 for it, so the duct that scores clearance -0.4000 / P(clash)
+    1.0000 through Wall-Party scored +1.8000 / 0.0000 with overlap mass
+    -0.02955 m3 and exited 0.  Wording matches ClearanceDecision's own
+    checks so the declared type and this entry point cannot drift.
+    """
+    origin = tuple(box.origin)
+    extents = tuple(box.extents)
+    if len(origin) != 3 or len(extents) != 3:
+        raise ValueError("proposed box origin and extents must each be 3 numbers")
+    values = (*origin, float(box.angle), *extents)
+    if not all(math.isfinite(float(value)) for value in values):
+        raise ValueError("proposed box coordinates and extents must be finite")
+    if any(float(extent) <= 0.0 for extent in extents):
+        raise ValueError("proposed box extents must be positive")
+    sigma = float(position_sigma)
+    if not math.isfinite(sigma) or sigma < 0.0:
+        raise ValueError("position_sigma must be finite and non-negative")
+
+
 def detect(
     scene: GeometryScene,
-    max_clearance: float = 0.5,
+    max_clearance: float | None = 0.5,
     min_p: float = 0.0,
 ) -> ClashReport:
-    """Score every non-exempt solid pair within broad-phase range."""
+    """Score every non-exempt solid pair within broad-phase range.
+
+    ``max_clearance`` is the widest gap worth scoring; ``None`` disables
+    broad-phase pruning entirely, as :func:`score_proposed_box` already
+    spells it.
+    """
     scene.check_fresh(scene.world)
+    margin = _broadphase_margin(max_clearance)
     solids = [e for e in scene.elements if e.is_solid]
     considered = 0
     passed: list[tuple[SceneElement, SceneElement]] = []
     for i, a in enumerate(solids):
-        lo_a, hi_a = a.aabb(margin=0.5 * max_clearance)
+        lo_a, hi_a = a.aabb(margin=margin) if margin is not None else (None, None)
         for b in solids[i + 1 :]:
             considered += 1
             pair = (min(a.row, b.row), max(a.row, b.row))
             if pair in scene.exempt_pairs:
                 continue
-            lo_b, hi_b = b.aabb(margin=0.5 * max_clearance)
-            if (lo_a > hi_b).any() or (lo_b > hi_a).any():
-                continue
+            if margin is not None:
+                lo_b, hi_b = b.aabb(margin=margin)
+                if (lo_a > hi_b).any() or (lo_b > hi_a).any():
+                    continue
             passed.append((a, b))
 
     items = [score_pair(scene, a, b) for a, b in passed]
@@ -224,6 +279,8 @@ def score_proposed_box(
     from gat.geometry.primitives import GaussianCloud, N_FEATURES
 
     scene.check_fresh(scene.world)
+    _check_proposed_box(box, position_sigma)
+    margin = _broadphase_margin(max_clearance)
     means, covs, weights, fractions = gaussianize_box(box, 0.4)
     n_raw = scene.world.binding.n_raw
     base_count = len(scene.cloud)
@@ -258,16 +315,14 @@ def score_proposed_box(
     )
     items = []
     considered = 0
-    if max_clearance is not None and max_clearance < 0.0:
-        raise ValueError("max_clearance must be non-negative or None")
-    if max_clearance is not None:
-        lo_g, hi_g = ghost.aabb(margin=0.5 * max_clearance)
+    if margin is not None:
+        lo_g, hi_g = ghost.aabb(margin=margin)
     for element in extended.elements[:-1]:
         if not element.is_solid:
             continue
         considered += 1
-        if max_clearance is not None:
-            lo, hi = element.aabb(margin=0.5 * max_clearance)
+        if margin is not None:
+            lo, hi = element.aabb(margin=margin)
             if (lo > hi_g).any() or (lo_g > hi).any():
                 continue
         items.append(

@@ -40,6 +40,7 @@ import math
 import os
 from pathlib import Path
 import sys
+import traceback
 from typing import Sequence
 
 from gat.engine.sampling import sample_report
@@ -275,6 +276,65 @@ def _clash_item_dict(item) -> dict:
     }
 
 
+def _spec_number(spec: dict, key: str, path: str, default: float | None) -> float:
+    """One finite number out of a proposed-element spec, or a refusal."""
+    if key not in spec:
+        if default is None:
+            raise ValueError(f"{path}: proposed-element spec needs {key!r}")
+        return default
+    # An explicit null is a template that did not fill in, not a request for
+    # the default: guessing 0.0 for it would place geometry the spec never
+    # asked for.
+    value = spec[key]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{path}: {key!r} must be a number, got {value!r}")
+    if not math.isfinite(float(value)):
+        raise ValueError(f"{path}: {key!r} must be finite, got {value!r}")
+    return float(value)
+
+
+def _spec_triple(spec: dict, key: str, path: str) -> tuple[float, float, float]:
+    """Three finite numbers out of a proposed-element spec, or a refusal."""
+    if key not in spec:
+        raise ValueError(f"{path}: proposed-element spec needs {key!r}: three numbers")
+    value = spec[key]
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        raise ValueError(f"{path}: {key!r} must be three numbers, got {value!r}")
+    out = []
+    for slot, item in enumerate("xyz"):
+        entry = value[slot]
+        if isinstance(entry, bool) or not isinstance(entry, (int, float)):
+            raise ValueError(f"{path}: {key!r}[{item}] must be a number, got {entry!r}")
+        if not math.isfinite(float(entry)):
+            raise ValueError(f"{path}: {key!r}[{item}] must be finite, got {entry!r}")
+        out.append(float(entry))
+    return (out[0], out[1], out[2])
+
+
+def _read_proposed(path: str) -> tuple[OrientedBox, float]:
+    """Read a ``--proposed`` spec into a box, or refuse by name.
+
+    The spec is operator-authored JSON and was subscripted raw, so a
+    2-element "extents" left an IndexError traceback and exit 1 -- the code
+    the contract above reserves for a finding about the building.  Value
+    invariants (extents positive, sigma non-negative) stay in
+    score_proposed_box, which is where every caller meets them.
+    """
+    with open(path, "r", encoding="utf-8") as fh:
+        spec = json.load(fh)
+    if not isinstance(spec, dict):
+        raise ValueError(
+            f"{path}: proposed-element spec must be a JSON object with keys "
+            "origin, extents and optionally angle_deg, position_sigma"
+        )
+    box = OrientedBox(
+        origin=_spec_triple(spec, "origin", path),
+        angle=math.radians(_spec_number(spec, "angle_deg", path, 0.0)),
+        extents=_spec_triple(spec, "extents", path),
+    )
+    return box, _spec_number(spec, "position_sigma", path, 0.0)
+
+
 def _run_check(args: argparse.Namespace) -> int:
     session = _load(args.model)
     scene = derive_scene(session.world)
@@ -283,17 +343,11 @@ def _run_check(args: argparse.Namespace) -> int:
 
     proposed_items = []
     if args.proposed:
-        with open(args.proposed, encoding="utf-8") as fh:
-            spec = json.load(fh)
-        box = OrientedBox(
-            origin=tuple(spec["origin"]),
-            angle=math.radians(float(spec.get("angle_deg", 0.0))),
-            extents=tuple(spec["extents"]),
-        )
+        box, position_sigma = _read_proposed(args.proposed)
         proposed = score_proposed_box(
             scene,
             box,
-            position_sigma=float(spec.get("position_sigma", 0.0)),
+            position_sigma=position_sigma,
             max_clearance=args.max_clearance,
         )
         proposed_items = list(proposed.items)
@@ -447,6 +501,32 @@ def _run_sample(args: argparse.Namespace) -> int:
     return 0
 
 
+def _positive_float(text: str) -> float:
+    """argparse type: a scale that must be usable as a divisor.
+
+    ``--spacing 0`` reached ``extents[i] / spacing`` and raised
+    ZeroDivisionError; ``--spacing -1`` exited 0 after tiling every box to a
+    single primitive, i.e. a viewer silently drawn at the coarsest possible
+    resolution.
+    """
+    value = float(text)
+    if not math.isfinite(value) or value <= 0.0:
+        raise argparse.ArgumentTypeError(f"must be a positive length, got {text!r}")
+    return value
+
+
+def _finite_float(text: str) -> float:
+    """argparse type: a threshold that must be comparable.
+
+    ``--fail-above nan`` made ``worst >= args.fail_above`` False for every
+    p_clash, so a P(clash) of 1.0000 still exited 0.
+    """
+    value = float(text)
+    if not math.isfinite(value):
+        raise argparse.ArgumentTypeError(f"must be a finite number, got {text!r}")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gat",
@@ -472,8 +552,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = commands.add_parser("check", help="probabilistic clash report")
     p.add_argument("model")
     p.add_argument("--proposed", help="JSON spec of a proposed element")
-    p.add_argument("--max-clearance", type=float, default=0.5)
-    p.add_argument("--fail-above", type=float, default=0.5,
+    p.add_argument("--max-clearance", type=_finite_float, default=0.5,
+                   help="widest gap worth scoring, in metres (default 0.5)")
+    p.add_argument("--fail-above", type=_finite_float, default=0.5,
                    help="exit 1 when any P(clash) reaches this (default 0.5)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(handler=_run_check)
@@ -495,7 +576,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("out_dir")
     p.add_argument("--variations", type=int, default=0)
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--spacing", type=float, default=0.75)
+    p.add_argument("--spacing", type=_positive_float, default=0.75)
     p.set_defaults(handler=_run_splats)
 
     p = commands.add_parser("sample", help="invariant checking over belief realizations")
@@ -539,7 +620,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--output", required=True, help="viewer HTML path")
     p.add_argument("--variations", type=int, default=8)
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--spacing", type=float, default=0.75)
+    p.add_argument("--spacing", type=_positive_float, default=0.75)
     p.add_argument(
         "--decision",
         help="gat-headless response to overlay (must be evaluated on this model)",
@@ -564,7 +645,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--output", required=True, help="console HTML path")
     p.add_argument("--variations", type=int, default=8)
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--spacing", type=float, default=0.75)
+    p.add_argument("--spacing", type=_positive_float, default=0.75)
     p.add_argument(
         "--decision",
         help="gat-headless response to bind (DECISION readout + FIELD overlay)",
@@ -592,12 +673,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2 if exc.code not in (0, None) else 0
     try:
         return int(args.handler(args))
-    except FileNotFoundError as exc:
+    except OSError as exc:
+        # A directory where a file belongs raised IsADirectoryError past the
+        # old FileNotFoundError-only clause: exit 1 with a traceback, and
+        # exit 1 is reserved above for a finding about the building.
         print(f"gat: {exc}", file=sys.stderr)
         return 2
     except (GatError, KeyError, ValueError, json.JSONDecodeError) as exc:
         print(f"gat: {exc}", file=sys.stderr)
         return 2
+    except Exception as exc:  # gat.errors: the CLI is the must-not-miss caller
+        # Not a refusal and not a finding, so it may not borrow either code:
+        # say which kind it was, keep the traceback that makes it fixable.
+        print(f"gat: internal error: {type(exc).__name__}: {exc}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        return 3
 
 
 def ifc_audit_main(argv: Sequence[str] | None = None) -> int:

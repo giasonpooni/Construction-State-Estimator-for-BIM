@@ -174,5 +174,138 @@ class DemoClashTest(unittest.TestCase):
         self.assertEqual(report_a.render(), self.report.render())
 
 
+class BroadPhaseWindowIsNotAFilterTests(unittest.TestCase):
+    """A negative ``max_clearance`` published "nothing was checked" as
+    "nothing is wrong".
+
+    ``detect`` passed ``margin=0.5 * max_clearance`` straight into
+    ``SceneElement.aabb``, which adds it to the max corner and subtracts it
+    from the min. At margin -0.5 Wall-Party's own bounds invert --
+    lo [5.65 2.05 0.5] > hi [4.7 1.95 1.5] -- so ``(lo_a > hi_b).any()``
+    rejects every pair unconditionally. Measured on the demo scene before
+    the fix: max_clearance 0.5 and 0.0 both scored 6 pairs out of 15
+    considered with worst p_clash 0.03165889341501993, while -0.01 and -1.0
+    scored 0 pairs and reported worst p_clash 0.0. It is a cliff at any
+    negative value, not a graduated filter. ``gat check --max-clearance -1``
+    exited 0 on that empty report, while the same flag on the same
+    invocation plus ``--proposed`` already exited 2, because
+    ``score_proposed_box`` carried the guard ``detect`` did not.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.world = GatSession.load_ifc(MODEL).world
+        cls.scene = derive_scene(cls.world)
+
+    def test_the_smallest_negative_window_is_refused(self):
+        # -0.01 is where the cliff already is: 6 scored pairs -> 0.
+        for value in (-0.01, -0.5, -1.0, -1e6):
+            with self.subTest(max_clearance=value):
+                with self.assertRaises(ValueError) as caught:
+                    detect(self.scene, max_clearance=value)
+                self.assertIn("max_clearance must be non-negative", str(caught.exception))
+
+    def test_a_non_finite_window_is_refused(self):
+        # nan compares False against every bound, so it silently disabled
+        # pruning; None is the spelling that asks for that.
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(max_clearance=value):
+                with self.assertRaises(ValueError):
+                    detect(self.scene, max_clearance=value)
+
+    def test_zero_is_still_a_valid_window(self):
+        # The fix must not move the valid boundary: touching boxes still score.
+        report = detect(self.scene, max_clearance=0.0)
+        self.assertEqual(len(report.items), 6)
+        self.assertEqual(report.n_pairs_broadphase, 6)
+        self.assertEqual(report.n_pairs_considered, 15)
+
+    def test_none_disables_pruning_as_it_does_for_a_proposal(self):
+        # score_proposed_box has always spelled "no pruning" None; detect
+        # divided None by two and raised TypeError.
+        report = detect(self.scene, max_clearance=None)
+        self.assertEqual(report.n_pairs_considered, 15)
+        self.assertGreaterEqual(report.n_pairs_broadphase, 6)
+        self.assertGreaterEqual(len(report.items), len(detect(self.scene).items))
+
+    def test_the_two_entry_points_refuse_alike(self):
+        duct = OrientedBox(origin=(4.0, 1.8, 2.6), angle=0.0, extents=(3.0, 0.4, 0.4))
+        with self.assertRaises(ValueError):
+            score_proposed_box(self.scene, duct, max_clearance=-0.01)
+        with self.assertRaises(ValueError):
+            detect(self.scene, max_clearance=-0.01)
+
+
+class ProposedBoxMustBeRepresentableTests(unittest.TestCase):
+    """A mirrored proposed box named an occupied region and scored it clear.
+
+    ``score_proposed_box`` never checked its box, so extents could be
+    negative or zero. origin (7.0, 2.2, 3.0) extents (-3.0, -0.4, -0.4) has
+    the same centre [5.5, 2.0, 2.8] and the same AABB
+    [4, 1.8, 2.6]-[7, 2.2, 3.0] as the crossing duct above, i.e. it passes
+    through Wall-Party just as that one does. Measured before the fix: the
+    duct scored clearance -0.4000, P(clash) 1.0000, overlap 0.01857 m3 and
+    ``gat check`` exited 1; the mirrored spelling scored clearance +1.8000,
+    P(clash) 0.0000, overlap mass -0.02955 m3 and exited 0 -- the clean
+    code for a duct through a party wall. Underneath, ``support_radius``
+    returns -1.5 for it and ``gaussianize_box`` emits a weight sum of
+    -0.48: a negative radius and a negative mass, geometry the runtime
+    cannot represent, emitted without complaint. ``ClearanceDecision``, the
+    repo's declared type for this same question, refused it all along with
+    "proposed box extents must be positive"; the CLI called past it.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.scene = derive_scene(GatSession.load_ifc(MODEL).world)
+
+    def test_the_mirrored_duct_is_refused_not_scored_clear(self):
+        mirrored = OrientedBox(
+            origin=(7.0, 2.2, 3.0), angle=0.0, extents=(-3.0, -0.4, -0.4)
+        )
+        with self.assertRaises(ValueError) as caught:
+            score_proposed_box(self.scene, mirrored, position_sigma=0.02)
+        self.assertEqual(str(caught.exception), "proposed box extents must be positive")
+
+    def test_a_flat_box_is_refused(self):
+        for extents in ((0.0, 0.4, 0.4), (3.0, 0.0, 0.4), (3.0, 0.4, 0.0)):
+            with self.subTest(extents=extents):
+                with self.assertRaises(ValueError):
+                    score_proposed_box(
+                        self.scene,
+                        OrientedBox(origin=(4.0, 1.8, 2.6), angle=0.0, extents=extents),
+                    )
+
+    def test_non_finite_geometry_is_refused(self):
+        nan = float("nan")
+        boxes = (
+            OrientedBox(origin=(nan, 1.8, 2.6), angle=0.0, extents=(3.0, 0.4, 0.4)),
+            OrientedBox(origin=(4.0, 1.8, 2.6), angle=nan, extents=(3.0, 0.4, 0.4)),
+            OrientedBox(origin=(4.0, 1.8, 2.6), angle=0.0, extents=(float("inf"), 0.4, 0.4)),
+        )
+        for box in boxes:
+            with self.subTest(box=box):
+                with self.assertRaises(ValueError):
+                    score_proposed_box(self.scene, box)
+
+    def test_a_negative_position_sigma_is_refused(self):
+        # It was squared into extra_var, so -0.02 scored as +0.02: an
+        # uncertainty budget silently accepted from a nonsense number.
+        duct = OrientedBox(origin=(4.0, 1.8, 2.6), angle=0.0, extents=(3.0, 0.4, 0.4))
+        with self.assertRaises(ValueError):
+            score_proposed_box(self.scene, duct, position_sigma=-0.02)
+        with self.assertRaises(ValueError):
+            score_proposed_box(self.scene, duct, position_sigma=float("nan"))
+
+    def test_the_honest_spelling_of_the_same_region_still_scores(self):
+        # The guard must refuse only the unrepresentable spelling.
+        duct = OrientedBox(origin=(4.0, 1.8, 2.6), angle=0.0, extents=(3.0, 0.4, 0.4))
+        report = score_proposed_box(self.scene, duct, position_sigma=0.02)
+        self.assertEqual(len(report.items), 1)
+        self.assertAlmostEqual(report.items[0].clearance, -0.4, delta=1e-12)
+        self.assertGreater(report.items[0].p_clash, 0.999)
+        self.assertGreater(report.items[0].overlap_mass, 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
