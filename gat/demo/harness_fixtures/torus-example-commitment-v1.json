@@ -1,0 +1,14 @@
+{
+  "schema": "torus-report-commitment-v1",
+  "kind": "torus-report",
+  "claim_scope": "record-integrity-only",
+  "payload": {
+    "title": "Shipped torus fixture for the CSE harness",
+    "result": {
+      "loop_length": 2.0615528128088303,
+      "closed": true
+    },
+    "note": "Illustrative payload. Re-run Flat-Torus write_validation.py for a live pin."
+  },
+  "digest": "720ef0c17d46b218aff84c945c4384ff286b0efbcdb206f7917298e38a860ae6"
+}

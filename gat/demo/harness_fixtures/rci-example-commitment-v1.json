@@ -1,0 +1,19 @@
+{
+  "schema": "rci-evidence-commitment-v1",
+  "kind": "instrument-observation",
+  "claim_scope": "record-integrity-only",
+  "observation_id": "demo-session:2",
+  "payload": {
+    "assembly_id": "bench-displacement-01",
+    "indicated": 2.0,
+    "indicated_unit": "mm",
+    "observation_id": "demo-session:2",
+    "raw": 200.0,
+    "raw_unit": "count",
+    "sigma": 0.02,
+    "sigma_unit": "mm",
+    "sigma_reason": "Shipped harness fixture. Not field evidence.",
+    "not_field_evidence": true
+  },
+  "digest": "dd035c6477a9926f678c235972a6ba753a49f9881164266e30e49821bd620b4f"
+}
