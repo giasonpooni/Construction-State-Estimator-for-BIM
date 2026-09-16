@@ -53,6 +53,9 @@ jobs:
       - name: Run the temporal predict-update demo (self-asserting)
         run: python -m gat.demo.temporal_process
 
+      - name: Run the SE(2) MCL satellite demo (self-asserting)
+        run: python -m gat.demo.mcl_floor
+
       - name: Run incremental propagation scale smoke probe
         run: python -m gat.demo.incremental_scale --sizes 8 16 32 --repeats 1 --output ci-out/incremental-scale.json
 
