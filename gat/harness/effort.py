@@ -7,12 +7,12 @@ Does not run SP1, CUDA, or Rust. Does not touch Beam-B1.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import math
 from pathlib import Path
 from typing import Mapping
 
 from gat.adapters.external_commitment import canonical_digest
-from gat.harness.bundle import load_json
 
 EFFORT_FORMAT = "satellite-effort-v1"
 KNOWN_SATELLITES = frozenset(
@@ -54,8 +54,15 @@ class EffortDecision:
         }
 
 
+def _read_object(path: str | Path) -> dict[str, object]:
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    return raw
+
+
 def load_effort_table(path: str | Path | None = None) -> dict[str, object]:
-    table = load_json(path or _DEFAULT_TABLE)
+    table = _read_object(path or _DEFAULT_TABLE)
     if table.get("format") != EFFORT_FORMAT:
         raise ValueError("effort table format must be satellite-effort-v1")
     satellites = table.get("satellites")
