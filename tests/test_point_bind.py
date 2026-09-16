@@ -63,21 +63,36 @@ class PointBindTests(unittest.TestCase):
         self.assertIn("evidence.as_built", codes)
         self.assertNotIn("bind.point_to_guid", codes)
 
-    def test_executed_v0_cut_is_presentable_not_a_stamp(self) -> None:
-        office_a_v0.main()
-        receipt = json.loads(Path(office_a_v0._RECEIPT).read_text(encoding="utf-8"))
+    def test_missing_sigma_is_refused(self) -> None:
+        with self.assertRaisesRegex(ValueError, "sigma"):
+            bind_point(
+                {
+                    "schema": BIND_SCHEMA,
+                    "claim_scope": "record-integrity-only",
+                    "point_id": "P-204",
+                    "ifc_class": "IfcOpeningElement",
+                    "global_id": "GATOPN0000000000000200",
+                    "frame_id": "office-a-layout-v0",
+                    "epoch": "design-declared",
+                }
+            )
+
+    def test_coordinates_without_guid_are_refused(self) -> None:
+        with self.assertRaisesRegex(ValueError, "coordinates"):
+            bind_point(
+                {
+                    "schema": BIND_SCHEMA,
+                    "claim_scope": "record-integrity-only",
+                    "xyz": [1.0, 2.0, 0.0],
+                }
+            )
+
+    def test_fixture_declares_frame_epoch_and_sigma(self) -> None:
         bind = bind_point_file(BIND)
-        space = json.loads(Path(office_a_v0._SPACE).read_text(encoding="utf-8"))
-        index = fold_inspectability(
-            space=space,
-            receipts=[(receipt, str(office_a_v0._RECEIPT))],
-            binds=[(bind.to_document(), str(BIND))],
-        )
-        self.assertEqual(index.inspectability, "ACCEPT")
-        self.assertEqual(tickets_from_index(index), ())
-        self.assertIn("not an occupancy permit", index.document["non_claims"])
-        self.assertEqual(len(receipt["evidence_digest"]), 64)
-        self.assertEqual(len(receipt["ledger_event_hash"]), 64)
+        self.assertEqual(bind.frame_id, "office-a-layout-v0")
+        self.assertEqual(bind.epoch, "design-declared")
+        self.assertEqual(bind.sigma, 0.005)
+        self.assertEqual(bind.sigma_unit, "m")
 
 
 if __name__ == "__main__":

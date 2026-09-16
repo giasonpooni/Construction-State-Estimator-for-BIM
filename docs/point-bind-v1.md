@@ -11,41 +11,10 @@ Name one layout point as the same object as one IFC entity. Close the
 This is not an observation. It does not condition belief. It does
 not make a DWG layer into `SCAN_GMM`.
 
-## Schema
-
-```json
-{
-  "schema": "cse-point-bind-v1",
-  "claim_scope": "record-integrity-only",
-  "payload": {
-    "point_id": "P-204",
-    "ifc_class": "IfcOpeningElement",
-    "global_id": "GATOPN0000000000000200",
-    "name": "Opening-1",
-    "space_id": "space:ifc:GATSPC0000000000000300",
-    "frame_id": null
-  },
-  "digest": "sha256 of the payload"
-}
-```
-
-`global_id` is the IFC `GlobalId`. Display names (`Opening-1`, `Office-A`)
-are refused. `frame_id` may name a survey setup; it is not a JSPT chart.
-
-## Call path
-
-```
-layout point P-204
-        |
-        v
-gat.harness.point_bind.bind_point
-        |
-        v
-inspectability fold (--bind)
-        |
-        v
-later ObserveQuantity / ObserveLinearized on that Guid
-```
+`frame_id`, `epoch`, `sigma`, `sigma_unit`, and `sigma_reason` are required.
+A bind without uncertainty is refused. Coordinates without a GlobalId are
+not a bind. Mesh proximity is not a bind. Display names are refused.
+`frame_id` may name a survey setup; it is not a JSPT chart.
 
 ## Non-claims
 
