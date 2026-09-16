@@ -122,14 +122,16 @@ def _case_row(document: Mapping[str, object], source: str | None) -> dict[str, o
 
 
 def _is_bind(document: Mapping[str, object]) -> bool:
-    if document.get("schema") == BIND_SCHEMA:
-        return True
-    binds = document.get("binds")
-    if isinstance(binds, list) and binds:
-        return True
+    if document.get("schema") != BIND_SCHEMA:
+        return False
     point_id = document.get("point_id")
     global_id = document.get("global_id")
-    return bool(document.get("schema") == BIND_SCHEMA and point_id and global_id)
+    return (
+        isinstance(point_id, str)
+        and bool(point_id.strip())
+        and isinstance(global_id, str)
+        and bool(global_id.strip())
+    )
 
 
 def _has_as_built(document: Mapping[str, object]) -> bool:
