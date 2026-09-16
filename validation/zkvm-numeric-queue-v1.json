@@ -1,0 +1,16 @@
+{
+  "schema": "cse-zkvm-numeric-queue-v1",
+  "claim_scope": "computational-integrity-only",
+  "current": {
+    "guest_id": "beam-b1-f2-1",
+    "arithmetic": "checked-integer",
+    "status": "implemented"
+  },
+  "not_opened": [
+    "discrete-lyapunov-decrease",
+    "jacobian-product-chain",
+    "discrete-jacobi-field",
+    "interval-box"
+  ],
+  "refused": ["ieee754-geodesic", "rk4-manifold", "jspt-in-guest"]
+}
