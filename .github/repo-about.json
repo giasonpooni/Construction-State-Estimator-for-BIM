@@ -1,0 +1,12 @@
+{
+  "description": "CSE: fail-closed evidence-to-decision runtime for BIM. OpenUSD is an optional restart carrier.",
+  "homepage": "https://github.com/giasonpooni/Construction-State-Estimator-for-BIM",
+  "topics": [
+    "bim",
+    "ifc",
+    "verification",
+    "gaussian",
+    "construction",
+    "state-estimation"
+  ]
+}
