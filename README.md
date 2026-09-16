@@ -49,9 +49,12 @@ python -m pip install -e .
 python -m unittest discover
 python -m gat.demo.workflow
 python -m gat.demo.beam_assurance out/beam
-python -m gat.demo.experiment_harness --disposition validation/beam-b1-disposition-v1.json -o out/harness-bundle.json
+python -m gat.demo.experiment_harness --demo -o out/harness-bundle.json
 gat-headless request.json -o response.json
 ```
+
+`--demo` binds the shipped instrument and torus *fixtures* to the Beam-B1
+pin. Those fixtures are not field evidence. Python 3.11+.
 
 Optional extras after the editable install:
 
@@ -60,23 +63,18 @@ python -m pip install -e ".[openusd]"      # Pixar OpenUSD carrier + signatures
 python -m pip install -e ".[ifcopenshell]" # second IFC inventory adapter; not the authoritative loader
 ```
 
-Python 3.11+.
-
 ## Experiment across tools
 
-Each companion repo stays its own clone. Do not submodule them. Produce a
-commitment file in that repo, then bind it here.
+Command map for every companion: [`docs/experiment-index-v1.md`](docs/experiment-index-v1.md).
+Harness contract: [`docs/experiment-harness-v1.md`](docs/experiment-harness-v1.md).
+
+Each companion repo stays its own clone. Do not submodule them.
 
 ```bash
-# In Retrofitted-Computational-Instrumentation
-PYTHONPATH=src python examples/displacement_bench.py
-# writes a JSONL log; each observation can be wrapped as rci-evidence-commitment-v1
+# After clone of this repo only:
+python -m gat.demo.experiment_harness --demo -o out/harness-bundle.json
 
-# In Flat-Torus-Moduli-and-Geodesic-Explorer
-PYTHONPATH=src python examples/write_validation.py
-# writes validation/torus-*-commitment-v1.json
-
-# Back in this repo: bind, do not fuse
+# Live records from the other clones, then bind:
 python -m gat.demo.experiment_harness \
   --disposition validation/beam-b1-disposition-v1.json \
   --commit path/to/rci-evidence-commitment.json \
@@ -85,8 +83,7 @@ python -m gat.demo.experiment_harness \
 ```
 
 The bundle records that those files hashed to those digests. It does not
-change Beam-B1. It does not call JSPT. It does not invoke SP1. See
-[`docs/experiment-harness-v1.md`](docs/experiment-harness-v1.md).
+change Beam-B1. It does not call JSPT. It does not invoke SP1.
 
 JSPT remains the owner of A2–A5. Pin a git SHA and wrap types in domain
 code. Do not put `sensitivity` in the guest.
@@ -154,6 +151,7 @@ satellite. See [`docs/kernel-v1.md`](docs/kernel-v1.md).
 - [`docs/treatise.md`](docs/treatise.md) — public name, architecture, proof language
 - [`docs/geometry-authority-v1.md`](docs/geometry-authority-v1.md)
 - [`docs/kernel-v1.md`](docs/kernel-v1.md)
+- [`docs/experiment-index-v1.md`](docs/experiment-index-v1.md) — how to try each tool
 - [`docs/experiment-harness-v1.md`](docs/experiment-harness-v1.md) — bind companion records
 - [`docs/sparse-belief-v1.md`](docs/sparse-belief-v1.md)
 - [`docs/ifcopenshell-adapter-v0.md`](docs/ifcopenshell-adapter-v0.md)
