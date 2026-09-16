@@ -115,6 +115,29 @@ class ClearanceLikelihoodCalibration:
     #: instrument delivers 3 mm buys itself a 15 mm tolerance for real
     #: deformation, and the declaration is what it will be held to.
     max_residual_sigma_ratio: float = 1.5
+    #: How far the support window may re-centre off the model's prediction
+    #: before the measurement is refused rather than reported.  The window
+    #: has to move -- pinned to the prediction it truncates a deviated face
+    #: and reports a shrunken number -- but a window that has walked a long
+    #: way is no longer obviously looking at the face it was asked about.
+    #: The default equals ``face_band``: a face further off than the window
+    #: is wide is a deviation this instrument was not set up to measure, and
+    #: saying so is more use than a number.  Raising it is a deliberate
+    #: declaration that the model is expected to be that wrong.
+    max_face_recentre: float = 0.060
+    #: Share of the settled face's returns that a plane one element
+    #: thickness further out may carry.  Above it the window has settled on
+    #: the element's far face, which is a clean measurement of the wrong
+    #: side of the wall and is invisible to every statistic computed on the
+    #: retained returns alone.  Conservative by design: clutter parked
+    #: exactly one thickness outward refuses too, and that really is
+    #: ambiguous evidence.
+    #:
+    #: Checked only when the element's support radius exceeds ``face_band``,
+    #: so that the rival window is a separate window rather than an overlap
+    #: of the face being measured.  Thinner than that and the two faces share
+    #: one window, which ``max_residual_sigma_ratio`` catches as scatter.
+    max_rival_plane_share: float = 0.25
     min_element_effective_points: float = 25.0
     min_support_diversity: float = 0.50
     min_assignment_confidence: float = 0.80
@@ -130,6 +153,8 @@ class ClearanceLikelihoodCalibration:
             "min_face_effective_points",
             "min_tangent_rms",
             "max_residual_sigma_ratio",
+            "max_face_recentre",
+            "max_rival_plane_share",
             "min_element_effective_points",
             "max_pose_disagreement_m2",
             "max_innovation_sigma",
@@ -199,6 +224,96 @@ class ScanClearanceLikelihood:
 #: statistic about *where* the returns are, which is the question.
 COVERAGE_POINTS_PER_CELL = 4.0
 COVERAGE_CELL_BOUNDS = (4, 256)
+
+
+def _on_support_face(
+    element: SceneElement,
+    direction: np.ndarray,
+    points: np.ndarray,
+) -> np.ndarray:
+    """Boolean mask: returns lying on the support face, not a perpendicular one.
+
+    The support window is one-dimensional -- a band on the projection along
+    ``direction`` -- and a box has four faces *perpendicular* to that
+    direction whose returns fall inside the band near the far edge. On
+    ``gat/demo/model.ifc`` that is 21.3% of the weight: the party wall is
+    3.0 m tall and 0.2 m thick, so every return on its sides and ends within
+    60 mm of the top counted as a top-face return. They are not scatter about
+    the support plane; they are a different plane seen edge-on, and their
+    spread is what ``max_residual_sigma_ratio`` was reading. Filtering them
+    out takes the demo's support face from 15.08 mm rms to 8.84 mm and moves
+    ``observed`` from 6.5 mm below the true top to 1.2 mm below it.
+
+    ``min_face_alignment`` already checks that the *direction* names a face
+    rather than an edge or corner. This checks that each *return* does.
+
+    A point is assigned to the box face it is nearest, in the box's own
+    frame: for half-extents h and local coordinates x, the distance to the
+    face pair on axis i is ``| |x_i| - h_i |``, and the smallest wins. It is
+    the same rule a scanner's own geometry obeys -- a return sits on one
+    surface -- so it needs no tolerance and no new calibration constant.
+
+    The axis carries *two* faces, and only the one ``direction`` points at
+    is the support face; the other is the element's far side. Keeping both
+    would put a thin element's two faces in one retained set, which is the
+    case ``max_rival_plane_share`` exists to refuse and this would have
+    hidden from it. So the sign is checked too.
+    """
+    rotation = rot_z(element.box.angle)
+    half = 0.5 * np.asarray(element.box.extents, dtype=np.float64)
+    local = (points - element.box.center()) @ rotation
+    to_face = np.abs(np.abs(local) - half)
+    aligned = direction @ rotation
+    support_axis = int(np.argmax(np.abs(aligned)))
+    on_axis = np.argmin(to_face, axis=1) == support_axis
+    outward = np.sign(aligned[support_axis])
+    return on_axis & (local[:, support_axis] * outward > 0.0)
+
+
+#: Rounds the support window is allowed to chase the returns. The map
+#: centre -> weighted mean of what the centre retains is a mean-shift step
+#: with a flat kernel; it converges in a handful of rounds on anything
+#: plane-like and oscillates between two clusters on anything that is not.
+#: The bound is what turns the second case into a refusal instead of a hang.
+SUPPORT_WINDOW_ROUNDS = 12
+
+#: Movement below which the window is called settled, in metres. A hundredth
+#: of a millimetre is far inside any sensor this runtime accepts, so this
+#: stops the iteration rather than deciding anything.
+SUPPORT_WINDOW_TOLERANCE = 1e-5
+
+
+def _settle_support_window(
+    projections: np.ndarray,
+    gamma: np.ndarray,
+    predicted: float,
+    band: float,
+) -> tuple[float, float]:
+    """Move the support window onto the returns. Returns ``(centre, walked)``.
+
+    Starts at the model's prediction and repeatedly re-centres on the
+    weighted mean of what the current window retains -- mean shift with a
+    flat kernel. ``walked`` is the total distance from ``predicted``, which
+    the caller gates on: it is the estimator's own statement of how far the
+    as-built face is from the model, and the one number the pinned window
+    could not produce.
+
+    An empty window is left where it is. The caller's effective-point gate
+    then refuses it, and it refuses with a count rather than with whatever a
+    mean over nothing would have been.
+    """
+    centre = float(predicted)
+    for _ in range(SUPPORT_WINDOW_ROUNDS):
+        inside = np.abs(projections - centre) <= band
+        mass = float(np.sum(gamma * inside))
+        if mass <= 0.0:
+            break
+        moved = float(np.sum(gamma * inside * projections) / mass)
+        if abs(moved - centre) < SUPPORT_WINDOW_TOLERANCE:
+            centre = moved
+            break
+        centre = moved
+    return centre, abs(centre - float(predicted))
 
 
 def _face_coverage(
@@ -372,9 +487,81 @@ def adapt_clearance_likelihood(
     target_gamma = posterior.responsibilities[:, primitive_mask].sum(axis=1)
 
     center = element.box.center()
-    predicted = float(direction @ center + support_radius(element, direction))
+    radius = support_radius(element, direction)
+    predicted = float(direction @ center + radius)
     projections = posterior.model_points @ direction
-    face_mask = np.abs(projections - predicted) <= calibration.face_band
+
+    # The support window used to sit on ``predicted`` -- the BIM's own answer
+    # to the question being asked -- and never move. A face at predicted +
+    # delta is then one-side truncated by it, so ``observed`` is pulled back
+    # toward the model. Measured on the truncated normal at the shipped
+    # 60 mm band and 10 mm sensor: a true 70 mm offset reported 54.8 mm, a
+    # true 90 mm reported 57.1, and the estimator saturates near 56 mm -- it
+    # could not report a deviation larger than about 0.93 of the band, no
+    # matter the truth. Worse, ``face_residual_rms`` is taken about that
+    # already-pulled mean, so the gate meant to catch "this is a shape, not
+    # noise" read 4.45 mm against its 15 mm bound at the 70 mm offset and
+    # got *quieter* the worse the deviation.
+    #
+    # So the window is put on the returns instead, and the two ways that can
+    # go wrong are then checked rather than assumed away.
+    # Only returns that lie on the support face may speak for it. See
+    # ``_on_support_face``: the window is one-dimensional, so a box's four
+    # perpendicular faces put returns inside the band near its far edge and
+    # they read as scatter about a plane they are not on.
+    on_face = _on_support_face(element, direction, posterior.model_points)
+    target_gamma = target_gamma * on_face
+
+    centre, walked = _settle_support_window(
+        projections, target_gamma, predicted, calibration.face_band
+    )
+    if walked > calibration.max_face_recentre:
+        raise LikelihoodCalibrationError(
+            f"the support face sits {walked*1000:.0f} mm from where the model "
+            f"puts it, past the {calibration.max_face_recentre*1000:.0f} mm "
+            "this calibration declares: either the as-built deviation is "
+            "larger than this instrument was set up to measure, or the "
+            "window has found a different surface. Widen face_band and "
+            "max_face_recentre deliberately, or fix the pose"
+        )
+
+    # A box has two parallel faces exactly 2R apart along ``direction``, and
+    # ``direction`` points outward, so the support face is the OUTER one. A
+    # window that settles with a plane-like cluster one full thickness
+    # further out has settled on the far face: a *clean* measurement of the
+    # wrong side of the element. Nothing about the retained returns can show
+    # that -- they are well centred in their own window and every statistic
+    # taken on them is healthy -- so only the element's own geometry can.
+    #
+    # It applies only when the far face is far enough away to be a separate
+    # window: ``radius > face_band``. Below that the two faces sit inside one
+    # window, the rival window overlaps the face itself, and the test fires
+    # on every honest measurement -- measured at 0.99 on a clean one-sided
+    # scan of Door-1, which is 25 mm of support radius against a 60 mm band.
+    # That case is not unguarded: two faces inside one window make the
+    # retained returns bimodal, and ``max_residual_sigma_ratio`` below reads
+    # the half-separation as scatter and refuses. The two gates divide the
+    # range between them.
+    if radius > calibration.face_band:
+        inside = np.abs(projections - centre) <= calibration.face_band
+        here = float(np.sum(target_gamma * inside))
+        rival_centre = centre + 2.0 * radius
+        rival = float(
+            np.sum(
+                target_gamma
+                * (np.abs(projections - rival_centre) <= calibration.face_band)
+            )
+        )
+        if here > 0.0 and rival / here >= calibration.max_rival_plane_share:
+            raise LikelihoodCalibrationError(
+                f"a second plane carries {rival/here:.2f} of this one's "
+                f"returns exactly {2.0*radius*1000:.0f} mm outward -- one "
+                "element thickness. The window has settled on the far face, "
+                "or something is parked one thickness off it; either way the "
+                "outermost plane is not the one being measured"
+            )
+
+    face_mask = np.abs(projections - centre) <= calibration.face_band
     weights = target_gamma * face_mask
     face_mass = float(weights.sum())
     if face_mass < calibration.min_face_effective_points:

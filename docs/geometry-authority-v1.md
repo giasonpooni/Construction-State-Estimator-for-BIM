@@ -67,6 +67,151 @@ right formula only while the residual is independent noise. A face that
 fails the gate is not a support plane, and scanning it harder does not make
 its mean one.
 
+## The support window used to be pinned to the model
+
+`adapt_clearance_likelihood` finds the element's support face by projecting
+the registered returns onto the clearance direction and averaging the ones
+inside a band. That band was centred on `predicted` — the BIM's own answer
+to the question being asked — and never moved:
+
+```python
+predicted = direction @ center + support_radius(element, direction)
+face_mask = np.abs(projections - predicted) <= calibration.face_band
+```
+
+A face at `predicted + δ` is then **one-side truncated** by its own support
+window, so the reported deviation is pulled back toward the model. Measured
+through the whole pipeline on Wall-Party's top face, 400 returns at a 10 mm
+sensor and the shipped 60 mm band:
+
+| true offset | reported | shortfall | `face_residual_rms` | outcome |
+|---|---|---|---|---|
+| 30 mm | 29.4 mm | 0.6 mm | 10.00 mm | reported |
+| 40 mm | 38.8 mm | 1.2 mm | 9.40 mm | reported |
+| 50 mm | 46.7 mm | 3.3 mm | 7.98 mm | reported |
+| 55 mm | 49.9 mm | 5.1 mm | 7.17 mm | reported |
+| 60 mm | 52.0 mm | 8.0 mm | 6.45 mm | reported |
+| 70 mm | 53.9 mm | **16.1 mm** | **4.67 mm** | reported |
+| 80 mm | — | — | — | refused |
+
+Three things go wrong at once, and they compound:
+
+1. The reported deviation is short, and short in the direction of agreeing
+   with the model — in an instrument whose entire output *is* the deviation.
+2. `face_residual_rms` is taken about that already-pulled mean, so a
+   truncated sample looks **tighter** than an untruncated one. The gate meant
+   to catch "this is a shape, not noise" reads 4.67 mm against its 15 mm
+   bound at the point of worst error — quieter than it reads on a face that
+   is exactly right.
+3. A shrunken deviation is a shrunken innovation, so the 5σ innovation gate
+   does not see it either. At a true 60 mm offset the pinned window reported
+   52.0 mm and passed; the settled window puts the real number in front of
+   the same gate and it fires at 5.29σ.
+
+Past about 80 mm the element's own GMM responsibilities die and the case
+refuses on effective points. That part always worked. The hole is the band
+either side of it, where a real as-built deviation is reported as a smaller
+one with every gate green.
+
+### Settling the window on the returns
+
+The window now starts at `predicted` and re-centres on the weighted mean of
+what it retains until it stops moving — mean shift with a flat kernel,
+bounded in rounds so two rival clusters give a bounded answer rather than a
+loop. The distance it travelled is `walked`, which is the estimator's own
+statement of how far the as-built face is from the model, and the one number
+the pinned window could not produce.
+
+| true offset | reported | shortfall | `face_residual_rms` |
+|---|---|---|---|
+| 0–55 mm | accurate | **0.5 mm, flat** | **10.14 mm, flat** |
+| 60 mm | refused — innovation gate, 5.29σ | | |
+| 70–80 mm | refused — "the support face sits 69 mm from where the model puts it" | | |
+| 90 mm+ | refused — 0.000 effective points | | |
+
+The residual 0.5 mm is not the truncation: it is the same at 0 mm as at
+55 mm. It comes from weighting the returns by responsibilities that are
+themselves centred on the model. Constant, small, and not a function of how
+wrong the model is, which is the property that matters.
+
+Two new declared gates bound what settling is allowed to do.
+
+**`max_face_recentre`** (default `0.060`, equal to `face_band`) is how far
+the window may walk before the case is refused instead of reported. A face
+further off than the window is wide is a deviation this instrument was not
+set up to measure, and saying so — with the distance — is more use than a
+number. Raising it is a deliberate declaration that the model is expected to
+be that wrong.
+
+**`max_rival_plane_share`** (default `0.25`) catches the window settling on
+the element's *far* face. A box has two parallel faces exactly 2R apart and
+the clearance direction points outward, so the support face is the outer one.
+A window on the inner one is a **clean** measurement of the wrong side: the
+retained returns are well centred in their own window and every statistic
+taken on them is healthy. Only the element's own geometry shows it.
+
+That test applies only when `support_radius > face_band`, so the rival
+window is a separate window rather than an overlap of the face being
+measured. Below that threshold it reads 0.99 on a clean one-sided scan of
+Door-1 — 25 mm of support radius against a 60 mm band — and would refuse
+every honest measurement of anything thinner than the band. The thin case is
+not unguarded: two faces inside one window make the retained returns
+bimodal, and `max_residual_sigma_ratio` reads the half-separation as scatter.
+The two gates divide the range between them, and both halves are pinned in
+`tests/test_scan_likelihood.py`.
+
+### Only the support face may speak for it
+
+Settling the window surfaced a second, larger defect. The support window is
+**one-dimensional** — a band on the projection along `direction` — and a box
+has four faces that direction is *perpendicular* to. Their returns fall
+inside the band near its far edge.
+
+Wall-Party is 3.0 m tall and 0.2 m thick, so every return on its sides and
+ends within one `face_band` of the top landed in the support window. On the
+shipped `gat.demo.geometry` scan that is **21.3% of the weight**:
+
+| support window | `face_mass` | `observed` | residual rms |
+|---|---|---|---|
+| all returns in the band | 36.35 | 2.993521 | 15.08 mm |
+| support-face returns only | 28.61 | **2.998803** | **8.84 mm** |
+
+The true wall top is 3.000, so filtering also takes the measurement from
+6.5 mm below it to 1.2 mm below it. Those returns were never scatter about
+the support plane — they are a *different plane seen edge-on*, and their
+spread is what `max_residual_sigma_ratio` had been reading.
+
+`min_face_alignment` already checks that the *direction* names a face rather
+than an edge or a corner. Nothing checked that each *return* did.
+`_on_support_face` now assigns every return to the box face it is nearest, in
+the box's own frame — for half-extents h and local coordinates x, the
+distance to the face pair on axis i is `| |x_i| - h_i |`, smallest wins — and
+keeps only the face the direction points at. It is the rule a scanner's own
+geometry obeys, so it needs no tolerance and no new calibration constant.
+
+The sign matters: the support axis carries two faces, and keeping both would
+put a thin element's near and far faces inside one retained set, which is
+exactly what `max_rival_plane_share` exists to refuse.
+
+The strongest evidence that this is the right filter is that **with it, the
+pinned window and the settled window return bit-identical numbers** — mass
+28.61, observed 2.998803, rms 8.84 mm. A correct extraction cannot depend on
+its own starting guess, and before the filter it did.
+
+### What the demo was actually doing
+
+Worth recording, because it is the reason this was invisible. The demo had
+been passing the 15 mm shape gate at 11.96 mm — and only because the window
+was pinned 6.5 mm above the returns and clipped more of the contaminating
+tail. Settling the window honestly took it to 15.08 mm and refused. **Both
+numbers were wrong.** The face filter is what makes them agree, and it takes
+the demo to 8.84 mm rms with a support reading 1.2 mm off the truth instead
+of 4.9 mm off.
+
+A gate passing is not the same as a gate being right, and a fixture that
+passes on a bias will keep passing until something changes the bias.
+
+
 ## What a surface capture does that a drawn scan does not
 
 Every scan this runtime was measured against until now came from
