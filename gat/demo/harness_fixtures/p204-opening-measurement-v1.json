@@ -1,0 +1,11 @@
+{
+  "schema": "cse-measurement-v1",
+  "claim_scope": "record-integrity-only",
+  "observation_id": "p204-opening-width-1",
+  "calibration_id": "layout-point-p204-declared-width",
+  "indicated": 1.002,
+  "sigma": 0.005,
+  "sigma_unit": "m",
+  "sigma_reason": "Same declared layout tolerance as the calibration.",
+  "digest": "be6536789d57859e934855448547b086182da8d93373e4197ae89f0299760ee9"
+}
