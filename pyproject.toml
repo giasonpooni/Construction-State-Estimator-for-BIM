@@ -25,6 +25,7 @@ dependencies = ["numpy>=1.24"]
 gat = "gat.cli:main"
 gat-headless = "gat.headless:main"
 gat-ifc-audit = "gat.cli:ifc_audit_main"
+gat-present = "gat.demo.present_space:main"
 
 [project.optional-dependencies]
 openusd = ["usd-core>=26.8,<27", "cryptography>=40"]
