@@ -41,7 +41,7 @@ from gat.geometry.scan_filter import (
     prepare_for_measurement,
     prepare_for_pose,
 )
-from gat.geometry.scan_io import load_ply_points
+from gat.geometry.scan_io import ScanArtifact, load_ply_points, read_ply_scan
 from gat.geometry.scan_likelihood import (
     ClearanceLikelihoodCalibration,
     IndependentPoseCalibration,
@@ -85,7 +85,9 @@ __all__ = [
     "FILTER_FORMAT",
     "FilterStep",
     "FilteredScan",
+    "ScanArtifact",
     "load_ply_points",
+    "read_ply_scan",
     "prepare_for_measurement",
     "prepare_for_pose",
     "moment_match",

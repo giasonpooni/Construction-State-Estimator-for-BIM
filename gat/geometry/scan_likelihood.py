@@ -654,6 +654,7 @@ def adapt_clearance_likelihood(
         face_assignment,
         pose,
         calibration,
+        getattr(registration, "artifact_digest", None),
     )
     observation = ObserveLinearized(
         row=row,
@@ -749,6 +750,7 @@ def _likelihood_digest(
     face_assignment: float,
     pose: IndependentPoseCalibration,
     calibration: ClearanceLikelihoodCalibration,
+    artifact_digest: str | None = None,
 ) -> str:
     digest = hashlib.sha256()
     payload = {
@@ -761,6 +763,12 @@ def _likelihood_digest(
         "face_assignment": face_assignment,
         "calibration": asdict(calibration),
     }
+    if artifact_digest is not None:
+        # Added only when the scan actually came from a file, so an
+        # in-memory scan's evidence digest is byte-identical to what it was
+        # before this existed. A measurement claims byte provenance exactly
+        # when it has some.
+        payload["scan_artifact"] = artifact_digest
     digest.update(json.dumps(payload, sort_keys=True).encode("utf-8"))
     digest.update(np.asarray(direction, dtype="<f8").tobytes())
     digest.update(

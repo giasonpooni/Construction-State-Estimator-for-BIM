@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -81,8 +81,18 @@ class RegistrationResult:
     converged_nlls: tuple[float, ...]
     info_matrix: np.ndarray        # (4, 4) over (theta, tx, ty, tz)
     accepted: bool                 # fit quality AND basin separation
-    scan_digest: str               # binds downstream evidence to exact input bytes
+    #: SHA-256 over the parsed float64 coordinates -- NOT over the artifact's
+    #: bytes. Two files that differ anywhere except the vertex positions
+    #: (a provenance comment, splat scales, opacity) hash the same here. The
+    #: byte identity, when the scan came from a file, is ``artifact_digest``.
+    scan_digest: str
     scene_version: str             # canonical-world digest used to derive the field
+    #: SHA-256 of the scan artifact's bytes, when the scan was read from a
+    #: file through :func:`gat.geometry.scan_io.read_ply_scan`. ``None`` for
+    #: an in-memory scan, which has no bytes to speak of. Optional so that
+    #: every existing caller and every recorded digest is unchanged: a
+    #: measurement only claims byte provenance when it actually has it.
+    artifact_digest: str | None = None
     #: The distinct poses the contenders converged to, best fit first -- not
     #: one entry per start. Contenders that arrive at the same pose are one
     #: answer found twice, and are merged as they meet rather than carried to
@@ -893,16 +903,23 @@ class ScanRegistrar:
         vertices are treated as scan points and enter the same deterministic
         GMM likelihood and fit-quality gate as native point clouds.
         """
-        from gat.geometry.scan_io import load_ply_points
+        from gat.geometry.scan_io import read_ply_scan
 
-        return self.register(
-            load_ply_points(path),
+        # Read the artifact, not just its coordinates: `scan_digest` covers
+        # the parsed float64 positions and nothing else, so without this a
+        # reconstruction claiming 1 m isotropic splats at opacity 0.02 and
+        # one claiming 2 mm splats at opacity 0.99 are indistinguishable
+        # downstream as long as their vertex positions agree.
+        artifact = read_ply_scan(path)
+        result = self.register(
+            artifact.points,
             n_starts,
             accept_nll,
             min_basin_margin,
             max_yaw_sigma,
             max_translation_sigma,
         )
+        return replace(result, artifact_digest=artifact.source_digest)
 
     def evidence(
         self, scan: np.ndarray, result: RegistrationResult

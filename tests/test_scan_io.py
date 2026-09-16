@@ -19,7 +19,13 @@ import numpy as np
 
 import gat.demo
 from gat.errors import ScanArtifactError
-from gat.geometry.scan_io import load_ply_points
+from gat.geometry.registration import (
+    RigidTransformZ,
+    ScanRegistrar,
+    _scan_digest,
+    synthesize_scan,
+)
+from gat.geometry.scan_io import load_ply_points, read_ply_scan
 from gat.geometry.splat_io import export_splat_ply
 from gat.geometry.stateio import derive_scene
 from gat.session import GatSession
@@ -181,6 +187,173 @@ class TrailingNewlineTests(unittest.TestCase):
                 )
                 with self.assertRaisesRegex(ScanArtifactError, "can hold at most"):
                     load_ply_points(path)
+
+class ScanArtifactBindsTheFileTests(unittest.TestCase):
+    """``scan_digest`` covers the parsed coordinates; nothing covered the file.
+
+    ``RegistrationResult.scan_digest`` was commented "binds downstream
+    evidence to exact input bytes". It does not: ``_scan_digest``
+    (gat/geometry/registration.py) hashes the parsed ``float64`` positions.
+    Everything a PLY says *about* those positions -- a provenance comment,
+    per-splat scales, opacity -- is outside it, and so is outside the ledger
+    event hash and the proof statement built on top.
+
+    Measured: four byte-distinct files carrying identical vertex positions
+    produced one scan digest. Two of them make opposite claims about what was
+    measured -- 1 m isotropic splats at opacity 0.02 against 2 mm splats at
+    opacity 0.99 -- and were indistinguishable downstream.
+
+    The certificate path had this right all along:
+    ``material_certificate`` hashes ``source_bytes`` and
+    ``certificate_signature`` HMACs them. The scan path had no equivalent, so
+    a point cloud was trusted on arrival. ``ScanArtifact`` does not make it
+    trusted -- nothing here verifies a signature -- it makes it
+    identifiable, which is the precondition for ever signing one.
+    """
+
+    def _write(self, path, points, *, comments=(), props=(), values=None):
+        n = len(points)
+        head = ["ply", "format binary_little_endian 1.0"]
+        head += [f"comment {c}" for c in comments]
+        head += [f"element vertex {n}"]
+        head += [f"property double {a}" for a in ("x", "y", "z")]
+        head += [f"property float {q}" for q in props]
+        head += ["end_header", ""]
+        with open(path, "wb") as handle:
+            handle.write("\n".join(head).encode("ascii"))
+            for index, point in enumerate(points):
+                handle.write(struct.pack("<3d", *point))
+                if props:
+                    handle.write(struct.pack(f"<{len(props)}f", *values[index]))
+
+    def _variants(self, directory, points):
+        """Four files, identical vertex positions, different claims."""
+        plain = os.path.join(directory, "plain.ply")
+        self._write(plain, points)
+
+        forged = os.path.join(directory, "forged.ply")
+        self._write(
+            forged,
+            points,
+            comments=[
+                "captured by Leica RTC360 s/n 4417281",
+                "survey control CAL-UTM-2026-08",
+            ],
+        )
+
+        splat_props = ("scale_0", "scale_1", "scale_2", "opacity")
+        blobs = os.path.join(directory, "blobs.ply")
+        self._write(
+            blobs,
+            points,
+            props=splat_props,
+            values=np.hstack(
+                [
+                    np.full((len(points), 3), 1.0, dtype=np.float32),
+                    np.full((len(points), 1), 0.02, dtype=np.float32),
+                ]
+            ),
+        )
+
+        tight = os.path.join(directory, "tight.ply")
+        self._write(
+            tight,
+            points,
+            props=splat_props,
+            values=np.hstack(
+                [
+                    np.full((len(points), 3), 0.002, dtype=np.float32),
+                    np.full((len(points), 1), 0.99, dtype=np.float32),
+                ]
+            ),
+        )
+        return {"plain": plain, "forged": forged, "blobs": blobs, "tight": tight}
+
+    def test_the_artifact_digest_separates_what_the_coordinates_do_not(
+        self,
+    ) -> None:
+        rng = np.random.default_rng(1)
+        points = rng.uniform(-1.0, 1.0, size=(200, 3))
+        with tempfile.TemporaryDirectory() as directory:
+            variants = self._variants(directory, points)
+            coordinate_digests = set()
+            artifact_digests = set()
+            for path in variants.values():
+                artifact = read_ply_scan(path)
+                np.testing.assert_allclose(artifact.points, points)
+                coordinate_digests.add(_scan_digest(artifact.points))
+                artifact_digests.add(artifact.source_digest)
+
+            # The coordinates really are identical -- that is the premise.
+            self.assertEqual(len(coordinate_digests), 1)
+            # And the artifact digest tells the four files apart.
+            self.assertEqual(len(artifact_digests), len(variants))
+
+    def test_the_two_reconstructions_that_contradict_each_other_differ(
+        self,
+    ) -> None:
+        """1 m isotropic blobs at 2% opacity and 2 mm splats at 99% opacity
+        are opposite claims about what was measured. Before, one digest."""
+        rng = np.random.default_rng(2)
+        points = rng.uniform(-1.0, 1.0, size=(200, 3))
+        with tempfile.TemporaryDirectory() as directory:
+            variants = self._variants(directory, points)
+            blobs = read_ply_scan(variants["blobs"])
+            tight = read_ply_scan(variants["tight"])
+            self.assertEqual(blobs.source_bytes, tight.source_bytes)
+            self.assertEqual(_scan_digest(blobs.points), _scan_digest(tight.points))
+            self.assertNotEqual(blobs.source_digest, tight.source_digest)
+
+    def test_the_artifact_records_a_basename_not_a_path(self) -> None:
+        """World identity is path-independent by design
+        (docs/world-identity-v2.md); evidence must not smuggle the
+        exporter's directory layout back in."""
+        rng = np.random.default_rng(3)
+        points = rng.uniform(-1.0, 1.0, size=(50, 3))
+        with tempfile.TemporaryDirectory() as directory:
+            nested = os.path.join(directory, "clientname_x")
+            os.makedirs(nested)
+            path = os.path.join(nested, "survey.ply")
+            self._write(path, points)
+            artifact = read_ply_scan(path)
+            self.assertEqual(artifact.source_name, "survey.ply")
+            self.assertNotIn("clientname_x", artifact.source_name)
+            self.assertGreater(artifact.source_bytes, 0)
+
+    def test_registering_a_file_carries_the_byte_identity_through(self) -> None:
+        scene = derive_scene(GatSession.load_ifc(MODEL).world)
+        registrar = ScanRegistrar(scene)
+        truth = RigidTransformZ(0.0, (0.0, 0.0, 0.0))
+        scan = synthesize_scan(
+            scene, n_points=600, noise_sigma=0.01, outlier_frac=0.02,
+            transform=truth, seed=5,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "scan.ply")
+            self._write(path, scan)
+            artifact = read_ply_scan(path)
+            result = registrar.register_ply(path)
+            self.assertEqual(result.artifact_digest, artifact.source_digest)
+            self.assertEqual(result.scan_digest, _scan_digest(artifact.points))
+            self.assertNotEqual(result.artifact_digest, result.scan_digest)
+
+    def test_an_in_memory_scan_claims_no_byte_provenance(self) -> None:
+        """Optional on purpose. A scan with no file behind it must not
+        assert one, and every digest recorded before this existed must be
+        unchanged."""
+        scene = derive_scene(GatSession.load_ifc(MODEL).world)
+        registrar = ScanRegistrar(scene)
+        scan = synthesize_scan(
+            scene, n_points=600, noise_sigma=0.01, outlier_frac=0.02,
+            transform=RigidTransformZ(0.0, (0.0, 0.0, 0.0)), seed=5,
+        )
+        self.assertIsNone(registrar.register(scan).artifact_digest)
+
+    def test_a_missing_artifact_is_a_declared_refusal(self) -> None:
+        with self.assertRaises(ScanArtifactError):
+            read_ply_scan("/nonexistent/none.ply")
+
+
 
 if __name__ == "__main__":
     unittest.main()

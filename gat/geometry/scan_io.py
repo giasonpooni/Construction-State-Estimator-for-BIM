@@ -21,6 +21,8 @@ misread.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 from typing import BinaryIO
 
@@ -49,12 +51,64 @@ _SCALAR_DTYPES = {
 }
 
 
+@dataclass(frozen=True)
+class ScanArtifact:
+    """A scan's points together with the identity of the file they came from.
+
+    ``source_digest`` is the SHA-256 of the artifact's *bytes*, which is what
+    ``gat.engineering.material_certificate`` has always recorded for a
+    certificate (``material_certificate.py`` hashes ``source_bytes``) and
+    what ``certificate_signature`` HMACs. The scan path had no equivalent:
+    ``registration._scan_digest`` hashes the parsed float64 coordinates, so
+    four byte-distinct PLYs carrying the same vertex positions -- a plain
+    cloud, one with a fabricated survey-rig provenance comment, one whose
+    splats are 1 m isotropic blobs at opacity 0.02, and one whose splats are
+    2 mm at opacity 0.99 -- produced one identical scan digest, one ledger
+    event hash and one proof statement. The last two make opposite claims
+    about what was measured.
+
+    This does not make a point cloud trusted; nothing here verifies a
+    signature. It makes the file *identifiable*, which is the precondition
+    for ever signing one.
+    """
+
+    points: np.ndarray
+    #: SHA-256 of the artifact's bytes on disk.
+    source_digest: str
+    #: Size in bytes, recorded because a digest alone says nothing about
+    #: whether two artifacts are comparable in kind.
+    source_bytes: int
+    #: Basename only. World identity is deliberately path-independent
+    #: (docs/world-identity-v2.md), and a full path would carry the
+    #: exporter's directory layout into evidence.
+    source_name: str
+
+
+def read_ply_scan(path: str | Path) -> ScanArtifact:
+    """Load a PLY scan together with the digest of its bytes."""
+    path = Path(path)
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise ScanArtifactError(f"{path}: cannot read scan artifact: {exc}") from exc
+    return ScanArtifact(
+        points=load_ply_points(path),
+        source_digest=hashlib.sha256(raw).hexdigest(),
+        source_bytes=len(raw),
+        source_name=path.name,
+    )
+
+
 def load_ply_points(path: str | Path) -> np.ndarray:
     """Load immutable ``(n, 3)`` float64 points from a PLY vertex element.
 
     The point order is preserved exactly.  A triangle mesh is therefore a
     valid scan artifact: its face element is left unread once all vertices
     have been consumed.
+
+    This returns coordinates only. It therefore cannot bind anything to the
+    file: see :class:`ScanArtifact` and :func:`read_ply_scan` for the byte
+    identity.
     """
     path = Path(path)
     try:
