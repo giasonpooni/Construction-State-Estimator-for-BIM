@@ -1,0 +1,33 @@
+{
+  "format": "satellite-effort-v1",
+  "claim_scope": "gate-policy-only",
+  "default": "refuse",
+  "note": "Declared effort. Not learned. Does not change Beam-B1, Sigma, or replay.",
+  "satellites": {
+    "python_uv": {
+      "allowed": true,
+      "cost_nats": 0.0,
+      "effort": "baseline host path"
+    },
+    "rust_ingest": {
+      "allowed": false,
+      "cost_nats": 8.0,
+      "effort": "compile plus unsafe boundary plus one replay contract"
+    },
+    "cuda_jspt": {
+      "allowed": false,
+      "cost_nats": 16.0,
+      "effort": "device present, transfer, non-replayable unless pinned"
+    },
+    "sp1_zkvm": {
+      "allowed": false,
+      "cost_nats": 32.0,
+      "effort": "long guest; workflow_dispatch only"
+    },
+    "dense_sigma_rebuild": {
+      "allowed": false,
+      "cost_nats": 12.0,
+      "effort": "dense oracle rebuild when incremental_scale says so"
+    }
+  }
+}
