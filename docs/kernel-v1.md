@@ -1,14 +1,28 @@
-# GAT kernel freeze v1
+# CSE kernel freeze v1
 
 Status: project convention. Not a feature freeze of bugs.
+
+Public name: Construction State Estimator (CSE). Code namespace: `gat`.
 
 ## Why
 
 v0 already answers the original milestone: when one architectural parameter
-changes, GAT can transform state and propagate dependents through mandatory
+changes, CSE can transform state and propagate dependents through mandatory
 verification. Additional layers are useful only when they change a
 disposition, a world digest, or a replay on the construction-acceptance
 slice.
+
+## Version bump rule
+
+If a change alters a disposition, digest, or replay on
+
+1. opening / prefabrication fit,
+2. as-built clearance,
+3. beam certificate → capacity verdict,
+4. design-change / RFI preview,
+
+it is a **version bump of the kernel**, not a satellite merge. Document the
+changed contract in the validation JSON that pins that slice.
 
 ## Kernel
 
@@ -42,11 +56,5 @@ release or expand the public claim.
 
 ## Rule
 
-If a change does not alter a disposition, digest, or replay on
-
-1. opening / prefabrication fit,
-2. as-built clearance,
-3. beam certificate → capacity verdict,
-4. design-change / RFI preview,
-
-it belongs on a satellite branch.
+If a change does not alter a disposition, digest, or replay on the four
+slice items above, it belongs on a satellite branch.
