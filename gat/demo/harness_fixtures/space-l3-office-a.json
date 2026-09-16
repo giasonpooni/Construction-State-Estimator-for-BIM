@@ -1,0 +1,10 @@
+{
+  "project_id": "proj:example-hall",
+  "building_id": "bldg:hall-a",
+  "space_id": "space:ifc:3AbcOfficeA00000000000000",
+  "space_ref": {
+    "ifc_class": "IfcSpace",
+    "global_id": "3AbcOfficeA00000000000000",
+    "name": "L3-Office-A"
+  }
+}
