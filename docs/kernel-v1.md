@@ -36,6 +36,7 @@ release or expand the public claim.
 - splat PLY export and viewer cosmetics
 - Blender sidebar coloring
 - SP1 guest packaging and any proving service
+- `gat/adapters/external_commitment.py` — bind RCI/torus record digests
 - temporal process demos beyond the linear-Gaussian forecast already used
   by the decision slice
 
