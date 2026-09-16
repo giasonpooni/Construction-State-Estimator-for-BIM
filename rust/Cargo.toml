@@ -1,0 +1,3 @@
+[workspace]
+members = ["effort_gate", "fixedpoint_kernel", "sp1_guest"]
+resolver = "2"
