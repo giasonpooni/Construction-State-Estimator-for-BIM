@@ -1,0 +1,26 @@
+{
+  "schema": "sp1-guest-claim-v0",
+  "claim_kind": "observe_quantity_integrity",
+  "zk": false,
+  "invoked": false,
+  "authority": "rust-effort-gate",
+  "allowed": false,
+  "program_id": null,
+  "input_digest": null,
+  "output_digest": null,
+  "public": {
+    "entity": "IfcOpeningElement",
+    "global_id": "GATOPN0000000000000200",
+    "quantity": "Width",
+    "indicated_m": 1.0,
+    "sigma_m": 0.003,
+    "calibration_id": "public-xref-total-station-short-range-v1"
+  },
+  "non_claims": [
+    "not a field observation",
+    "not an ApprovalRecord",
+    "not a Beam-B1 certificate",
+    "not zero-knowledge unless zk is true and a proof is attached"
+  ],
+  "note": "Claim shape only. No guest binary. No proof bytes."
+}
