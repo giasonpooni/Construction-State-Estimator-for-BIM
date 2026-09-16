@@ -1,0 +1,10 @@
+{
+  "schema": "cse-measurement-v1",
+  "claim_scope": "record-integrity-only",
+  "observation_id": "p204-opening-width-public-sim-1",
+  "calibration_id": "layout-point-p204-declared-width",
+  "indicated": 1.002,
+  "sigma": 0.0016,
+  "sigma_unit": "m",
+  "sigma_reason": "Simulated from SDI 117 unmarked linear tolerance ±1.6 mm. Not a field resection. ACI 117 concrete opening envelope is +25/-13 mm and is not used as this sigma."
+}
