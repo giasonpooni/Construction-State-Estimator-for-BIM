@@ -19,6 +19,7 @@ import tempfile
 from typing import Callable, Mapping
 
 from gat.causal import AssessmentRecord
+from gat.engine.decision import DecisionVerdict
 from gat.engine.executor import World
 from gat.engineering.aisc360_22 import AISC360_22_PHI_B
 from gat.engineering.beam import BeamCheckResult
@@ -509,6 +510,41 @@ def sp1_beam_assessment_record(
             "available_milli_n_mm": claim.available_milli_n_mm,
             "verdict": claim.verdict,
         },
+        # The claim's verdict is not this runtime's verdict, and the record
+        # has to say so in the same breath rather than leave it to a reader
+        # who knows the criterion kind above means what it says.
+        #
+        # ``build_sp1_beam_claim`` quantizes ``world.belief.mean(...)`` and
+        # never reads a sigma, so ``claim.verdict`` flips at P = 0.5: it is
+        # PASS exactly when the posterior MEAN capacity clears the demand.
+        # The runtime's own rule wants the decision's declared confidence.
+        # Measured on gat/demo/beam_model.ifc, DesignMomentCapacity
+        # 315000.0 +- 7858.9 N*m:
+        #
+        #     demand      p_satisfies   runtime      claim
+        #     300000 N*m      0.9718     SATISFIED    PASS
+        #     310000 N*m      0.7377     UNRESOLVED   PASS   <-- diverges
+        #     320000 N*m      0.2623     UNRESOLVED   FAIL
+        #
+        # Nothing is miscomputed: the guest proves what its docstring says it
+        # proves, and `claim_limits.proves_gaussian_update` has always been
+        # False. But a cryptographically signed "PASS" sitting beside an
+        # UNRESOLVED disposition is the same hazard as a check whose label
+        # implies support it does not have, and this runtime is built to
+        # refuse that reading. So the probabilistic verdict travels in the
+        # record next to the deterministic one, and `diverges` marks the band
+        # where they disagree.
+        "belief_verdict": {
+            "verdict": result.assessment.verdict.value,
+            "p_satisfies": result.assessment.p_satisfies,
+            "confidence": result.assessment.decision.confidence,
+            "target_mean_n_m": result.assessment.target_mean,
+            "target_sigma_n_m": result.assessment.target_sigma,
+            "diverges": (
+                (result.assessment.verdict is DecisionVerdict.SATISFIED)
+                != (claim.verdict == "PASS")
+            ),
+        },
         "computation": {
             "method": SP1_BEAM_METHOD,
             "computation_digest": claim.computation_digest,
@@ -522,6 +558,13 @@ def sp1_beam_assessment_record(
             "proves_evidence_truth": False,
             "proves_design_code_applicability": False,
             "authorizes_physical_action": False,
+            # Named because it is the one a reader is most likely to assume.
+            # The claim is over quantized posterior MEANS; no field of
+            # `Sp1BeamClaimInput` can carry a second moment and no field of
+            # the public values can carry one out, so the declared
+            # confidence is outside what any proof over this circuit can
+            # say. `belief_verdict` above carries it instead.
+            "proves_declared_confidence": False,
         },
     }
     return AssessmentRecord(

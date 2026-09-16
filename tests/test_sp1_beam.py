@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+from types import SimpleNamespace
+
 from dataclasses import replace
 import copy
 import hashlib
@@ -8,7 +11,11 @@ from pathlib import Path
 import tempfile
 import unittest
 
+import gat.demo
+from gat.engine.decision import DecisionVerdict, assess_decision
+from gat.engineering.beam import BeamBendingCheck, BeamBendingEvaluator
 from gat.errors import ProofManifestError
+from gat.session import GatSession
 from gat.demo.beam_assurance import run_beam_assurance
 from gat.ledger import read_ledger
 from gat.proof_manifest import computation_proof_public_values_digest
@@ -24,6 +31,8 @@ from gat.sp1_beam import (
     Sp1BeamPublicValues,
     Sp1BeamRequest,
     read_sp1_beam_request,
+    build_sp1_beam_claim,
+    sp1_beam_assessment_record,
     sp1_beam_numeric_contract,
     write_sp1_beam_request,
 )
@@ -168,6 +177,100 @@ class Sp1BeamArithmeticTests(unittest.TestCase):
                 fixed_assessment["details"]["computation"]["computation_digest"],
                 request.claim.computation_digest,
             )
+
+
+class ProofVerdictIsNotTheRuntimeVerdictTests(unittest.TestCase):
+    """A signed PASS beside an UNRESOLVED disposition must not read as agreement.
+
+    ``build_sp1_beam_claim`` quantizes ``world.belief.mean(...)``
+    (gat/sp1_beam.py:479-480) and the module contains no reference to a
+    sigma anywhere. So the claim's verdict flips at P = 0.5 -- it is PASS
+    exactly when the posterior MEAN capacity clears the demand -- while this
+    runtime's own rule wants the decision's declared confidence. Measured on
+    gat/demo/beam_model.ifc, DesignMomentCapacity 315000.0 +- 7858.9 N*m:
+
+        demand      p_satisfies   runtime      claim
+        300000 N*m      0.9718     SATISFIED    PASS
+        310000 N*m      0.7377     UNRESOLVED   PASS   <-- diverges
+        320000 N*m      0.2623     UNRESOLVED   FAIL
+
+    Nothing is miscomputed. The guest proves what its docstring says, and
+    ``claim_limits.proves_gaussian_update`` was always False. The hazard is
+    that the artifact carried one word, "PASS", and a reader had to already
+    know that the criterion kind above it meant mean-capacity. So the record
+    now carries the probabilistic verdict beside the deterministic one, and
+    marks the band where they disagree.
+    """
+
+    MODEL = os.path.join(os.path.dirname(gat.demo.__file__), "beam_model.ifc")
+
+    class _Evidence:
+        """Minimal stand-in: build_sp1_beam_claim reads only these."""
+
+        def __init__(self, beam) -> None:
+            self.subject = SimpleNamespace(entity=beam)
+            self.source_digest = "1" * 64
+
+        def digest(self) -> str:
+            return "0" * 64
+
+    def _record_for(self, demand: float):
+        session = GatSession.load_ifc(self.MODEL)
+        beam = session.entity_by_name("Beam-B1")
+        check = BeamBendingCheck(beam, float(demand), 0.95, f"demand {demand}")
+        result = BeamBendingEvaluator().evaluate(session.world, check)
+        evidence = self._Evidence(beam)
+        claim = build_sp1_beam_claim(session.world, result, evidence)
+        record = sp1_beam_assessment_record(session.world, result, evidence, claim)
+        return claim, record, assess_decision(session.world, check.decision())
+
+    def test_the_record_carries_the_belief_verdict_too(self) -> None:
+        claim, record, assessment = self._record_for(300_000)
+        belief = record.details["belief_verdict"]
+        self.assertEqual(belief["verdict"], assessment.verdict.value)
+        self.assertAlmostEqual(belief["p_satisfies"], assessment.p_satisfies, places=12)
+        self.assertEqual(belief["confidence"], 0.95)
+        self.assertIn("target_sigma_n_m", belief)
+        self.assertGreater(belief["target_sigma_n_m"], 0.0)
+
+    def test_the_divergence_band_is_marked(self) -> None:
+        """The whole point: at 310 kN*m the claim says PASS and the runtime
+        says UNRESOLVED, and the record has to say that out loud."""
+        claim, record, assessment = self._record_for(310_000)
+        self.assertEqual(claim.verdict, "PASS")
+        self.assertEqual(assessment.verdict, DecisionVerdict.UNRESOLVED)
+        self.assertTrue(record.details["belief_verdict"]["diverges"])
+        self.assertLess(record.details["belief_verdict"]["p_satisfies"], 0.95)
+
+    def test_agreement_is_marked_as_agreement(self) -> None:
+        for demand in (250_000, 300_000, 320_000):
+            with self.subTest(demand=demand):
+                claim, record, assessment = self._record_for(demand)
+                agree = (assessment.verdict is DecisionVerdict.SATISFIED) == (
+                    claim.verdict == "PASS"
+                )
+                self.assertTrue(agree, "fixture moved; pick another demand")
+                self.assertFalse(record.details["belief_verdict"]["diverges"])
+
+    def test_the_claim_still_flips_at_the_mean_not_the_confidence(self) -> None:
+        """Pinning the actual behaviour, so that if the circuit ever does
+        learn about sigma this test fails and says where to look."""
+        _, _, low = self._record_for(310_000)
+        self.assertGreater(low.p_satisfies, 0.5)
+        self.assertLess(low.p_satisfies, 0.95)
+        claim, _, _ = self._record_for(310_000)
+        self.assertEqual(claim.verdict, "PASS")
+
+    def test_the_limits_name_what_a_reader_would_assume(self) -> None:
+        _, record, _ = self._record_for(300_000)
+        limits = record.details["claim_limits"]
+        self.assertFalse(limits["proves_declared_confidence"])
+        self.assertFalse(limits["proves_gaussian_update"])
+        self.assertEqual(
+            record.details["criterion"]["kind"],
+            "deterministic-fixed-point-mean-capacity",
+        )
+
 
 
 if __name__ == "__main__":
