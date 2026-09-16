@@ -60,6 +60,89 @@ the source or output could not be read or written.
 ## Report contract
 
 `gat-ifc-audit-v1` binds its result to the exact source SHA-256 and byte size.
-See the remainder of this file on `main` before this edit for the measured
-baselines, corpus reproduction commands, and adapter-hardening order. The
-audit still cannot authorize decisions.
+It includes:
+
+- IFC schema and exact entity-type counts;
+- every currently supported product and its STEP id, GlobalId, class, and name;
+- required, available, and missing quantities;
+- whether a geometry representation exists from which a future adapter could
+  derive missing quantities;
+- active project length-unit kind, prefix, scale to metres, and whether
+  normalization is required;
+- placement incompatibilities without stopping the rest of the inventory;
+- a non-authorizing beam-geometry summary with complete, partial, and blocked
+  counts plus an ordered result digest;
+- separate lowering, compilation, and verification stage results; and
+- an explicit assurance statement that the audit cannot authorize decisions.
+
+Product statuses have narrow meanings:
+
+| Status | Meaning |
+| --- | --- |
+| `READY` | The product satisfies the current preflight contract. |
+| `NEEDS_GEOMETRY_DERIVATION` | Required quantities are missing, but an IFC geometry representation exists. |
+| `MISSING_SOURCE_DATA` | Required quantities are missing and no current fallback source exists. |
+| `BLOCKED` | Metadata, quantity graphs, or placements cannot be interpreted safely. |
+
+`pipeline_ready` is still only about `supported-product-scope-only`. A later
+acceptance request must name a decision scope and prove that every relevant
+entity and dependency is covered. Partial ingestion may never produce
+`ACCEPT`.
+
+## Measured public-model baseline
+
+The manifest at `validation/ifc-corpus-v1.json` pins repository commits,
+artifact SHA-256 digests, sizes, URLs, expected audit results, and CC-BY-4.0
+licensing. The two small buildingSMART fixtures and the 19 MB Medical-Dental
+Clinic structural model run in CI. Schependomlaan is kept out of routine CI
+because it is a 65 MB Git LFS artifact, but its measured baseline is pinned and
+can be reproduced with `--include-large`.
+
+| Model | Exact supported products | Measured result |
+| --- | ---: | --- |
+| Shipped two-office model | 10 | 10 `READY`; full pipeline passes. |
+| buildingSMART wall/opening/window Reference View | 3 | 2 need geometry derivation; 1 lacks a fallback. |
+| buildingSMART PCERT Building Architecture | 7 | 4 `READY`; 2 need geometry derivation; 1 lacks a fallback. |
+| buildingSMART Medical-Dental Clinic Structural | 37 in architectural scope; 738 beam candidates | 738 lengths; 277 swept-solid sections complete; 461 surface-model beams explicitly length-only; multi-storey lowering blocked. |
+| Schependomlaan as-planned IFC2x3 | 1,086 | 1,022 need geometry derivation; 63 also have unsupported placements; 1 lacks a fallback. |
+
+The two small IFC4 fixtures and Schependomlaan declare millimetres; the clinic
+structural model declares metres. The authoritative loader resolves the active
+`IfcProject.UnitsInContext`, converts SI-prefixed source lengths into canonical
+metres, and carries the source scale into export. Their audits therefore
+progress beyond the former unit gate. Schependomlaan contains one storey, 880
+walls, and 205 doors in CSE's current class scope. Every one of those 1,086
+products still lacks at least one quantity required by the v0 state contract;
+1,022 expose geometry that can be used by a future derivation adapter.
+
+The clinic model is the first measured structural boundary. CSE parses the
+complete file, inventories all 738 beams as candidates for explicit
+`GAT_Structural` opt-in, and refuses to claim a structural verdict.
+That fail-closed result is a CI baseline.
+
+## Reproducing the corpus
+
+```console
+python validation/fetch_ifc_corpus.py validation-corpus
+GAT_IFC_VALIDATION_ROOT=validation-corpus \
+  python -m unittest tests.test_public_ifc_corpus -v
+```
+
+The downloader accepts only fixed destination basenames and refuses content
+whose byte size or SHA-256 differs from the manifest. Routine tests do not
+silently download external data.
+
+## Adapter-hardening order derived from the measurements
+
+1. **Completed:** resolve the active project SI length unit.
+2. **Completed (bounded v1):** derive axis length for clinic beams and section
+   properties for swept/extruded profiles; report surface models as `LENGTH_ONLY`.
+3. **Completed (schema v1):** ingest material certificates as typed observations.
+4. **Completed:** attach provenance to every derived quantity.
+5. **Completed (bounded v1):** validate ANSI/AISC 360-22 F2-1 LRFD yielding
+   against published AISC Example F.1-1B.
+6. **Next:** expose the validated chain through the headless CLI and Blender/Bonsai.
+7. Then add storey-local ownership and general rigid 3D placement composition.
+8. Only then admit a real-model structural decision scope into beam assurance.
+
+No tolerance mode should bypass these steps by silently dropping entities.
