@@ -411,6 +411,7 @@ def _acceptance_report(
     )
 
     check_rows: list[tuple[str, ...]] = []
+    verdicts: list[tuple[str, str]] = []
     accents: list[str] = []
     risk_rows: list[tuple[str, ...]] = []
     risk_accents: list[str] = []
@@ -427,15 +428,23 @@ def _acceptance_report(
             else f"{format_probability(lower)}..{format_probability(upper)}"
         )
         confidence = _number(check.get("confidence"), "check.confidence")
+        check_id = _string(check.get("check_id"), "check.check_id")
         check_rows.append(
             (
-                _string(check.get("check_id"), "check.check_id"),
+                check_id,
                 _string(check.get("kind"), "check.kind"),
                 verdict,
                 p_range,
-                f"{confidence:.0%}",
+                # The threshold the verdict was decided against, at the same
+                # five decimals as the P(satisfies) cell beside it; readers
+                # compare the two. ".0%" printed the strictly-below-1 band the
+                # engine enforces as "100%" from 0.995 up, and rendered
+                # 0.99355 UNRESOLVED against a bar shown as "99%" -- a row
+                # that reads as clearing the bar it failed.
+                format_probability(confidence),
             )
         )
+        verdicts.append((check_id, verdict))
         accents.append(verdict)
         # Per-element clearance risks, when the check carries them.  An
         # element the case could not clear at its confidence takes the
@@ -457,6 +466,45 @@ def _acceptance_report(
                 )
             )
             risk_accents.append(verdict if p_violates > 1.0 - confidence else "")
+
+    # The disposition must follow from the verdicts rendered beside it, the
+    # way every sibling builder here cross-checks its own claim. Without this
+    # a transported response saying ACCEPT over a VIOLATED check -- or over no
+    # checks at all -- rendered the green proceed banner and the
+    # "Recommendation only" footer, the one footer that invites action. The
+    # engine can produce none of these: workflows/acceptance.py takes REJECT
+    # on any VIOLATED check before any other branch, and AcceptanceCase
+    # refuses a case with no checks.
+    if not verdicts:
+        raise ValueError(
+            "acceptance case reports no checks; a disposition over zero "
+            "checks is not a decision"
+        )
+    violated = [check_id for check_id, verdict in verdicts if verdict == "VIOLATED"]
+    if disposition == "ACCEPT":
+        unsatisfied = [
+            (check_id, verdict)
+            for check_id, verdict in verdicts
+            if verdict != "SATISFIED"
+        ]
+        if unsatisfied:
+            check_id, verdict = unsatisfied[0]
+            raise ValueError(
+                f"acceptance disposition ACCEPT contradicts check {check_id!r} "
+                f"({verdict}); re-run the case against this world instead of "
+                "rendering the transported response"
+            )
+    elif disposition == "REJECT":
+        if not violated:
+            raise ValueError(
+                "rejected acceptance case reports no violated check"
+            )
+    elif violated:
+        raise ValueError(
+            f"acceptance disposition REQUEST_EVIDENCE contradicts violated "
+            f"check {violated[0]!r}; a violated check is a rejection under "
+            "every policy"
+        )
 
     request_rows: list[tuple[str, ...]] = []
     for item in _array(result.get("evidence_requests"), "evidence_requests"):

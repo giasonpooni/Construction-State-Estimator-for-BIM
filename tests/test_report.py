@@ -67,6 +67,27 @@ def acceptance_response() -> dict:
     )
 
 
+def acceptance_response_at(confidence: float, minimum_margin: float) -> dict:
+    """The same opening-fit case at a caller-chosen bar and margin."""
+    payload = {
+        "case_id": "opening-fit-1",
+        "workflow": "OPENING_VERIFICATION",
+        "subject": "Door-1 into Opening-1",
+        "checks": [
+            {
+                "kind": "difference",
+                "check_id": "width",
+                "lhs": {"entity_name": "Opening-1", "quantity": "Width"},
+                "rhs": {"entity_name": "Door-1", "quantity": "Width"},
+                "minimum_margin": minimum_margin,
+                "confidence": confidence,
+                "label": "opening width fit",
+            }
+        ],
+    }
+    return handle_request(request("acceptance", payload))
+
+
 def beam_response() -> dict:
     return handle_request(
         request(
@@ -171,6 +192,137 @@ class AcceptanceRenderingTests(unittest.TestCase):
         tampered["result"]["disposition"] = "PROBABLY_FINE"
         with self.assertRaises(ValueError):
             report.decode_response(tampered)
+
+
+class AcceptanceDispositionFollowsItsVerdictsTests(unittest.TestCase):
+    """The disposition must follow from the verdicts rendered beside it.
+
+    Before the fix ``_acceptance_report`` validated the disposition
+    vocabulary, the world digest, ``may_authorize`` and each verdict's
+    vocabulary, and then never compared the two. Measured on the tampered
+    demo response: disposition "ACCEPT" over one VIOLATED check decoded
+    without refusing and rendered headline 'ACCEPT: Door-1 into Opening-1',
+    banner #1ab233 (proceed green) and the footer 'Recommendation only;
+    professional approval is still required.' -- the one footer that invites
+    action -- above a checks row reading 'width DIFFERENCE VIOLATED'. With
+    "checks": [] the same green ACCEPT rendered over a checks table with a
+    header and zero rows, no contradiction visible at all. "REJECT" over a
+    lone SATISFIED check and "REQUEST_EVIDENCE" over a VIOLATED check also
+    rendered. ``python -m gat report forged.json`` printed each and exited 0.
+    None is engine-representable: workflows/acceptance.py takes REJECT on any
+    VIOLATED check before every other branch, and AcceptanceCase.__post_init__
+    refuses a case with no checks.
+    """
+
+    def test_accept_over_a_violated_check_is_refused(self) -> None:
+        tampered = copy.deepcopy(acceptance_response())
+        tampered["result"]["disposition"] = "ACCEPT"
+        tampered["result"]["may_authorize"] = True
+        tampered["result"]["checks"][0]["verdict"] = "VIOLATED"
+        with self.assertRaises(ValueError) as caught:
+            report.decode_response(tampered)
+        message = str(caught.exception)
+        self.assertIn("ACCEPT", message)
+        self.assertIn("width", message)
+        self.assertIn("VIOLATED", message)
+
+    def test_accept_over_an_unresolved_check_is_refused(self) -> None:
+        tampered = copy.deepcopy(acceptance_response())
+        tampered["result"]["disposition"] = "ACCEPT"
+        tampered["result"]["may_authorize"] = True
+        tampered["result"]["checks"][0]["verdict"] = "UNRESOLVED"
+        with self.assertRaises(ValueError):
+            report.decode_response(tampered)
+
+    def test_disposition_over_zero_checks_is_refused(self) -> None:
+        for disposition, may_authorize in (
+            ("ACCEPT", True),
+            ("REQUEST_EVIDENCE", False),
+        ):
+            tampered = copy.deepcopy(acceptance_response())
+            tampered["result"]["disposition"] = disposition
+            tampered["result"]["may_authorize"] = may_authorize
+            tampered["result"]["checks"] = []
+            with self.assertRaises(ValueError) as caught:
+                report.decode_response(tampered)
+            self.assertIn("no checks", str(caught.exception))
+
+    def test_reject_with_no_violated_check_is_refused(self) -> None:
+        tampered = copy.deepcopy(acceptance_response())
+        tampered["result"]["disposition"] = "REJECT"
+        with self.assertRaises(ValueError):
+            report.decode_response(tampered)
+
+    def test_request_evidence_over_a_violated_check_is_refused(self) -> None:
+        tampered = copy.deepcopy(acceptance_response())
+        tampered["result"]["checks"][0]["verdict"] = "VIOLATED"
+        with self.assertRaises(ValueError):
+            report.decode_response(tampered)
+
+    def test_engine_dispositions_still_render(self) -> None:
+        # The guard must not cost the cases the engine does emit: an
+        # unresolved case (REQUEST_EVIDENCE over UNRESOLVED) and a satisfied
+        # one still awaiting evidence (REQUEST_EVIDENCE over SATISFIED).
+        for margin in (0.05, 0.0855):
+            decoded = report.decode_response(
+                acceptance_response_at(0.95, margin)
+            )
+            self.assertEqual(decoded.disposition, "REQUEST_EVIDENCE")
+            self.assertIn(report.NON_AUTHORIZING_FOOTER, report.render_text(decoded))
+
+    def test_cli_refuses_a_forged_accept_and_exits_two(self) -> None:
+        tampered = copy.deepcopy(acceptance_response())
+        tampered["result"]["disposition"] = "ACCEPT"
+        tampered["result"]["may_authorize"] = True
+        tampered["result"]["checks"][0]["verdict"] = "VIOLATED"
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "forged.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(tampered, handle)
+            self.assertNotEqual(cli_main(["report", path]), 0)
+
+
+class ConfidenceColumnIsTheDecisionBarTests(unittest.TestCase):
+    """The confidence cell is the bar the verdict was decided against.
+
+    gat/report.py:436 rendered it as ``f"{confidence:.0%}"``. Measured on
+    untampered engine responses for this demo model: confidence 0.994 with
+    minimum_margin 0.0855 gives p_satisfies_lower 0.9935538305 and verdict
+    UNRESOLVED, and the row rendered 'width DIFFERENCE UNRESOLVED 0.99355
+    99%' -- a five-decimal probability that reads as clearing the whole-
+    percent bar it actually failed. The whole top of the band collapsed:
+    0.995, 0.999 and 0.9999 all rendered '100%', a bar AcceptanceCheck
+    guarantees no confidence can be (0.5 < confidence < 1.0). The documented
+    rule is five decimals (docs/design-language-v1.md "Value formatting").
+    """
+
+    def test_a_confidence_below_the_bar_is_not_rounded_up_to_it(self) -> None:
+        response = acceptance_response_at(0.994, 0.0855)
+        check = response["result"]["checks"][0]
+        self.assertEqual(check["verdict"], "UNRESOLVED")
+        self.assertLess(check["p_satisfies_lower"], check["confidence"])
+        text = report.render_text(report.decode_response(response))
+        row = next(
+            line.strip()
+            for line in text.splitlines()
+            if line.strip().startswith("width  DIFFERENCE")
+        )
+        self.assertIn("0.99400", row)
+        self.assertNotIn("99%", row)
+
+    def test_the_strictly_below_one_band_never_renders_as_certainty(self) -> None:
+        for confidence in (0.995, 0.999, 0.9999):
+            text = report.render_text(
+                report.decode_response(acceptance_response_at(confidence, 0.05))
+            )
+            self.assertNotIn("100%", text)
+            self.assertIn(report.format_probability(confidence), text)
+
+    def test_html_carries_the_same_cell_as_the_terminal(self) -> None:
+        decoded = report.decode_response(acceptance_response_at(0.994, 0.0855))
+        html = report.render_html(decoded)
+        self.assertIn("<td>0.99400</td>", html)
+        self.assertNotIn("<td>99%</td>", html)
 
 
 class BeamRenderingTests(unittest.TestCase):
