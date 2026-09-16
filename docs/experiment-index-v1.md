@@ -4,8 +4,8 @@ How to try the tools. Each repo is its own clone. No submodule. No monorepo.
 
 BIM construction acceptance is the first demonstrator. The frameworks are
 for industrial data integration, computational instrumentation, and
-maintained evidence services (manufacturing, infrastructure, agri-food,
-logistics). See [domain-v1.md](domain-v1.md) and [sandbox-v0.md](sandbox-v0.md).
+maintained evidence services. See [domain-v1.md](domain-v1.md),
+[sandbox-v0.md](sandbox-v0.md), and [calibrate-verify-v1.md](calibrate-verify-v1.md).
 
 ## CSE (this repo)
 
@@ -15,10 +15,12 @@ python -m unittest discover
 python -m gat.demo.beam_assurance out/beam
 python -m gat.demo.experiment_harness --demo -o out/harness-bundle.json
 python -m gat.demo.usd_projection --demo -o out/usd-projection.json
+python -m gat.demo.calibrate_verify --demo -o out/calibrate-verify
 ```
 
-`--demo` binds the shipped fixtures and the Beam-B1 pin. The USD projection
-is a look-only overlay. It does not prove. It does not require usd-core.
+`calibrate_verify` will not run without a calibration declaration and a
+measurement. The shipped demo is a prototype: invariants may pass and the
+packet may be presentable; it is still not field evidence.
 
 ## Flat torus
 
@@ -26,12 +28,8 @@ https://github.com/giasonpooni/Flat-Torus-Moduli-and-Geodesic-Explorer
 
 ```bash
 PYTHONPATH=src python examples/quickstart.py
-PYTHONPATH=src python examples/fold.py
 PYTHONPATH=src python examples/write_validation.py
 ```
-
-Hand `validation/torus-first-release-commitment-v1.json` to the harness with `--commit`.
-Invariant of an object under a change of representation — not a BIM solid.
 
 ## Instrument host contract
 
@@ -42,32 +40,8 @@ PYTHONPATH=src python -m pytest
 PYTHONPATH=src python examples/displacement_bench.py
 ```
 
-Host stand-in for computational instrumentation. Not a measured millimetre.
-Never proves.
-
 ## JSPT
 
 https://github.com/giasonpooni/Jacobian-Sensitivity-Propagation-Testbed
 
-```bash
-uv run --python 3.13 python examples/quickstart.py
-```
-
-Owns A2-A5 for every sector. Not a harness `--commit`. Not a guest.
-
-## FSRT
-
-https://github.com/giasonpooni/Fluid-State-Reconstruction-Testbed
-
-```bash
-uv run --frozen --python 3.13 python examples/quickstart.py
-```
-
-Inventory / balance evidence. Own experiment. No beam slot. No harness schema yet.
-
-## Jacobi companion
-
-https://github.com/giasonpooni/Geodesic-Flow-and-Jacobi-Field-Testbed
-
-Scaffold. Use the torus first. Planned comparison against `s`, `sin s`, `sinh s`.
-No guest.
+Owns A2-A5. Pin SHA in [jspt-pin-v1.md](jspt-pin-v1.md).
