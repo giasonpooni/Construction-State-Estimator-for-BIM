@@ -44,6 +44,20 @@ class PresentProcessTests(unittest.TestCase):
         self.assertEqual(stamp["kind"], "refused")
         self.assertIsNone(stamp["record"])
 
+    def test_public_xref_uses_published_sigma_and_qto_width(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            manifest = run_process(output_dir=raw, public_xref=True)
+            xref = json.loads((Path(raw) / "05-public-xref.json").read_text())
+            package = json.loads((Path(raw) / "03-package.json").read_text())
+        self.assertEqual(manifest["inspectability"], "ACCEPT")
+        self.assertTrue(manifest["simulation"])
+        self.assertFalse(manifest["may_authorize"])
+        self.assertEqual(xref["observation"]["indicated_m"], 1.0)
+        self.assertEqual(xref["calibration"]["sigma"], 0.003)
+        self.assertFalse(xref["calibration"]["traceable"])
+        self.assertEqual(package["calibration"]["sigma"], 0.003)
+        self.assertFalse(package["may_authorize"])
+
 
 if __name__ == "__main__":
     unittest.main()
