@@ -56,6 +56,7 @@ release or expand the public claim.
 - `gat/inspectability/` — space-id readiness fold; not an inspection stamp
 - temporal process demos beyond the linear-Gaussian forecast already used
   by the decision slice
+- `gat/localize/` — SE(2) MCL on a declared occupancy slice; not pose evidence
 
 ## Rule
 

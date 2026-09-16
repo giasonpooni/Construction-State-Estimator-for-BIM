@@ -130,6 +130,8 @@ session.export_ifc("out/model_transformed.ifc")
 - Determinism is same-platform byte identity.
 - A public IFC audit inventories compatibility. It does not authorize a
   decision. See [`docs/real-ifc-validation-v1.md`](docs/real-ifc-validation-v1.md).
+- SE(2) MCL (`gat.localize`) is a satellite pose cloud on a declared floor
+  plate. A particle mean is not survey control and cannot close clearance.
 
 ## Kernel vs satellites
 
@@ -145,10 +147,12 @@ satellite. See [`docs/kernel-v1.md`](docs/kernel-v1.md).
 | IFC audit + beam geometry status | SP1 proving service (manual CI) |
 | Headless JSON boundary | Learned weights |
 | | Experiment harness (digest binding) |
+| | SE(2) MCL floor plate (`gat.localize`) |
 
 ## Docs
 
 - [`docs/treatise.md`](docs/treatise.md) — public name, architecture, proof language
+- [`docs/mcl-se2-v1.md`](docs/mcl-se2-v1.md) — SE(2) particle filter satellite
 - [`docs/geometry-authority-v1.md`](docs/geometry-authority-v1.md)
 - [`docs/kernel-v1.md`](docs/kernel-v1.md)
 - [`docs/experiment-index-v1.md`](docs/experiment-index-v1.md) — how to try each tool

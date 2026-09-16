@@ -16,6 +16,7 @@ python -m gat.demo.beam_assurance out/beam
 python -m gat.demo.experiment_harness --demo -o out/harness-bundle.json
 python -m gat.demo.usd_projection --demo -o out/usd-projection.json
 python -m gat.demo.calibrate_verify --demo -o out/calibrate-verify
+python -m gat.demo.mcl_floor
 ```
 
 `calibrate_verify` will not run without a calibration declaration and a
