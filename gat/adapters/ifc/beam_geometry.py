@@ -268,6 +268,35 @@ def _axis_length(
     if len(axes) != 1:
         raise BeamGeometryError(f"expected one Axis representation, found {len(axes)}")
     axis = axes[0]
+    # The Body path has always read RepresentationType and refused an
+    # out-of-scope one; the Axis path selected on RepresentationIdentifier
+    # alone. `_polyline_points` then asks `_point` for 2 dimensions, and
+    # `_point` slices `coordinates[:dimensions]` without complaint, so a
+    # Curve3D polyline had its z silently dropped and the span came back as
+    # its XY projection. Measured on synthetic IFC4 beams:
+    #
+    #     Axis polyline            true span   reported   short by
+    #     (0,0,0) -> (6,0,8)          10.0        6.0       4.0 m
+    #     (0,0,0) -> (3,4,12)         13.0        5.0       8.0 m  (62%)
+    #
+    # and the result came back LENGTH_ONLY with `issues=()`. Span is the
+    # lever arm in the bending check, so a short span understates the
+    # required moment: the member reads stronger than it is.
+    #
+    # Refused rather than extended to 3D on purpose. `Curve2D` is what
+    # docs/beam-assurance-reference-chain.md declares this provider reads,
+    # and a sloping or cranked member is not merely a longer straight one --
+    # AISC 360-22 F2 is scoped to doubly-symmetric compact I-shapes bent
+    # about the major axis, and admitting those geometries is a validation
+    # question, not a length calculation.
+    representation_type = attr(axis, "RepresentationType")
+    if representation_type != "Curve2D":
+        raise BeamGeometryError(
+            f"unsupported Axis representation {representation_type!r}: this "
+            "provider derives a span from a Curve2D polyline, and reading "
+            "any other type would project it onto XY and report a shorter "
+            "member than the model describes"
+        )
     items = refs(attr(axis, "Items"))
     if len(items) != 1:
         raise BeamGeometryError("Axis representation must contain exactly one item")
