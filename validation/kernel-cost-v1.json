@@ -1,0 +1,13 @@
+{
+  "schema": "cse-kernel-cost-v1",
+  "claim_scope": "computational-integrity-only",
+  "ieee754_guest": false,
+  "kernels": [
+    {"name": "chain_jvp_i32", "i32_muls": 8, "i32_adds": 4, "ieee754": false, "guest": "not-compiled", "proof": "not-invoked"},
+    {"name": "discrete_lyapunov_decrease_i32", "i32_muls": 16, "i32_adds": 8, "ieee754": false, "guest": "not-compiled", "proof": "not-invoked"}
+  ],
+  "beam_guest": {"guest_id": "beam-b1-f2-1", "arithmetic": "checked-integer", "cycles": null},
+  "riscv_ot": {"isa": "riscv", "flashed": false, "plc_replacement": false},
+  "ranking": "fixed-point op count on this kernel, not rollup benches",
+  "sheaf": "not opened"
+}
