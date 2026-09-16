@@ -33,6 +33,7 @@ class IfcOpenShellAdapterTests(unittest.TestCase):
         self.assertTrue({"IfcSpace", "IfcOpeningElement", "IfcWall", "IfcDoor"} <= classes)
         office = [row for row in inventory.products if row.name == "Office-A"]
         self.assertEqual(len(office), 1)
+        self.assertEqual(office[0].global_id, "GATSPC0000000000000300")
         self.assertEqual(office[0].quantity_names, ("Length", "Width"))
 
     def test_installed_runtime_does_not_claim_solid_authority(self) -> None:
@@ -41,6 +42,23 @@ class IfcOpenShellAdapterTests(unittest.TestCase):
         inventory = inventory_with_ifcopenshell(BEAM)
         self.assertGreaterEqual(inventory.product_count, 1)
         self.assertEqual(inventory.geometry_authority, "INSUFFICIENT")
+
+    def test_representation_labels_are_not_geometry_authority(self) -> None:
+        if not ifcopenshell_available():
+            self.skipTest("ifcopenshell extra is not installed")
+        for path in (DEMO, BEAM):
+            ios = inventory_with_ifcopenshell(path)
+            self.assertEqual(ios.geometry_authority, "INSUFFICIENT")
+            for row in ios.products:
+                self.assertIsInstance(row.representation_types, tuple)
+                for label in row.representation_types:
+                    self.assertIsInstance(label, str)
+                    self.assertNotEqual(label.upper(), "SWEPT_SOLID")
+            # Shipped demos have quantities and placements, not bodies.
+            self.assertFalse(
+                any(row.representation_types for row in ios.products),
+                msg=f"{path} unexpectedly grew a RepresentationType",
+            )
 
     def test_demo_identities_match_when_ifcopenshell_is_present(self) -> None:
         if not ifcopenshell_available():
