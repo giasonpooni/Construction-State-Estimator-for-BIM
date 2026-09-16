@@ -8,13 +8,30 @@ import unittest
 from pathlib import Path
 
 from gat.adapters.openusd import openusd_available, read_openusd, write_openusd
-from gat.adapters.openusd_compose import ASSEMBLY_KIND, write_combined_stage, write_display_layer
+from gat.adapters.openusd_compose import (
+    ASSEMBLY_KIND,
+    write_combined_stage,
+    write_display_layer,
+)
 from gat.errors import OpenUsdError
 from gat.session import GatSession
 from gat.state_snapshot import computational_equivalence
 
 MODEL = os.path.join(os.path.dirname(__file__), "..", "gat", "demo", "model.ifc")
 BIND = os.path.join(os.path.dirname(__file__), "..", "validation", "cse-point-bind-v1.json")
+
+
+class CombinedUsdStageWithoutRuntimeTests(unittest.TestCase):
+    def test_missing_usd_core_fails_closed(self) -> None:
+        if openusd_available():
+            self.skipTest("usd-core is installed in this environment")
+        with self.assertRaisesRegex(OpenUsdError, "usd-core is not installed"):
+            write_display_layer("sitelook.usda")
+        with self.assertRaisesRegex(OpenUsdError, "usd-core is not installed"):
+            write_combined_stage(
+                carrier_path="missing.usdc",
+                assembly_path="world.usda",
+            )
 
 
 @unittest.skipUnless(openusd_available(), "optional usd-core runtime is not installed")
@@ -40,6 +57,7 @@ class CombinedUsdStageTests(unittest.TestCase):
             self.assertEqual(world.GetName(), "World")
             self.assertEqual(world.GetAttribute("gat:assemblyKind").Get(), ASSEMBLY_KIND)
             self.assertFalse(world.GetAttribute("gat:bindsInUsd").Get())
+            self.assertEqual(world.GetAttribute("gat:restartPath").Get(), "cse.usdc")
             self.assertTrue(stage.GetPrimAtPath("/World/GAT"))
             self.assertTrue(stage.GetPrimAtPath("/World/SiteLook"))
             self.assertFalse(stage.GetPrimAtPath("/World/Binds"))
