@@ -51,6 +51,7 @@ release or expand the public claim.
 - Blender sidebar coloring
 - SP1 guest packaging and any proving service
 - `gat/adapters/external_commitment.py` — bind RCI/torus record digests
+- `gat/harness/` — multi-tool experiment bundle; digest binding only
 - temporal process demos beyond the linear-Gaussian forecast already used
   by the decision slice
 
