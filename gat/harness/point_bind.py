@@ -1,13 +1,14 @@
 """Layout point bound to an IFC GlobalId.
 
 Satellite. Record-integrity only. Does not condition belief, register a
-scan, or turn a display name into an entity.
+scan, or turn a display name into an entity. A bind without sigma is refused.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
 from typing import Mapping
 
@@ -42,6 +43,15 @@ def _looks_like_display_name(global_id: str) -> bool:
     return global_id.startswith(prefixes)
 
 
+def _positive(value: object, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a positive number")
+    number = float(value)
+    if not math.isfinite(number) or number <= 0.0:
+        raise ValueError(f"{label} must be a positive finite number")
+    return number
+
+
 @dataclass(frozen=True)
 class PointBind:
     point_id: str
@@ -49,7 +59,11 @@ class PointBind:
     ifc_class: str
     name: str | None
     space_id: str | None
-    frame_id: str | None
+    frame_id: str
+    epoch: str
+    sigma: float
+    sigma_unit: str
+    sigma_reason: str
     digest: str
 
     def to_document(self) -> dict[str, object]:
@@ -57,16 +71,22 @@ class PointBind:
             "point_id": self.point_id,
             "ifc_class": self.ifc_class,
             "global_id": self.global_id,
+            "frame_id": self.frame_id,
+            "epoch": self.epoch,
+            "sigma": self.sigma,
+            "sigma_unit": self.sigma_unit,
+            "sigma_reason": self.sigma_reason,
         }
         if self.name:
             payload["name"] = self.name
         if self.space_id:
             payload["space_id"] = self.space_id
-        if self.frame_id:
-            payload["frame_id"] = self.frame_id
         return {
             "schema": BIND_SCHEMA,
             "claim_scope": CLAIM_SCOPE,
+            "point_id": self.point_id,
+            "global_id": self.global_id,
+            "ifc_class": self.ifc_class,
             "payload": payload,
             "digest": self.digest,
         }
@@ -79,11 +99,24 @@ def bind_point(document: Mapping[str, object]) -> PointBind:
         raise ValueError(f"unsupported bind schema {schema!r}")
     if document.get("claim_scope") != CLAIM_SCOPE:
         raise ValueError("claim_scope must be record-integrity-only")
+    if document.get("global_id") is None and document.get("xyz") is not None:
+        raise ValueError("coordinates without an IfcGuid are not a bind")
     payload = document.get("payload")
     if not isinstance(payload, Mapping):
         payload = {
             key: document[key]
-            for key in ("point_id", "global_id", "ifc_class", "name", "space_id", "frame_id")
+            for key in (
+                "point_id",
+                "global_id",
+                "ifc_class",
+                "name",
+                "space_id",
+                "frame_id",
+                "epoch",
+                "sigma",
+                "sigma_unit",
+                "sigma_reason",
+            )
             if key in document
         }
     point_id = _nonempty(payload.get("point_id"), "point_id")
@@ -99,9 +132,11 @@ def bind_point(document: Mapping[str, object]) -> PointBind:
     space_id = payload.get("space_id")
     if space_id is not None:
         space_id = _nonempty(space_id, "space_id")
-    frame_id = payload.get("frame_id")
-    if frame_id is not None:
-        frame_id = _nonempty(frame_id, "frame_id")
+    frame_id = _nonempty(payload.get("frame_id"), "frame_id")
+    epoch = _nonempty(payload.get("epoch"), "epoch")
+    sigma = _positive(payload.get("sigma"), "sigma")
+    sigma_unit = _nonempty(payload.get("sigma_unit"), "sigma_unit")
+    sigma_reason = _nonempty(payload.get("sigma_reason"), "sigma_reason")
     digest_payload = {
         "point_id": point_id,
         "ifc_class": ifc_class,
@@ -109,6 +144,10 @@ def bind_point(document: Mapping[str, object]) -> PointBind:
         "name": name,
         "space_id": space_id,
         "frame_id": frame_id,
+        "epoch": epoch,
+        "sigma": sigma,
+        "sigma_unit": sigma_unit,
+        "sigma_reason": sigma_reason,
     }
     digest = canonical_digest(digest_payload)
     declared = document.get("digest")
@@ -120,7 +159,11 @@ def bind_point(document: Mapping[str, object]) -> PointBind:
         ifc_class=ifc_class,
         name=name if isinstance(name, str) else None,
         space_id=space_id if isinstance(space_id, str) else None,
-        frame_id=frame_id if isinstance(frame_id, str) else None,
+        frame_id=frame_id,
+        epoch=epoch,
+        sigma=sigma,
+        sigma_unit=sigma_unit,
+        sigma_reason=sigma_reason,
         digest=digest,
     )
 
@@ -133,7 +176,7 @@ def bind_point_file(path: str | Path) -> PointBind:
 
 
 def assert_bind_in_world(bind: PointBind, world: World) -> None:
-    """Fail closed if the Guid is not in the compiled IFC world."""
+    """Fail closed if the Guid is not in the compiled world."""
     for entity in world.module.entities.values():
         if entity.id.global_id == bind.global_id and entity.id.ifc_class == bind.ifc_class:
             return
