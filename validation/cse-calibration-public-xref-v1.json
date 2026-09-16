@@ -1,0 +1,44 @@
+{
+  "schema": "cse-calibration-v1",
+  "calibration_id": "public-xref-total-station-short-range-v1",
+  "instrument_class": "total-station-or-layout",
+  "target": {
+    "ifc_class": "IfcOpeningElement",
+    "global_id": "GATOPN0000000000000200",
+    "name": "Opening-1",
+    "quantity": "Width"
+  },
+  "unit": "m",
+  "sigma": 0.003,
+  "declared": true,
+  "traceable": false,
+  "simulation": true,
+  "not_field_evidence": true,
+  "derivation": {
+    "range_m": 5.0,
+    "prism_rmse_m": 0.002,
+    "ppm_term_m": 0.00001,
+    "centering_m": 0.001,
+    "rss_m": 0.00224,
+    "declared_sigma_m": 0.003,
+    "rule": "rss of short-range prism RMSE and centering, rounded up"
+  },
+  "sources": [
+    {
+      "id": "trimble-s5-iso",
+      "claim": "Prism-mode RMSE 2 mm + 2 ppm (ISO 17123 family on the datasheet)",
+      "ref": "Trimble S5 Total Station datasheet"
+    },
+    {
+      "id": "iso-17123-5",
+      "claim": "Field procedure for total-station coordinate precision; ancillary centering typically ~1 mm with optical/laser plummet",
+      "ref": "ISO 17123-5:2018"
+    },
+    {
+      "id": "korec-asbuilt",
+      "claim": "Construction as-built verification against tight tolerances often quoted at 2 to 5 mm",
+      "ref": "KOREC, Laser Scanner Accuracy guide"
+    }
+  ],
+  "note": "Declared lab sigma from public instrument literature. Not an ISO 17123 field test of a named instrument on this site."
+}
