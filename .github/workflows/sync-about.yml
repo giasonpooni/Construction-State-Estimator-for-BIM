@@ -9,8 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  metadata: write
+  contents: write
 
 jobs:
   sync:
@@ -22,7 +21,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 - << 'PY'
-          import json, os, urllib.request
+          import json, os, urllib.error, urllib.request
           spec = json.loads(open(".github/repo-about.json", encoding="utf-8").read())
           repo = os.environ["GITHUB_REPOSITORY"]
           token = os.environ["GH_TOKEN"]
@@ -39,8 +38,12 @@ jobs:
                       "Content-Type": "application/json",
                   },
               )
-              with urllib.request.urlopen(req) as resp:
-                  print(method, url, resp.status)
+              try:
+                  with urllib.request.urlopen(req) as resp:
+                      print(method, url, resp.status)
+              except urllib.error.HTTPError as exc:
+                  print(method, url, exc.code, exc.read().decode()[:500])
+                  raise
 
           call(
               "PATCH",
@@ -52,6 +55,6 @@ jobs:
               "PUT",
               f"https://api.github.com/repos/{repo}/topics",
               {"names": spec["topics"]},
-              "application/vnd.github.mercy-preview+json",
+              "application/vnd.github+json",
           )
           PY
