@@ -2,6 +2,11 @@
 
 How to try the tools. Each repo is its own clone. No submodule. No monorepo.
 
+BIM construction acceptance is the first demonstrator. The frameworks are
+for industrial data integration, computational instrumentation, and
+maintained evidence services (manufacturing, infrastructure, agri-food,
+logistics). See [domain-v1.md](domain-v1.md).
+
 ## CSE (this repo)
 
 ```bash
@@ -24,6 +29,7 @@ PYTHONPATH=src python examples/write_validation.py
 ```
 
 Hand `validation/torus-first-release-commitment-v1.json` to the harness with `--commit`.
+Invariant of an object under a change of representation — not a BIM solid.
 
 ## Instrument host contract
 
@@ -34,7 +40,8 @@ PYTHONPATH=src python -m pytest
 PYTHONPATH=src python examples/displacement_bench.py
 ```
 
-Host stand-in. Not a measured millimetre. Never proves.
+Host stand-in for computational instrumentation. Not a measured millimetre.
+Never proves.
 
 ## JSPT
 
@@ -44,7 +51,7 @@ https://github.com/giasonpooni/Jacobian-Sensitivity-Propagation-Testbed
 uv run --python 3.13 python examples/quickstart.py
 ```
 
-Owns A2-A5. Not a harness `--commit`. Not a guest.
+Owns A2-A5 for every sector. Not a harness `--commit`. Not a guest.
 
 ## FSRT
 
@@ -54,7 +61,7 @@ https://github.com/giasonpooni/Fluid-State-Reconstruction-Testbed
 uv run --frozen --python 3.13 python examples/quickstart.py
 ```
 
-Own experiment. No beam slot. No harness schema yet.
+Inventory / balance evidence. Own experiment. No beam slot. No harness schema yet.
 
 ## Jacobi companion
 
