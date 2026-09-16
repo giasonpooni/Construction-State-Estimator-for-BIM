@@ -1,0 +1,25 @@
+{
+  "schema": "cse-zkvm-guest-scope-v1",
+  "claim_scope": "computational-integrity-only",
+  "zero_knowledge": false,
+  "backend": "sp1",
+  "isa": "riscv",
+  "kernel_if_backend_down": "unchanged",
+  "allowed_guests": [
+    {
+      "id": "beam-b1-f2-1",
+      "status": "implemented",
+      "attests": "checked fixed-point F2-1 on a ledger-bound slice",
+      "does_not_attest": ["evidence truth", "Gaussian update", "occupancy"]
+    }
+  ],
+  "forbidden_guests": [
+    "jspt-a2-a5",
+    "rci-tape",
+    "torus-length",
+    "jacobi-field",
+    "atlas-laplacian",
+    "sum-product",
+    "full-estimator"
+  ]
+}
