@@ -52,6 +52,7 @@ release or expand the public claim.
 - SP1 guest packaging and any proving service
 - `gat/adapters/external_commitment.py` — bind RCI/torus record digests
 - `gat/harness/` — multi-tool experiment bundle; digest binding only
+- `gat/inspectability/` — space-id readiness fold; not an inspection stamp
 - temporal process demos beyond the linear-Gaussian forecast already used
   by the decision slice
 
