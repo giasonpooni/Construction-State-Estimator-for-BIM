@@ -1,0 +1,29 @@
+{
+  "bound_cases": [
+    {
+      "case_id": "opening-17",
+      "disposition": "ACCEPT",
+      "source": "gat/demo/harness_fixtures/opening-17-as-built-receipt.json",
+      "workflow": "OPENING_VERIFICATION"
+    }
+  ],
+  "building_id": "bldg:hall-a",
+  "cited": [],
+  "claim_scope": "record-integrity-only",
+  "digest": "597c2348d2bda48229409c873495f99623bac0699e62c3498dad112e4614a478",
+  "format": "cse-inspectability-index-v1",
+  "inspectability": "ACCEPT",
+  "non_claims": [
+    "not an occupancy permit",
+    "not a replacement for a human inspector",
+    "pace thesis is not a measured result"
+  ],
+  "open_requests": [],
+  "project_id": "proj:example-hall",
+  "space_id": "space:ifc:GATSPC0000000000000300",
+  "space_ref": {
+    "global_id": "GATSPC0000000000000300",
+    "ifc_class": "IfcSpace",
+    "name": "Office-A"
+  }
+}

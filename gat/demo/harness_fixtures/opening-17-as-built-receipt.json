@@ -1,0 +1,12 @@
+{
+  "case_id": "opening-17",
+  "workflow": "OPENING_VERIFICATION",
+  "disposition": "ACCEPT",
+  "subject": "Door-1 into Opening-1",
+  "evidence_digest": "e6075724ff2bfa8ca41166ebfb0b7053481a0ccab5efcb977b5be7b7ecd44bca",
+  "evidence_kind": "calibrated-quantity",
+  "prior_world_digest": "d9c3e7e684e3690dd96d30d51a3599e146d2b1bcb0714a2d3c8b35427cd1c9ea",
+  "result_world_digest": "073754fd2ec33e3b0aaa4afdde54588e05892be6af9235411d9e260fecfa4c57",
+  "ledger_event_hash": "2bd3daab305299426257223ea4501560be15e4500e9f596426cbff6f7eb6f0b6",
+  "calibration_id": "layout-point-p204-declared-width"
+}
