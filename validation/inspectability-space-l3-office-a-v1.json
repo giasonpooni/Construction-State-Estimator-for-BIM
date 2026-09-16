@@ -1,7 +1,7 @@
 {
   "format": "cse-inspectability-index-v1",
-  "project_id": "proj:cse-demo",
-  "building_id": "bldg:demo",
+  "project_id": "proj:example-hall",
+  "building_id": "bldg:hall-a",
   "space_id": "space:ifc:GATSPC0000000000000300",
   "space_ref": {
     "ifc_class": "IfcSpace",
@@ -12,7 +12,7 @@
   "open_requests": [
     {
       "code": "bind.point_to_guid",
-      "asks_for": "layout point bound to Opening-1 IfcGuid GATOPN0000000000000200"
+      "asks_for": "layout point for opening O-204 bound to an IfcGuid"
     },
     {
       "code": "evidence.as_built",

@@ -1,0 +1,12 @@
+{
+  "schema": "cse-station-setup-v1",
+  "claim_scope": "record-integrity-only",
+  "payload": {
+    "setup_id": "S-12",
+    "occupied_id": "CP-1",
+    "backsight_id": "CP-2",
+    "space_id": "space:ifc:GATSPC0000000000000300",
+    "prism_height_m": 1.512
+  },
+  "digest": "51ae2d8c2796b078ede7196881cf42a0e818b1975318034377803d9e0c8a3aba"
+}
