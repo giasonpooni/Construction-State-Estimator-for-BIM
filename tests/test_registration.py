@@ -10,6 +10,8 @@ deterministic scan synthesis, and rejection of degenerate scans.
 
 from __future__ import annotations
 
+import hashlib
+
 from dataclasses import replace
 import math
 import os
@@ -242,11 +244,26 @@ class TestPlyHandoff(RegistrationTestBase):
         ).encode("ascii")
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "external_reconstruction.ply"
-            path.write_bytes(header + np.asarray(points, dtype="<f4").tobytes())
+            body = header + np.asarray(points, dtype="<f4").tobytes()
+            path.write_bytes(body)
             with patch.object(self.registrar, "register", return_value=self.result) as register:
                 actual = self.registrar.register_ply(str(path), n_starts=4, accept_nll=2.5)
 
-        self.assertIs(actual, self.result)
+        # It is still the result `register()` returned, and not a second
+        # registration: everything is the same object or value except the one
+        # field only a file can supply. `scan_digest` covers the parsed
+        # coordinates, so it cannot tell two PLYs apart that differ in their
+        # provenance comment, splat scales or opacity; `artifact_digest` is
+        # the SHA-256 of the bytes and is stamped on here because this is the
+        # only entry point that has any.
+        self.assertIsNot(actual, self.result)
+        self.assertIsNone(self.result.artifact_digest)
+        self.assertEqual(
+            actual.artifact_digest, hashlib.sha256(body).hexdigest()
+        )
+        self.assertEqual(
+            replace(actual, artifact_digest=None), self.result
+        )
         register.assert_called_once()
         (
             loaded,
