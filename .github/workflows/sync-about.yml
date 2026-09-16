@@ -1,60 +1,17 @@
 name: Sync About
 
+# Manual only. GITHUB_TOKEN cannot PATCH repository description/topics
+# (403 Resource not accessible by integration). The intended About text
+# lives in .github/repo-about.json for a human or a PAT with repo scope.
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/repo-about.json
-      - .github/workflows/sync-about.yml
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  sync:
+  print:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply description, homepage, and topics
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 - << 'PY'
-          import json, os, urllib.error, urllib.request
-          spec = json.loads(open(".github/repo-about.json", encoding="utf-8").read())
-          repo = os.environ["GITHUB_REPOSITORY"]
-          token = os.environ["GH_TOKEN"]
-
-          def call(method, url, payload, accept):
-              req = urllib.request.Request(
-                  url,
-                  data=json.dumps(payload).encode(),
-                  method=method,
-                  headers={
-                      "Accept": accept,
-                      "Authorization": f"Bearer {token}",
-                      "X-GitHub-Api-Version": "2022-11-28",
-                      "Content-Type": "application/json",
-                  },
-              )
-              try:
-                  with urllib.request.urlopen(req) as resp:
-                      print(method, url, resp.status)
-              except urllib.error.HTTPError as exc:
-                  print(method, url, exc.code, exc.read().decode()[:500])
-                  raise
-
-          call(
-              "PATCH",
-              f"https://api.github.com/repos/{repo}",
-              {"description": spec["description"], "homepage": spec.get("homepage", "")},
-              "application/vnd.github+json",
-          )
-          call(
-              "PUT",
-              f"https://api.github.com/repos/{repo}/topics",
-              {"names": spec["topics"]},
-              "application/vnd.github+json",
-          )
-          PY
+      - run: python3 -m json.tool .github/repo-about.json
