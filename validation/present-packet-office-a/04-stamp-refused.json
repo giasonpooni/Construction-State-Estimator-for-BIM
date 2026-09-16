@@ -1,0 +1,9 @@
+{
+  "inspectability": "REQUEST_EVIDENCE",
+  "kind": "refused",
+  "may_authorize": false,
+  "name": "stamp",
+  "reason": "CSE does not issue ApprovalRecord or occupancy. An inspector stamps.",
+  "record": null,
+  "step": 4
+}

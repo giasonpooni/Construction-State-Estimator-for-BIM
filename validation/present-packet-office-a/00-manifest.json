@@ -1,0 +1,31 @@
+{
+  "format": "cse-present-process-v1",
+  "inspectability": "REQUEST_EVIDENCE",
+  "may_authorize": false,
+  "open_requests": [
+    {
+      "asks_for": "layout point bound to an IfcGuid",
+      "code": "bind.point_to_guid"
+    },
+    {
+      "asks_for": "ledger-bound ObserveLinearized or ObserveQuantity digest",
+      "code": "evidence.as_built"
+    },
+    {
+      "asks_for": "cse-calibration-v1 with a finite sigma on the target quantity",
+      "code": "calibration.declared"
+    }
+  ],
+  "stamp": {
+    "kind": "refused",
+    "reason": "CSE does not issue ApprovalRecord or occupancy. An inspector stamps.",
+    "record": null
+  },
+  "steps": [
+    "01-verify",
+    "02-inventory",
+    "03-package",
+    "04-stamp-refused"
+  ],
+  "verification_passed": true
+}
