@@ -9,9 +9,12 @@ LoweringError paths, driven through the public GatSession entry points.
 from __future__ import annotations
 
 import os
+from pathlib import Path
+import tempfile
 import unittest
 
 import gat
+from gat.adapters.ifc.schema import type_family, unknown_subtypes
 from gat.errors import LoweringError
 from gat.ir.core import RelKind, Role
 from gat.session import GatSession
@@ -235,6 +238,110 @@ class TestLoweringErrors(unittest.TestCase):
             0.003,
             delta=1e-15,
         )
+
+
+class Ifc4SubtypesAreTheSameRelationTests(unittest.TestCase):
+    """A legal IFC4 spelling must not silently empty the relation.
+
+    ``IfcFile.by_type`` is an exact uppercase string compare with no schema
+    knowledge, and lowering asked only for ``IFCRELSPACEBOUNDARY``. IFC4 puts
+    two subtypes under it -- ``1stLevel`` adds ParentBoundary, ``2ndLevel``
+    adds CorrespondingBoundary, and both leave positions 0..8 exactly where
+    the supertype has them -- and real exporters emit them.
+
+    Measured on the shipped demo before the fix: renaming its eight
+    ``IFCRELSPACEBOUNDARY`` instances to either subtype made
+    ``GatSession.load_ifc`` succeed **with no error** while dropping all
+    eight BOUNDS edges and all four ``external`` flags. Wall-East,
+    Wall-North, Wall-South and Wall-West each became an interior wall. That
+    flag is read at gat/geometry/stateio.py:152-155 and feeds the geometry
+    feature vector, so a 2nd-level file would have turned every exterior
+    wall in a building into an interior one and refused nothing.
+
+    ``IFCWALLSTANDARDCASE`` was already normalized in ``PRODUCT_CLASSES``
+    ("a wall is a wall"), so the adapter knew this hazard for elements and
+    had never carried it to relationships.
+    """
+
+    SPELLINGS = (
+        "IFCRELSPACEBOUNDARY",
+        "IFCRELSPACEBOUNDARY1STLEVEL",
+        "IFCRELSPACEBOUNDARY2NDLEVEL",
+    )
+
+    def _respelled(self, directory: str, spelling: str) -> str:
+        text = Path(DEMO_PATH).read_text(encoding="utf-8")
+        self.assertEqual(
+            text.count("IFCRELSPACEBOUNDARY("), 8, "fixture moved"
+        )
+        path = os.path.join(directory, f"{spelling}.ifc")
+        Path(path).write_text(
+            text.replace("IFCRELSPACEBOUNDARY(", f"{spelling}("),
+            encoding="utf-8",
+        )
+        return path
+
+    def test_every_legal_spelling_yields_the_same_boundaries(self) -> None:
+        for spelling in self.SPELLINGS:
+            with self.subTest(spelling=spelling):
+                with tempfile.TemporaryDirectory() as directory:
+                    module = GatSession.load_ifc(
+                        self._respelled(directory, spelling)
+                    ).world.module
+                bounds = [r for r in module.rels if r.kind is RelKind.BOUNDS]
+                external = sorted(
+                    e.name
+                    for e in module.entities.values()
+                    if e.attrs.get("external")
+                )
+                self.assertEqual(len(bounds), 8)
+                self.assertEqual(tuple(external), tuple(sorted(ENVELOPE_WALLS)))
+
+    def test_the_envelope_does_not_become_interior(self) -> None:
+        """Stated as the consequence rather than the count, because the
+        consequence is what a reader of a scan-conditioned clearance cares
+        about."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._respelled(directory, "IFCRELSPACEBOUNDARY2NDLEVEL")
+            module = GatSession.load_ifc(path).world.module
+        for name in ENVELOPE_WALLS:
+            with self.subTest(wall=name):
+                entity = next(
+                    e for e in module.entities.values() if e.name == name
+                )
+                self.assertTrue(
+                    entity.attrs.get("external"),
+                    f"{name} is an envelope wall and must stay external",
+                )
+
+    def test_an_unknown_subtype_is_refused_by_name(self) -> None:
+        """The fail-closed half. Listing today's subtypes fixes today's
+        files and does nothing for the next schema revision, where the
+        failure mode is silence again."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._respelled(directory, "IFCRELSPACEBOUNDARY3RDLEVEL")
+            with self.assertRaises(LoweringError) as caught:
+                GatSession.load_ifc(path)
+        message = str(caught.exception)
+        self.assertIn("IFCRELSPACEBOUNDARY3RDLEVEL", message)
+        self.assertIn("SUBTYPES_OF", message)
+
+    def test_a_known_subtype_is_not_refused(self) -> None:
+        """The guard must not fire on the families it was taught."""
+        for spelling in self.SPELLINGS[1:]:
+            with self.subTest(spelling=spelling):
+                with tempfile.TemporaryDirectory() as directory:
+                    GatSession.load_ifc(self._respelled(directory, spelling))
+
+    def test_the_family_helper_is_the_single_source(self) -> None:
+        self.assertEqual(type_family("IFCRELSPACEBOUNDARY"), self.SPELLINGS)
+        self.assertEqual(type_family("ifcwall"), ("IFCWALL", "IFCWALLSTANDARDCASE"))
+        self.assertEqual(type_family("IFCDOOR"), ("IFCDOOR",))
+        self.assertEqual(unknown_subtypes({"IFCWALL", "IFCDOOR"}), ())
+        self.assertEqual(
+            unknown_subtypes({"IFCBEAMCURVEDCASE"}), ("IFCBEAMCURVEDCASE",)
+        )
+
 
 
 if __name__ == "__main__":

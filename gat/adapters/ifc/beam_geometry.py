@@ -23,6 +23,7 @@ import re
 
 from gat.adapters.ifc.parser import EnumVal, IfcFile, RawInstance, Ref, Typed
 from gat.adapters.ifc.reader import attr, global_id, name_of, numeric, refs
+from gat.adapters.ifc.schema import type_family
 from gat.adapters.ifc.units import assigned_unit_ids, length_unit_context
 from gat.errors import BeamGeometryError, GatError
 
@@ -682,7 +683,8 @@ def derive_all_beam_geometry(
             length_scale_to_metres=units.scale_to_metres,
             angle_scale_to_radians=angle_scale,
         )
-        for beam in file.by_type("IFCBEAM")
+        for name in type_family("IFCBEAM")
+        for beam in file.by_type(name)
     )
 
 

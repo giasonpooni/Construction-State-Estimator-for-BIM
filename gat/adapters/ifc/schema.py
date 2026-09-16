@@ -19,6 +19,7 @@ SUPPORTED_ENTITIES: dict[str, dict[str, int]] = {
     "IFCOPENINGELEMENT": {"GlobalId": 0, "Name": 2, "ObjectPlacement": 5},
     "IFCDOOR": {"GlobalId": 0, "Name": 2, "ObjectPlacement": 5},
     "IFCBEAM": {"GlobalId": 0, "Name": 2, "ObjectPlacement": 5},
+    "IFCBEAMSTANDARDCASE": {"GlobalId": 0, "Name": 2, "ObjectPlacement": 5},
     "IFCPRODUCTDEFINITIONSHAPE": {"Representations": 2},
     "IFCSHAPEREPRESENTATION": {
         "RepresentationIdentifier": 1,
@@ -66,7 +67,24 @@ SUPPORTED_ENTITIES: dict[str, dict[str, int]] = {
         "RelatingOpeningElement": 4,
         "RelatedBuildingElement": 5,
     },
+    # IFC4 puts two subtypes under IfcRelSpaceBoundary -- 1stLevel adds
+    # ParentBoundary at position 9, 2ndLevel adds CorrespondingBoundary at
+    # 10 -- and leaves positions 0..8 exactly as they are here. Real IFC4
+    # exporters emit the subtypes, so the same layout is registered for all
+    # three. See SUBTYPES_OF below for why this is not optional.
     "IFCRELSPACEBOUNDARY": {
+        "GlobalId": 0,
+        "RelatingSpace": 4,
+        "RelatedBuildingElement": 5,
+        "InternalOrExternalBoundary": 8,
+    },
+    "IFCRELSPACEBOUNDARY1STLEVEL": {
+        "GlobalId": 0,
+        "RelatingSpace": 4,
+        "RelatedBuildingElement": 5,
+        "InternalOrExternalBoundary": 8,
+    },
+    "IFCRELSPACEBOUNDARY2NDLEVEL": {
         "GlobalId": 0,
         "RelatingSpace": 4,
         "RelatedBuildingElement": 5,
@@ -108,4 +126,61 @@ PRODUCT_CLASSES: dict[str, str] = {
 # the v0 architectural lowering path.
 ANNOTATED_PRODUCT_CLASSES: dict[str, tuple[str, str]] = {
     "IFCBEAM": ("IfcBeam", "GAT_Structural"),
+    "IFCBEAMSTANDARDCASE": ("IfcBeam", "GAT_Structural"),
 }
+
+
+#: IFC types this adapter consumes, mapped to the subtypes it treats as the
+#: same thing. ``IfcFile.by_type`` is an exact uppercase string compare with
+#: no schema knowledge, so a subtype that is not listed here is not found --
+#: and, for a relationship, is not found *silently*.
+#:
+#: Measured on ``gat/demo/model.ifc``: renaming its eight
+#: ``IFCRELSPACEBOUNDARY`` instances to either legal IFC4 subtype made
+#: ``GatSession.load_ifc`` succeed with no error while dropping all eight
+#: BOUNDS edges and all four ``external`` flags -- Wall-East, Wall-North,
+#: Wall-South and Wall-West each became an interior wall. That flag is read
+#: at ``gat/geometry/stateio.py:152-155`` and feeds the geometry feature
+#: vector, so a real IFC4 exporter using 2nd-level boundaries would have
+#: turned every exterior wall in the building into an interior one and
+#: refused nothing.
+#:
+#: ``IFCWALLSTANDARDCASE`` was already normalized in ``PRODUCT_CLASSES``
+#: ("a wall is a wall"), so the adapter knew this hazard for *elements* and
+#: had simply never carried it to *relationships*.
+SUBTYPES_OF: dict[str, tuple[str, ...]] = {
+    "IFCRELSPACEBOUNDARY": (
+        "IFCRELSPACEBOUNDARY1STLEVEL",
+        "IFCRELSPACEBOUNDARY2NDLEVEL",
+    ),
+    "IFCWALL": ("IFCWALLSTANDARDCASE",),
+    "IFCBEAM": ("IFCBEAMSTANDARDCASE",),
+}
+
+
+def type_family(supertype: str) -> tuple[str, ...]:
+    """``supertype`` and every subtype this adapter treats as equivalent."""
+    upper = supertype.upper()
+    return (upper,) + SUBTYPES_OF.get(upper, ())
+
+
+def unknown_subtypes(present: "frozenset[str] | set[str]") -> tuple[str, ...]:
+    """Type names that look like an unhandled subtype of a consumed type.
+
+    The fail-closed half of :data:`SUBTYPES_OF`. Listing the subtypes that
+    exist today fixes today's files; it does nothing for a schema revision
+    that adds another one, and the failure mode is silence. So a file
+    carrying a type whose name extends one this adapter consumes, and which
+    is not in the family, is refused by name rather than read as if the
+    instances were absent.
+    """
+    known = {name for key in SUBTYPES_OF for name in type_family(key)}
+    out = []
+    for name in sorted(present):
+        if name in known:
+            continue
+        for supertype in SUBTYPES_OF:
+            if name.startswith(supertype) and name != supertype:
+                out.append(name)
+                break
+    return tuple(out)

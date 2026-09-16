@@ -52,7 +52,12 @@ from gat.adapters.ifc.reader import (
     refs,
     resolve_placement,
 )
-from gat.adapters.ifc.schema import ANNOTATED_PRODUCT_CLASSES, PRODUCT_CLASSES
+from gat.adapters.ifc.schema import (
+    ANNOTATED_PRODUCT_CLASSES,
+    PRODUCT_CLASSES,
+    type_family,
+    unknown_subtypes,
+)
 from gat.adapters.ifc.scope import IfcLoweringScope
 from gat.adapters.ifc.units import LengthUnitContext, length_unit_context
 from gat.errors import GatError, LoweringError
@@ -144,6 +149,23 @@ def lower_ifc(
     dependencies never silently join the world — a scoped subject whose
     defining parent is absent fails closed rather than inventing a prior.
     """
+    # A subtype this adapter has not been taught is not read as "absent" --
+    # that is how the IFC4 space-boundary subtypes silently removed every
+    # exterior-wall flag from a file that loaded clean. Listing the subtypes
+    # that exist today fixes today's files and does nothing for the next
+    # schema revision, so anything whose name extends a consumed type and is
+    # not in its family is named and refused.
+    stray = unknown_subtypes({inst.type_name for inst in file.instances.values()})
+    if stray:
+        raise LoweringError(
+            "this file uses IFC subtypes this adapter has not been taught: "
+            + ", ".join(stray)
+            + ". They extend a type it does consume, so reading the file "
+            "without them would drop their instances silently rather than "
+            "refuse. Add them to gat.adapters.ifc.schema.SUBTYPES_OF with "
+            "their attribute layout once the positions are confirmed"
+        )
+
     length_units = length_unit_context(file)
 
     # -- products ----------------------------------------------------------
@@ -461,7 +483,17 @@ def lower_ifc(
         if isinstance(opening_ref, Ref) and isinstance(filler_ref, Ref):
             _edge(RelKind.FILLS, filler_ref, opening_ref, rel.step_id)
     external_elements: set[EntityId] = set()
-    for rel in file.by_type("IFCRELSPACEBOUNDARY"):
+    # Every legal IFC4 spelling of the relation, not just the supertype.
+    # ``by_type`` is an exact string compare, so asking only for
+    # IFCRELSPACEBOUNDARY loses a 1st- or 2nd-level file's boundaries
+    # silently -- and with them every ``external`` flag, turning exterior
+    # walls into interior ones with no refusal. See schema.SUBTYPES_OF.
+    boundaries = [
+        rel
+        for name in type_family("IFCRELSPACEBOUNDARY")
+        for rel in file.by_type(name)
+    ]
+    for rel in boundaries:
         space_ref = attr(rel, "RelatingSpace")
         element_ref = attr(rel, "RelatedBuildingElement")
         if isinstance(space_ref, Ref) and isinstance(element_ref, Ref):
