@@ -1,11 +1,8 @@
 # Compiled stack
 
-CSE v0 dense float64 covariance remains the verified oracle.
-This repository does not own a CUDA or Rust runtime.
+CSE v0 dense float64 covariance remains the verified oracle for GAT
+belief types. First-order P' = T P T.T and chart fidelity belong to
+Jacobian-Sensitivity-Propagation-Testbed.
 
-First-order P' = J P J.T and chart fidelity belong to
-Jacobian-Sensitivity-Propagation-Testbed. A later Rust gate may implement
-those maps. Sparse / factor-graph belief stays a CSE satellite until a
-disposition on the acceptance slice requires it.
-
-Do not add CuPy or a second condition-number cap here.
+Consume `sensitivity.push_covariance`. See `tests/test_jspt_consume.py`.
+Pin a JSPT git SHA in CI. Do not add CuPy or a second condition-number cap.
