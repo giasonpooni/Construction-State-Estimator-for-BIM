@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "gat-bim"
 version = "0.1.0"
-description = "A portable evidence-to-decision computational state runtime for BIM"
+description = "CSE: portable evidence-to-decision runtime for BIM"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Notation Systems" }]
-keywords = ["BIM", "IFC", "gaussian", "uncertainty", "compiler", "architecture", "digital-twin"]
+keywords = ["BIM", "IFC", "CSE", "gaussian", "uncertainty", "compiler", "architecture", "verification"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -31,7 +31,7 @@ openusd = ["usd-core>=26.8,<27", "cryptography>=40"]
 ifcopenshell = ["ifcopenshell>=0.8"]
 
 [project.urls]
-Repository = "https://github.com/giasonpooni/BIM-State-Transformer-Engine-WIP"
+Repository = "https://github.com/giasonpooni/Construction-State-Estimator-for-BIM"
 
 [tool.setuptools.packages.find]
 include = ["gat*"]
