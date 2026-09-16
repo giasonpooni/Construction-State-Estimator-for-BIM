@@ -12,7 +12,7 @@ from gat.demo.experiment_harness import (
     _DEMO_SPACE,
     run_inspectability,
 )
-from gat.harness.inspectability import fold_inspectability
+from gat.harness.inspectability import fold_inspectability, tickets_from_index
 
 
 class InspectabilityIndexTests(unittest.TestCase):
@@ -132,6 +132,57 @@ class InspectabilityIndexTests(unittest.TestCase):
         )
         self.assertEqual(index.inspectability, "ACCEPT")
         self.assertEqual(index.document["open_requests"], [])
+        self.assertEqual(tickets_from_index(index), ())
+
+    def test_open_holes_become_crew_tickets_with_instrument_class(self) -> None:
+        index = fold_inspectability(
+            receipts=[({"case_id": "opening-17", "disposition": "ACCEPT"}, "r.json")],
+        )
+        tickets = tickets_from_index(index)
+        codes = {ticket.code for ticket in tickets}
+        self.assertIn("identity.space", codes)
+        self.assertIn("bind.point_to_guid", codes)
+        instruments = {ticket.instrument_class for ticket in tickets}
+        self.assertIn("ifc-space-entity", instruments)
+        self.assertIn("total-station-or-layout", instruments)
+        self.assertFalse(any(ticket.presentable for ticket in tickets))
+
+    def test_survey_frame_request_is_a_named_hole_not_a_revit_export(self) -> None:
+        space = {
+            "space_ref": {
+                "ifc_class": "IfcSpace",
+                "global_id": "3AbcOfficeA00000000000000",
+            }
+        }
+        bind = {
+            "schema": "cse-point-bind-v1",
+            "point_id": "P-204",
+            "global_id": "2OpeningO2040000000000000",
+        }
+        index = fold_inspectability(
+            space=space,
+            receipts=[
+                (
+                    {
+                        "case_id": "opening-17",
+                        "disposition": "ACCEPT",
+                        "evidence_digest": "a" * 16,
+                    },
+                    "r.json",
+                )
+            ],
+            binds=[(bind, "bind.json")],
+            extra_requests=[
+                {
+                    "code": "frame.station_setup",
+                    "asks_for": "occupied + backsight id for setup S-12",
+                }
+            ],
+        )
+        self.assertEqual(index.inspectability, "REQUEST_EVIDENCE")
+        tickets = tickets_from_index(index)
+        self.assertEqual(tickets[0].instrument_class, "total-station")
+        self.assertEqual(tickets[0].code, "frame.station_setup")
 
 
 if __name__ == "__main__":
