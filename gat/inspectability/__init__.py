@@ -1,31 +1,19 @@
 """Inspectability index: space-id readiness, not an inspection stamp.
 
-Satellite. Does not change kernel dispositions, world digests, or replay
-on the acceptance / beam / RFI slice.
+Satellite. The fold lives in gat.harness.inspectability so the experiment
+harness and this import stay one object.
 """
 
-from gat.inspectability.index import (
+from gat.harness.inspectability import (
     INDEX_FORMAT,
-    BoundCaseRef,
-    CitedArtifact,
-    CrewTicket,
-    InspectabilityRecord,
-    OpenRequest,
-    SpaceRef,
+    InspectabilityIndex,
     fold_inspectability,
-    space_id_from_ifc,
     tickets_from_index,
 )
 
 __all__ = [
     "INDEX_FORMAT",
-    "BoundCaseRef",
-    "CitedArtifact",
-    "CrewTicket",
-    "InspectabilityRecord",
-    "OpenRequest",
-    "SpaceRef",
+    "InspectabilityIndex",
     "fold_inspectability",
-    "space_id_from_ifc",
     "tickets_from_index",
 ]
