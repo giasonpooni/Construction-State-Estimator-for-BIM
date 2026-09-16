@@ -1,7 +1,7 @@
 """Run the present-space process and write a packet. Never stamps.
 
     python -m gat.demo.present_process --demo -o out/present-packet
-    python -m gat.demo.present_process --demo --lab --value 0.9 -o out/present-packet-lab
+    python -m gat.demo.present_process --demo --public-xref -o out/present-packet-xref
 """
 
 from __future__ import annotations
@@ -19,9 +19,13 @@ from gat.demo.present_space import (
     _DEMO_SPACE,
     present_space,
 )
+from gat.harness.bundle import load_json
 from gat.session import GatSession
 
 PROCESS = "cse-present-process-v1"
+_REPO = Path(__file__).resolve().parents[2]
+_PUBLIC_CAL = _REPO / "validation" / "cse-calibration-public-xref-v1.json"
+_PUBLIC_OBS = _REPO / "validation" / "simulated-opening-width-observe-v1.json"
 STAMP = {
     "kind": "refused",
     "record": None,
@@ -43,10 +47,20 @@ def run_process(
     bind_path: str | Path | None = None,
     calibration_path: str | Path | None = None,
     lab: bool = False,
+    public_xref: bool = False,
     value: float | None = None,
 ) -> dict[str, object]:
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
+    observe = lab or public_xref
+    if public_xref:
+        bind_path = bind_path or _DEMO_BIND
+        calibration_path = calibration_path or _PUBLIC_CAL
+        if value is None:
+            value = float(load_json(_PUBLIC_OBS)["indicated_m"])
+    elif lab:
+        bind_path = bind_path or _DEMO_BIND
+        calibration_path = calibration_path or _DEMO_CAL
     session = GatSession.load_ifc(str(model_path))
     verification = session.verify()
     passed, warned, failed = verification.counts()
@@ -77,13 +91,18 @@ def run_process(
         model_path=model_path,
         space_path=space_path,
         receipt_path=receipt_path,
-        bind_path=bind_path if bind_path or not lab else _DEMO_BIND,
-        calibration_path=calibration_path if calibration_path or not lab else _DEMO_CAL,
-        apply_lab_observation=lab,
-        observed_value=value if lab else None,
+        bind_path=bind_path,
+        calibration_path=calibration_path,
+        apply_lab_observation=observe,
+        observed_value=value if observe else None,
         output_path=output / "03-package.json",
     )
-    package = {**package, "stamp": STAMP}
+    package = {
+        **package,
+        "stamp": STAMP,
+        "simulation": public_xref,
+        "not_field_evidence": True if public_xref else package.get("lab_observation_applied"),
+    }
     _write(output / "03-package.json", package)
     _write(
         output / "04-stamp-refused.json",
@@ -93,15 +112,28 @@ def run_process(
             **STAMP,
             "inspectability": package["inspectability"],
             "may_authorize": False,
+            "simulation": public_xref,
         },
     )
+    if public_xref:
+        _write(
+            output / "05-public-xref.json",
+            {
+                "step": 5,
+                "name": "public-xref",
+                "calibration": load_json(_PUBLIC_CAL),
+                "observation": load_json(_PUBLIC_OBS),
+            },
+        )
     manifest = {
         "format": PROCESS,
-        "steps": ["01-verify", "02-inventory", "03-package", "04-stamp-refused"],
+        "steps": ["01-verify", "02-inventory", "03-package", "04-stamp-refused"]
+        + (["05-public-xref"] if public_xref else []),
         "inspectability": package["inspectability"],
         "verification_passed": package["verification"]["passed"],
         "may_authorize": False,
         "stamp": STAMP,
+        "simulation": public_xref,
         "open_requests": package["open_requests"],
     }
     _write(output / "00-manifest.json", manifest)
@@ -113,14 +145,22 @@ def main() -> None:
         description="Present-space process packet. Never stamps."
     )
     parser.add_argument("--demo", action="store_true")
-    parser.add_argument("--lab", action="store_true", help="use shipped bind+calibration and observe")
-    parser.add_argument("--value", type=float, default=0.9)
+    parser.add_argument("--lab", action="store_true")
+    parser.add_argument(
+        "--public-xref",
+        action="store_true",
+        help="simulate observation from public instrument specs + demo QTO",
+    )
+    parser.add_argument("--value", type=float)
     parser.add_argument("-o", "--output", default="out/present-packet")
     args = parser.parse_args()
+    if args.lab and args.value is None:
+        args.value = 0.9
     manifest = run_process(
         output_dir=args.output,
         lab=args.lab,
-        value=args.value if args.lab else None,
+        public_xref=args.public_xref,
+        value=args.value,
     )
     print(f"wrote {args.output}")
     print(f"inspectability {manifest['inspectability']}")
