@@ -1,0 +1,24 @@
+{
+  "schema": "sp1-kernel-i32-v0",
+  "invoked": false,
+  "isa": "riscv",
+  "numeric": "i32",
+  "ieee754": false,
+  "kernels": {
+    "chain_jvp_i32": {
+      "J1": [[2, 0], [0, 3]],
+      "dx": [1, 1],
+      "J2": [[1, 1], [0, 1]],
+      "y": [5, 3]
+    },
+    "discrete_lyapunov_decrease_i32": {
+      "A": [[0, 1], [0, 0]],
+      "P": [[1, 0], [0, 1]],
+      "x": [2, 1],
+      "V": 5,
+      "V_next": 1,
+      "decreases": true
+    }
+  },
+  "note": "Host reference values. No guest, no proof, no float."
+}
