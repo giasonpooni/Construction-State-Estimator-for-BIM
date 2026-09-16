@@ -1,10 +1,6 @@
 """Bind independently produced tool records into one experiment bundle.
 
-    python -m gat.demo.experiment_harness \\
-        --disposition validation/beam-b1-disposition-v1.json \\
-        --commit path/to/rci-commitment.json \\
-        --commit path/to/torus-commitment.json \\
-        -o out/harness-bundle.json
+    python -m gat.demo.experiment_harness --demo -o out/harness-bundle.json
 
 Does not run SP1. Does not condition Beam-B1 on a millimetre.
 """
@@ -18,6 +14,14 @@ from gat.harness.bundle import (
     assemble_bundle,
     bind_commitment_file,
     load_json,
+)
+
+_FIXTURE_DIR = Path(__file__).resolve().parent / "harness_fixtures"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_DISPOSITION = _REPO_ROOT / "validation" / "beam-b1-disposition-v1.json"
+_DEMO_COMMITS = (
+    _FIXTURE_DIR / "rci-example-commitment-v1.json",
+    _FIXTURE_DIR / "torus-example-commitment-v1.json",
 )
 
 
@@ -70,6 +74,11 @@ def main() -> None:
         help="RCI or torus commitment JSON. Repeatable.",
     )
     parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Bind shipped fixtures and the Beam-B1 pin.",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         default="out/harness-bundle.json",
@@ -81,9 +90,15 @@ def main() -> None:
         choices=("NOT_REQUESTED", "BACKEND_REQUIRED", "UNAVAILABLE"),
     )
     args = parser.parse_args()
+    disposition = args.disposition
+    commits = list(args.commit)
+    if args.demo:
+        if disposition is None:
+            disposition = str(_DEFAULT_DISPOSITION)
+        commits.extend(str(path) for path in _DEMO_COMMITS)
     run_experiment_harness(
-        disposition_path=args.disposition,
-        commitment_paths=list(args.commit),
+        disposition_path=disposition,
+        commitment_paths=commits,
         output_path=args.output,
         sp1_status=args.sp1_status,
     )

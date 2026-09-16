@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from gat.adapters.external_commitment import canonical_digest
+from gat.demo.experiment_harness import _DEMO_COMMITS, _DEFAULT_DISPOSITION, run_experiment_harness
 from gat.harness.bundle import assemble_bundle, bind_commitment_file
 
 
@@ -73,6 +74,24 @@ class HarnessBundleTests(unittest.TestCase):
     def test_refuses_unknown_sp1_status(self) -> None:
         with self.assertRaisesRegex(ValueError, "sp1_status"):
             assemble_bundle(sp1_status="PROVED")
+
+    def test_demo_fixtures_bind_against_beam_pin(self) -> None:
+        self.assertTrue(_DEFAULT_DISPOSITION.is_file())
+        for path in _DEMO_COMMITS:
+            self.assertTrue(path.is_file(), msg=str(path))
+        with tempfile.TemporaryDirectory() as raw:
+            output = Path(raw) / "bundle.json"
+            document = run_experiment_harness(
+                disposition_path=_DEFAULT_DISPOSITION,
+                commitment_paths=list(_DEMO_COMMITS),
+                output_path=output,
+                quiet=True,
+            )
+        self.assertEqual(len(document["commitments"]), 2)
+        self.assertEqual(document["disposition"]["revised_verdict"], "VIOLATED")
+        kinds = {row["kind"] for row in document["commitments"]}
+        self.assertEqual(kinds, {"instrument-observation", "torus-report"})
+        self.assertFalse(document["sp1"]["invoked"])
 
 
 if __name__ == "__main__":

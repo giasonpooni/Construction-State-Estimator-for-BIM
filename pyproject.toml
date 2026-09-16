@@ -37,4 +37,4 @@ Repository = "https://github.com/giasonpooni/Construction-State-Estimator-for-BI
 include = ["gat*"]
 
 [tool.setuptools.package-data]
-"gat.demo" = ["*.ifc", "material_certificate.json", "material_certificate_followup.json"]
+"gat.demo" = ["*.ifc", "material_certificate.json", "material_certificate_followup.json", "harness_fixtures/*.json", "harness_fixtures/*.md"]
