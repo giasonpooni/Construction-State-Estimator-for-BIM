@@ -1,9 +1,4 @@
-"""Three graph views of existing objects. Not a second estimator.
-
-Spectral: eigenvalues of the atlas adjacency. Connectivity invariant.
-Functional: ledger events as out-degree-1 world transitions.
-Factor: declared factorization of a slot. No sum-product.
-"""
+"""Three graph views of existing objects. Not a second estimator."""
 
 from __future__ import annotations
 
@@ -12,6 +7,27 @@ from typing import Mapping, Sequence
 import numpy as np
 
 from gat.harness.atlas import Atlas
+
+
+def _components(adj, names: list[str]) -> list[list[str]]:
+    n = len(names)
+    seen = [False] * n
+    groups: list[list[str]] = []
+    for start in range(n):
+        if seen[start]:
+            continue
+        stack = [start]
+        seen[start] = True
+        group = []
+        while stack:
+            i = stack.pop()
+            group.append(names[i])
+            for j in range(n):
+                if adj[i, j] > 0 and not seen[j]:
+                    seen[j] = True
+                    stack.append(j)
+        groups.append(sorted(group))
+    return groups
 
 
 def atlas_adjacency(atlas: Atlas) -> tuple[list[str], np.ndarray]:
@@ -23,7 +39,7 @@ def atlas_adjacency(atlas: Atlas) -> tuple[list[str], np.ndarray]:
         i = index[edge.source]
         j = index[edge.target]
         adj[i, j] = 1.0
-        if edge.kind == "representation":
+        if edge.kind in {"representation", "observation", "coupling"}:
             adj[j, i] = 1.0
     return names, adj
 
@@ -35,6 +51,8 @@ def spectral_atlas(atlas: Atlas) -> dict[str, object]:
     degree = np.diag(adj.sum(axis=1))
     lap = degree - adj
     eig = np.sort(np.real(np.linalg.eigvals(lap)))
+    components = _components(adj, names)
+    isolated = [c[0] for c in components if len(c) == 1]
     return {
         "schema": "cse-spectral-atlas-v1",
         "claim_scope": "record-integrity-only",
@@ -43,7 +61,10 @@ def spectral_atlas(atlas: Atlas) -> dict[str, object]:
         "edge_count": len(atlas.edges),
         "eigenvalues": [float(v) for v in eig],
         "algebraic_connectivity": float(eig[1]) if len(eig) > 1 else 0.0,
-        "note": "Spectrum is a connectivity invariant of the atlas. Not a belief.",
+        "components": components,
+        "isolated_slots": isolated,
+        "connected": len(components) == 1,
+        "note": "lambda2=0 means isolated slots remain. Fill only with sigma-gated or T,c edges.",
     }
 
 
@@ -59,9 +80,7 @@ def functional_ledger(events: Sequence[Mapping[str, object]]) -> dict[str, objec
         if prior in seen and seen[prior] != result:
             forks.append({"prior": prior, "first": seen[prior], "again": result})
         seen[prior] = result
-        transitions.append(
-            {"prior": prior, "result": result, "event_hash": event.get("event_hash")}
-        )
+        transitions.append({"prior": prior, "result": result, "event_hash": event.get("event_hash")})
     return {
         "schema": "cse-functional-ledger-v1",
         "claim_scope": "record-integrity-only",
