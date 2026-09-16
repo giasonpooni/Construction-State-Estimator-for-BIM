@@ -17,6 +17,7 @@ from gat.adapters.external_commitment import (
     bind_external_commitment,
     canonical_digest,
 )
+from gat.harness.effort import EffortDecision, effort_slice, load_effort_table
 from gat.harness.merkle import merkle_proof, merkle_root, verify_merkle_proof
 
 BUNDLE_SCHEMA = "notation-systems-harness-bundle-v1"
@@ -99,6 +100,9 @@ def assemble_bundle(
     sp1_status: str = "NOT_REQUESTED",
     note: str | None = None,
     project_space_id: str | None = None,
+    effort_table: Mapping[str, object] | None = None,
+    effort_source: str | None = None,
+    effort_decisions: Iterable[EffortDecision] = (),
 ) -> HarnessBundle:
     if sp1_status not in ALLOWED_SP1_STATUS:
         raise ValueError(
@@ -119,6 +123,8 @@ def assemble_bundle(
         if not verify_merkle_proof(str(record["digest"]), path, root):
             raise ValueError("merkle inclusion check failed for a bound digest")
         inclusion.append({"digest": record["digest"], "path": path})
+    table = dict(effort_table) if effort_table is not None else load_effort_table()
+    decisions = list(effort_decisions)
     payload = {
         "schema": BUNDLE_SCHEMA,
         "status": "in-development",
@@ -140,6 +146,7 @@ def assemble_bundle(
             "status": sp1_status,
             "note": "A guest may attest one already-computed arithmetic claim. It does not prove A2-A5, Sigma, or a physical stream.",
         },
+        "effort": effort_slice(table, decisions, source=effort_source),
         "build_order": [
             "Keep dense Beam-B1 and the ledger.",
             "Keep RCI as telemetry records with sigma and quality.",
@@ -154,6 +161,7 @@ def assemble_bundle(
             "Does not treat a torus length as a covariance.",
             "Does not fuse axioms, Sigma, and a bench into one theorem.",
             "Does not treat a Merkle path as an inspection.",
+            "Does not open CUDA, Rust ingest, or SP1 because a planner scored them.",
         ],
         "note": note
         or "Bundle of independently replayable records. Alignment is digest binding, not fusion.",
