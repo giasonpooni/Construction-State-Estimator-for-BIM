@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       run_sp1:
-        description: Build the SP1 beam guest and produce a CPU proof (satellite; 45 min)
+        description: Build SP1 guests and produce CPU proofs (satellite; 45 min)
         type: boolean
         default: false
 
@@ -101,9 +101,6 @@ jobs:
         run: python -m unittest tests.test_public_ifc_corpus -v
 
   test-extras:
-    # Everything the other jobs do not cover: the FULL suite with the
-    # optional stack installed (zero skips) on the second Python version,
-    # and the gat command-line surface end to end.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -158,10 +155,27 @@ jobs:
           "$HOME/.sp1/bin/sp1up" --token "$GITHUB_TOKEN" --version 6.5.0
           echo "$HOME/.sp1/bin" >> "$GITHUB_PATH"
 
-      - name: Validate Python/Rust fixed-point agreement
+      - name: Host i32 kernel pin
+        run: |
+          cargo test --manifest-path rust/Cargo.toml -p cse-fixedpoint-kernel
+          cargo test --manifest-path sp1/kernel/Cargo.toml -p gat-sp1-kernel-lib
+
+      - name: Execute the i32 chain-JVP guest and print cycles
+        env:
+          SP1_PROVER: cpu
+        run: cargo run --release --manifest-path sp1/kernel/Cargo.toml -p gat-sp1-kernel -- execute
+
+      - name: Prove and verify the i32 chain-JVP guest
+        env:
+          SP1_PROVER: cpu
+        run: |
+          mkdir -p ci-sp1-out
+          cargo run --release --manifest-path sp1/kernel/Cargo.toml -p gat-sp1-kernel -- prove --proof ci-sp1-out/kernel-chain-jvp.proof
+
+      - name: Validate Python/Rust fixed-point agreement (beam lib)
         run: cargo test --locked --manifest-path sp1/beam/Cargo.toml -p gat-sp1-beam-lib
 
-      - name: Build the SP1 guest and proof host
+      - name: Build the SP1 beam guest and proof host
         run: cargo build --locked --release --manifest-path sp1/beam/Cargo.toml -p gat-sp1-beam
 
       - name: Generate and independently verify the ledger-bound beam proof
