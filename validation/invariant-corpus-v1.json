@@ -33,6 +33,11 @@
       "ifc_class": "IfcOpeningElement"
     },
     {
+      "id": "cal.declared",
+      "kind": "calibration",
+      "statement": "sigma is declared before Observe. RCI owns the chain parts."
+    },
+    {
       "id": "geom.authority",
       "kind": "authority",
       "statement": "CLEARANCE ACCEPT needs SWEPT_SOLID or SCAN_GMM. mesh is View."
@@ -70,7 +75,7 @@
       "id": "var.opening-width",
       "owner": "id.opening-17",
       "quantity": "OverallWidth",
-      "needs": ["calibration.declared", "bind.point_to_guid", "observe"]
+      "needs": ["cal.declared", "bind.point_to_guid", "observe"]
     }
   ]
 }
