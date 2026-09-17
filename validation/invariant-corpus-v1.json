@@ -1,0 +1,76 @@
+{
+  "schema": "invariant-corpus-v1",
+  "role": "declared identity of the plant. inference needles free coordinates only.",
+  "claim_scope": "computational-integrity-only",
+  "not": [
+    "a second inference engine",
+    "belief Sigma",
+    "a digital twin",
+    "authorization"
+  ],
+  "invariants": [
+    {
+      "id": "disp.three-valued",
+      "kind": "disposition",
+      "statement": "ACCEPT | REJECT | REQUEST_EVIDENCE. absence is REQUEST_EVIDENCE."
+    },
+    {
+      "id": "unit.space_id",
+      "kind": "handle",
+      "statement": "unit of work is space_id / zone_id, not the model."
+    },
+    {
+      "id": "id.office-a",
+      "kind": "identity",
+      "name": "Office-A",
+      "global_id": "GATSPC0000000000000300",
+      "ifc_class": "IfcSpace"
+    },
+    {
+      "id": "id.opening-17",
+      "kind": "identity",
+      "name": "Opening-1",
+      "ifc_class": "IfcOpeningElement"
+    },
+    {
+      "id": "geom.authority",
+      "kind": "authority",
+      "statement": "CLEARANCE ACCEPT needs SWEPT_SOLID or SCAN_GMM. mesh is View."
+    },
+    {
+      "id": "usd.projection",
+      "kind": "carrier",
+      "statement": "canonical state projects to USD. binds and proofs stay files."
+    },
+    {
+      "id": "proof.integrity-only",
+      "kind": "certificate",
+      "statement": "host evaluation is not a proof. proof cannot authorize."
+    },
+    {
+      "id": "pin.chain-jvp-i32",
+      "kind": "numeric",
+      "kernel": "chain_jvp_i32",
+      "y": [5, 3]
+    },
+    {
+      "id": "gate.sp1-refuse",
+      "kind": "effort",
+      "key": "sp1_zkvm",
+      "allowed": false
+    },
+    {
+      "id": "stamp.human",
+      "kind": "authorization",
+      "statement": "ApprovalRecord is human. CSE may_authorize stays false."
+    }
+  ],
+  "free_coordinates": [
+    {
+      "id": "var.opening-width",
+      "owner": "id.opening-17",
+      "quantity": "OverallWidth",
+      "needs": ["calibration.declared", "bind.point_to_guid", "observe"]
+    }
+  ]
+}
