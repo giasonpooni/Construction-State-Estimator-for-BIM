@@ -2,18 +2,18 @@
 
 Satellite. Path C (restart) stays a standalone CSE carrier. Path A
 (display) is a sibling payload. Point binds stay JSON files — they are
-never authored as USD prims.
-
-    /World
-      GAT       reference to cse.usdc:/GAT
-      SiteLook  payload/reference to display USD
+never authored as USD prims. Integrity citations are digest pointers on
+/World, never proof bytes and never inside /GAT/State.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
+from typing import Mapping, Sequence
 
+from gat.adapters.integrity_citation import validate_citation
 from gat.adapters.openusd import openusd_available
 from gat.errors import OpenUsdError
 
@@ -67,6 +67,7 @@ def write_combined_stage(
     assembly_path: str | Path,
     display_path: str | Path | None = None,
     bind_path: str | Path | None = None,
+    citations: Sequence[Mapping[str, object]] = (),
 ) -> CombinedUsdStage:
     """Write /World assembly. Restart remains load_openusd(carrier_path)."""
     if not openusd_available():
@@ -86,6 +87,7 @@ def write_combined_stage(
         if not display.is_file():
             display = write_display_layer(display)
         display = display.resolve()
+    checked = [validate_citation(row) for row in citations]
     assembly.parent.mkdir(parents=True, exist_ok=True)
     stage = Usd.Stage.CreateNew(str(assembly))
     UsdGeom.SetStageMetersPerUnit(stage, 1.0)
@@ -103,6 +105,13 @@ def write_combined_stage(
             str(Path(bind_path))
         )
         world.CreateAttribute("gat:bindsInUsd", Sdf.ValueTypeNames.Bool, custom=True).Set(False)
+    if checked:
+        world.CreateAttribute(
+            "gat:integrityCitation", Sdf.ValueTypeNames.String, custom=True
+        ).Set(json.dumps(checked[0], sort_keys=True))
+        world.CreateAttribute(
+            "gat:integrityCitationIsProofBytes", Sdf.ValueTypeNames.Bool, custom=True
+        ).Set(False)
 
     gat = stage.DefinePrim("/World/GAT", "Scope")
     gat.GetReferences().AddReference(_asset_ref(assembly, carrier), "/GAT")
