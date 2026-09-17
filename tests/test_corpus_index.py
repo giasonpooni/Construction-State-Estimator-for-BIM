@@ -17,7 +17,8 @@ class CorpusIndexTests(unittest.TestCase):
         validate_corpus_document(document)
         corpus = load_corpus()
         self.assertIn("var.opening-width", corpus.ids())
-        self.assertTrue(any(row.get("id") == "cal.declared" or True for row in corpus.invariants))
+        self.assertIn("cal.declared", corpus.ids())
+        self.assertEqual(corpus.require("pin.chain-jvp-i32")["y"], [5, 3])
 
     def test_index_lists_operational_members(self) -> None:
         index = json.loads((_REPO / "validation" / "invariant-corpus-index-v1.json").read_text())
