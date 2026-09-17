@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 from gat.adapters.ifcopenshell_adapter import inventory_identities_cse
+from gat.corpus import CorpusError, load_corpus
 from gat.engine.transform import ObserveQuantity
 from gat.errors import GatError
 from gat.harness.bundle import load_json
@@ -47,6 +48,30 @@ def load_calibration(path: str | Path | None) -> dict[str, object] | None:
     return document
 
 
+def _corpus_block(space_global_id: str | None) -> dict[str, object]:
+    corpus = load_corpus()
+    in_i = isinstance(space_global_id, str) and space_global_id in corpus.global_ids()
+    needles = []
+    for row in corpus.free_coordinates:
+        ident = row.get("id")
+        if isinstance(ident, str):
+            needles.append(ident)
+    extra = []
+    if space_global_id and not in_i:
+        extra.append(
+            {
+                "code": "corpus.identity",
+                "asks_for": "space GlobalId listed in invariant-corpus-v1",
+            }
+        )
+    return {
+        "schema": corpus.document["schema"],
+        "space_in_corpus": in_i,
+        "needles": needles,
+        "extra_requests": extra,
+    }
+
+
 def present_space(
     *,
     model_path: str | Path,
@@ -78,11 +103,21 @@ def present_space(
                 "asks_for": "cse-calibration-v1 with a finite sigma on the target quantity",
             }
         )
+    ref = space.get("space_ref") if isinstance(space.get("space_ref"), dict) else {}
+    space_guid = ref.get("global_id") if isinstance(ref, dict) else None
+    if not isinstance(space_guid, str):
+        space_guid = None
+    corpus_block = _corpus_block(space_guid)
+    extra.extend(corpus_block["extra_requests"])
     if apply_lab_observation:
         if calibration is None:
             raise GatError("lab observation requires cse-calibration-v1")
         if observed_value is None:
             raise GatError("lab observation requires --value")
+        try:
+            load_corpus().needle("var.opening-width")
+        except CorpusError as exc:
+            raise GatError(f"lab observation is not a corpus needle: {exc}") from exc
         target = calibration["target"]
         name = str(target.get("name") or "Opening-1")
         quantity = str(target["quantity"])
@@ -93,6 +128,7 @@ def present_space(
                 "calibration_id": calibration["calibration_id"],
                 "lab_observation": True,
                 "traceable": bool(calibration.get("traceable")),
+                "corpus_needle": "var.opening-width",
             },
         )
         report = session.verify()
@@ -140,6 +176,11 @@ def present_space(
         "bind": {
             "present": any(row.get("schema") == BIND_SCHEMA for row, _ in binds),
         },
+        "corpus": {
+            "schema": corpus_block["schema"],
+            "space_in_corpus": corpus_block["space_in_corpus"],
+            "needles": corpus_block["needles"],
+        },
         "lab_observation_applied": apply_lab_observation,
         "world_digest": session.world.digest(),
         "may_authorize": False,
@@ -147,6 +188,7 @@ def present_space(
             "not an occupancy permit",
             "declared calibration is not SI-traceable",
             "lab observation is not field evidence",
+            "inference does not invent corpus names",
         ],
     }
     if output_path is not None:
@@ -188,6 +230,7 @@ def main() -> None:
     )
     print(f"wrote {args.output}")
     print(f"inspectability {document['inspectability']}")
+    print(f"corpus {document['corpus']['space_in_corpus']}")
     print(f"verification passed {document['verification']['passed']}")
     print(f"may_authorize {document['may_authorize']}")
     holes = ", ".join(row["code"] for row in document["open_requests"]) or "none"
