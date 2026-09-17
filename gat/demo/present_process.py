@@ -1,8 +1,4 @@
-"""Run the present-space process and write a packet. Never stamps.
-
-    python -m gat.demo.present_process --demo -o out/present-packet
-    python -m gat.demo.present_process --demo --public-xref -o out/present-packet-xref
-"""
+"""Run the present-space process and write a packet. Never stamps."""
 
 from __future__ import annotations
 
@@ -12,6 +8,7 @@ from pathlib import Path
 
 from gat.adapters.ifcopenshell_adapter import inventory_identities_cse
 from gat.adapters.integrity_citation import kernel_citation, validate_citation
+from gat.corpus import load_corpus
 from gat.demo.present_space import (
     _DEMO_BIND,
     _DEMO_CAL,
@@ -141,10 +138,22 @@ def run_process(
             "citation": citation,
         },
     )
+    corpus = load_corpus()
+    _write(
+        output / "07-corpus.json",
+        {
+            "step": 7,
+            "name": "corpus",
+            "schema": corpus.document["schema"],
+            "space_in_corpus": package.get("corpus", {}).get("space_in_corpus"),
+            "needles": package.get("corpus", {}).get("needles"),
+            "invariants": [row.get("id") for row in corpus.invariants],
+        },
+    )
     steps = ["01-verify", "02-inventory", "03-package", "04-stamp-refused"]
     if public_xref:
         steps.append("05-public-xref")
-    steps.append("06-integrity-citation")
+    steps.extend(["06-integrity-citation", "07-corpus"])
     manifest = {
         "format": PROCESS,
         "steps": steps,
@@ -155,6 +164,7 @@ def run_process(
         "simulation": public_xref,
         "open_requests": package["open_requests"],
         "citations": [citation],
+        "corpus": package.get("corpus"),
     }
     _write(output / "00-manifest.json", manifest)
     return manifest
@@ -166,11 +176,7 @@ def main() -> None:
     )
     parser.add_argument("--demo", action="store_true")
     parser.add_argument("--lab", action="store_true")
-    parser.add_argument(
-        "--public-xref",
-        action="store_true",
-        help="simulate observation from public instrument specs + demo QTO",
-    )
+    parser.add_argument("--public-xref", action="store_true")
     parser.add_argument("--value", type=float)
     parser.add_argument("-o", "--output", default="out/present-packet")
     args = parser.parse_args()
@@ -184,8 +190,8 @@ def main() -> None:
     )
     print(f"wrote {args.output}")
     print(f"inspectability {manifest['inspectability']}")
+    print(f"corpus {manifest['corpus']}")
     print("stamp refused")
-    print(f"citation {manifest['citations'][0]['statement_digest'][:16]}... not a proof")
 
 
 if __name__ == "__main__":
