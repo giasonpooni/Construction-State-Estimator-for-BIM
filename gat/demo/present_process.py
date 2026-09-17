@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 from gat.adapters.ifcopenshell_adapter import inventory_identities_cse
+from gat.adapters.integrity_citation import kernel_citation, validate_citation
 from gat.demo.present_space import (
     _DEMO_BIND,
     _DEMO_CAL,
@@ -21,6 +22,7 @@ from gat.demo.present_space import (
 )
 from gat.harness.bundle import load_json
 from gat.session import GatSession
+from gat.sp1_kernel import host_callback
 
 PROCESS = "cse-present-process-v1"
 _REPO = Path(__file__).resolve().parents[2]
@@ -125,16 +127,34 @@ def run_process(
                 "observation": load_json(_PUBLIC_OBS),
             },
         )
+    kernel_receipt = host_callback(None)
+    kernel_receipt.write(output / "kernel_sp1_receipt.json")
+    citation = validate_citation(
+        kernel_citation(locator="kernel_sp1_receipt.json", is_proof=kernel_receipt.is_proof)
+    )
+    _write(
+        output / "06-integrity-citation.json",
+        {
+            "step": 6,
+            "name": "integrity-citation",
+            "note": "Pointer only. Proof bytes stay out of USD.",
+            "citation": citation,
+        },
+    )
+    steps = ["01-verify", "02-inventory", "03-package", "04-stamp-refused"]
+    if public_xref:
+        steps.append("05-public-xref")
+    steps.append("06-integrity-citation")
     manifest = {
         "format": PROCESS,
-        "steps": ["01-verify", "02-inventory", "03-package", "04-stamp-refused"]
-        + (["05-public-xref"] if public_xref else []),
+        "steps": steps,
         "inspectability": package["inspectability"],
         "verification_passed": package["verification"]["passed"],
         "may_authorize": False,
         "stamp": STAMP,
         "simulation": public_xref,
         "open_requests": package["open_requests"],
+        "citations": [citation],
     }
     _write(output / "00-manifest.json", manifest)
     return manifest
@@ -165,6 +185,7 @@ def main() -> None:
     print(f"wrote {args.output}")
     print(f"inspectability {manifest['inspectability']}")
     print("stamp refused")
+    print(f"citation {manifest['citations'][0]['statement_digest'][:16]}... not a proof")
 
 
 if __name__ == "__main__":
