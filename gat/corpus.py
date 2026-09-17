@@ -11,11 +11,38 @@ from pathlib import Path
 from typing import Mapping
 
 CORPUS_SCHEMA = "invariant-corpus-v1"
+CLAIM_SCOPE = "computational-integrity-only"
 _DEFAULT = Path(__file__).resolve().parents[1] / "validation" / "invariant-corpus-v1.json"
 
 
 class CorpusError(ValueError):
     """Name is not in the corpus. Inference must not invent it."""
+
+
+def validate_corpus_document(document: Mapping[str, object]) -> dict[str, object]:
+    if document.get("schema") != CORPUS_SCHEMA:
+        raise CorpusError("schema must be invariant-corpus-v1")
+    if document.get("claim_scope") != CLAIM_SCOPE:
+        raise CorpusError("corpus claim_scope must stay computational-integrity-only")
+    invariants = document.get("invariants")
+    free = document.get("free_coordinates")
+    if not isinstance(invariants, list) or not invariants:
+        raise CorpusError("corpus needs at least one invariant")
+    if not isinstance(free, list) or not free:
+        raise CorpusError("corpus needs at least one free coordinate")
+    seen: set[str] = set()
+    for row in list(invariants) + list(free):
+        if not isinstance(row, dict):
+            raise CorpusError("corpus rows must be objects")
+        ident = row.get("id")
+        if not isinstance(ident, str) or not ident:
+            raise CorpusError("corpus row needs an id")
+        if ident in seen:
+            raise CorpusError(f"duplicate corpus id {ident!r}")
+        seen.add(ident)
+    if not any(isinstance(row, dict) and str(row.get("id", "")).startswith("var.") for row in free):
+        raise CorpusError("free_coordinates must include a var.* needle")
+    return dict(document)
 
 
 @dataclass(frozen=True)
@@ -65,7 +92,6 @@ class Corpus:
         return frozenset(found)
 
     def needle(self, ident: str) -> dict[str, object]:
-        """Point at a free coordinate. Invariants are not residuals."""
         row = self.get(ident)
         if ident.startswith("var.") or row.get("quantity"):
             return {
@@ -79,11 +105,7 @@ class Corpus:
 
 def load_corpus(path: str | Path | None = None) -> Corpus:
     target = Path(path) if path is not None else _DEFAULT
-    document = json.loads(target.read_text(encoding="utf-8"))
-    if document.get("schema") != CORPUS_SCHEMA:
-        raise CorpusError("schema must be invariant-corpus-v1")
-    if document.get("claim_scope") != "computational-integrity-only":
-        raise CorpusError("corpus claim_scope must stay computational-integrity-only")
+    document = validate_corpus_document(json.loads(target.read_text(encoding="utf-8")))
     return Corpus(document, target)
 
 
