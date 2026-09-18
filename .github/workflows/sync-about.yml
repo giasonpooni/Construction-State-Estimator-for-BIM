@@ -1,8 +1,17 @@
 name: Sync About
 
-# Manual only. GITHUB_TOKEN cannot PATCH repository description/topics
-# (403 Resource not accessible by integration). The intended About text
-# lives in .github/repo-about.json for a human or a PAT with repo scope.
+# Manual only, deliberately. GITHUB_TOKEN can READ repository metadata but
+# cannot PATCH the description or topics (403 Resource not accessible by
+# integration): that needs administration:write, which the Actions token is
+# never granted. So applying the About text stays a human step, and this
+# workflow's job is to make the drift visible and hand over the exact
+# commands rather than only printing the intended values.
+#
+# It is not on the push path on purpose: the About panel is currently drifted,
+# so this job fails today, and the default branch's CI is meant to stay green.
+# Once the About matches .github/repo-about.json, adding
+#   push: {branches: [main]}
+# here turns it into a standing guard against silent re-drift.
 on:
   workflow_dispatch:
 
@@ -10,8 +19,19 @@ permissions:
   contents: read
 
 jobs:
-  print:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 -m json.tool .github/repo-about.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Show the intended About text
+        run: python3 -m json.tool .github/repo-about.json
+
+      - name: Compare the live About panel against it
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 validation/check_about.py
