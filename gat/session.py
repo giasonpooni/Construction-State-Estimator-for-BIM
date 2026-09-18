@@ -1,11 +1,4 @@
-"""GatSession: facade over compile / execute / ledger.
-
-    session = GatSession.load_ifc("model.ifc")
-    result = session.run(SetParameter(var, 3.4, design_sigma=0.01))
-
-The kernel is World + execute + ExecutionLedger. This object sequences
-them and owns the current world, trace, and ledger head.
-"""
+"""GatSession: facade over compile / execute / ledger."""
 
 from __future__ import annotations
 
@@ -13,6 +6,7 @@ from typing import Mapping
 
 from gat.adapters.ifc.lower import lower_ifc
 from gat.adapters.ifc.parser import IfcFile, parse_ifc_file
+from gat.adapters.ifc.scope import IfcLoweringScope
 from gat.adapters.openusd import (
     DEFAULT_OPENUSD_READ_LIMITS,
     OpenUsdKeyPair,
@@ -20,12 +14,14 @@ from gat.adapters.openusd import (
     read_openusd,
     write_openusd,
 )
+from gat.causal import AssessmentRecord, CausalRecord
 from gat.engine.executor import ExecutionResult, World, execute
 from gat.engine.transform import Transformation
 from gat.engine.verify import VerificationReport, run_invariants
-from gat.errors import GatError
+from gat.errors import GatError, LoweringError
 from gat.ids import VarId
-from gat.ledger import ExecutionLedger
+from gat.ir.core import Entity, Module
+from gat.ledger import ExecutionLedger, write_ledger
 from gat.trace import ExecutionTrace
 
 
@@ -50,14 +46,14 @@ class GatSession:
         self.initial_report = report
 
     @classmethod
-    def load_ifc(cls, path: str, scope=None) -> "GatSession":
+    def load_ifc(cls, path: str, scope: IfcLoweringScope | None = None) -> "GatSession":
         file = parse_ifc_file(path)
-        del scope
         module = lower_ifc(file, source=path)
+        if scope is not None:
+            module = _restrict_module(module, scope)
         return cls(World.compile(module), file)
 
-    def var(self, entity_name: str, quantity: str) -> VarId:
-        """Resolve one variable by entity display name plus quantity."""
+    def entity_by_name(self, entity_name: str) -> Entity:
         matches = [
             entity
             for entity in self.world.module.entities.values()
@@ -67,14 +63,16 @@ class GatSession:
             raise KeyError(
                 f"expected one entity named {entity_name!r}, found {len(matches)}"
             )
-        return matches[0].var(quantity)
+        return matches[0]
+
+    def var(self, entity_name: str, quantity: str) -> VarId:
+        return self.entity_by_name(entity_name).var(quantity)
 
     def run(
         self,
         transformation: Transformation,
         provenance: Mapping[str, object] | None = None,
     ) -> ExecutionResult:
-        """Apply one transformation under execute + ledger."""
         before = self.world
         try:
             result = execute(before, transformation)
@@ -103,6 +101,23 @@ class GatSession:
 
     def verify(self) -> VerificationReport:
         return run_invariants(self.world)
+
+    def export_ledger(self, path: str) -> str:
+        return write_ledger(self.ledger, path)
+
+    def record_assessment(
+        self,
+        record: AssessmentRecord,
+        provenance: Mapping[str, object] | None = None,
+    ):
+        return self.record_causal(record, provenance=provenance)
+
+    def record_causal(
+        self,
+        record: CausalRecord,
+        provenance: Mapping[str, object] | None = None,
+    ):
+        return self.ledger.record_causal(self.world, record, provenance=provenance)
 
     def export_openusd(
         self,
@@ -152,6 +167,37 @@ class GatSession:
             loaded.world.digest(),
         )
         return session
+
+
+def _restrict_module(module: Module, scope: IfcLoweringScope) -> Module:
+    present = {entity.id.global_id for entity in module.entities.values()}
+    missing = sorted(gid for gid in scope.include_global_ids if gid not in present)
+    if missing:
+        raise LoweringError(f"absent GlobalId in lowering scope: {missing}")
+    keep = {
+        eid
+        for eid, entity in module.entities.items()
+        if scope.admits(entity.id.global_id)
+    }
+    entities = {eid: entity for eid, entity in module.entities.items() if eid in keep}
+    rels = tuple(
+        rel for rel in module.rels if rel.source in keep and rel.target in keep
+    )
+    kept_ids = {eid.global_id for eid in keep}
+    constraints = []
+    for constraint in module.constraints:
+        blob = repr(constraint)
+        if any(gid not in kept_ids and gid in blob for gid in present - kept_ids):
+            continue
+        constraints.append(constraint)
+    meta = dict(module.meta)
+    meta["lowering_scope"] = sorted(scope.include_global_ids)
+    return Module(
+        entities=entities,
+        rels=rels,
+        constraints=tuple(constraints),
+        meta=meta,
+    )
 
 
 def _is_observation(transformation: Transformation) -> bool:
