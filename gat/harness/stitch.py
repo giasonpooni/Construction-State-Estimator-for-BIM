@@ -44,11 +44,27 @@ STITCH_SCHEMA = "cse-stitch-v1"
 PLANT_SCHEMA = "cse-plant-a-v1"
 RECEIPT_SCHEMA = "plsr-receipt-v1"
 
-#: Mirrored from the companion's frozen numeric law
-#: (lyapunov.constitution). Not imported: asserted equal by
-#: tests/test_stitch.py wherever the companion is importable.
+#: Mirrored from the companion's frozen numeric law (lyapunov.constitution).
+#: Not imported: asserted equal by tests/test_stitch.py wherever the companion
+#: is importable.
+#:
+#: A bare mirrored constant is only safe while someone can see it drifted, and in
+#: a deployment the companion is not checked out, so the agreement test cannot
+#: run. Every stitch record therefore reports the law it applied together with
+#: the commit these values were last read at, so a downstream reader can detect
+#: skew without having the companion at all.
+#:
+#: MIRRORED_AT is a verification pin, not an origin claim: it names the commit
+#: whose lyapunov.constitution was read and found equal to the values below. It
+#: does not claim that commit first fixed the law -- reading a shallow clone
+#: cannot establish that, and a pin that overstates what was checked is the
+#: failure this field exists to prevent.
 MAX_KRONECKER_DIM = 24
 SYMMETRY_ATOL = 1e-12
+MIRRORED_SOURCE = "giasonpooni/Parameterized-Lyapunov-Stability-Runtime"
+MIRRORED_MODULE = "lyapunov.constitution"
+MIRRORED_AT = "d98739e05e0d1bf38c86795ec5ae1a10b7a681c8"
+MIRRORED_FROM = f"{MIRRORED_SOURCE}@{MIRRORED_AT[:8]}"
 
 #: The companion's certificate verdicts, from lyapunov.runtime.verdict. Lower
 #: case, and these exact four. LYAPUNOV_SAMPLE and SUFFICIENT_COMMON_QUADRATIC
@@ -300,6 +316,19 @@ def stitch(
              "cited": cite_document is not None,
              "may_authorize": False},
         ],
+        "law_applied": {
+            "max_kronecker_dim": MAX_KRONECKER_DIM,
+            "symmetry_atol": SYMMETRY_ATOL,
+            "mirrored_from": MIRRORED_FROM,
+            "mirrored_module": MIRRORED_MODULE,
+            "verified_equal_at": MIRRORED_AT,
+            "note": (
+                "mirrored, not imported. verified_equal_at names the commit "
+                "these values were read at, not the commit that fixed them. "
+                "compare against the companion's lyapunov.constitution to "
+                "detect skew."
+            ),
+        },
         "composes": True,
         "not_claimed": [
             "a certified sample is not an ACCEPT",

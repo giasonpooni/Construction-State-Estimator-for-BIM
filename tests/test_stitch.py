@@ -194,6 +194,48 @@ class JoinTests(unittest.TestCase):
                     {"may_authorize": False, "support_code": "stability"},
                 )
 
+    def test_the_record_reports_the_law_it_applied(self) -> None:
+        # A deployment has no companion checked out, so the agreement test cannot
+        # run there. The record has to carry the law and its provenance instead.
+        from gat.harness.stitch import (
+            MIRRORED_AT,
+            MIRRORED_FROM,
+            MIRRORED_MODULE,
+            SYMMETRY_ATOL,
+        )
+
+        plant = _plant()
+        law = stitch(plant, _receipt(plant))["law_applied"]
+        self.assertEqual(law["max_kronecker_dim"], MAX_KRONECKER_DIM)
+        self.assertEqual(law["symmetry_atol"], SYMMETRY_ATOL)
+        self.assertEqual(law["mirrored_from"], MIRRORED_FROM)
+        self.assertEqual(law["mirrored_module"], MIRRORED_MODULE)
+        self.assertEqual(law["verified_equal_at"], MIRRORED_AT)
+        self.assertIn("not imported", law["note"])
+
+    def test_the_mirror_pin_is_a_resolvable_commit(self) -> None:
+        # The first pin written here cited a commit that did not exist in the
+        # companion at all. A pin nobody can resolve is decoration, so the shape
+        # is checked: a full 40-hex sha, and the short form actually abbreviates
+        # it rather than being typed independently.
+        from gat.harness.stitch import MIRRORED_AT, MIRRORED_FROM, MIRRORED_SOURCE
+
+        self.assertEqual(len(MIRRORED_AT), 40, "pin must be a full sha")
+        self.assertTrue(
+            all(character in "0123456789abcdef" for character in MIRRORED_AT),
+            "pin must be lower-case hex",
+        )
+        self.assertEqual(MIRRORED_FROM, f"{MIRRORED_SOURCE}@{MIRRORED_AT[:8]}")
+        self.assertNotIn("/", MIRRORED_AT)
+
+    def test_the_record_does_not_claim_the_pin_fixed_the_law(self) -> None:
+        # verified_equal_at says "read here and found equal", which is what was
+        # actually done. Claiming the commit introduced the constant would be a
+        # provenance claim no shallow read can support.
+        plant = _plant()
+        law = stitch(plant, _receipt(plant))["law_applied"]
+        self.assertIn("not the commit that fixed them", law["note"])
+
     def test_what_the_record_refuses_to_claim(self) -> None:
         plant = _plant()
         record = stitch(plant, _receipt(plant))

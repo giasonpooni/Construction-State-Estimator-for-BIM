@@ -55,6 +55,17 @@ prose refuses nothing.
   companion's frozen constants are mirrored and `tests/test_stitch.py` asserts
   they agree wherever the companion is importable — the same agreement-not-import
   pattern as the JSPT ownership pin.
+
+  A mirror needs a version, because the agreement test cannot run where the
+  companion is not checked out, which is every deployment. So every record
+  carries `law_applied`: the two constants it used, the module they were read
+  from, and `verified_equal_at` — the companion commit they were read at. That
+  field is a verification pin, not an origin claim: it says "read here, found
+  equal", not "this commit fixed the law". The distinction is not pedantry. The
+  first pin written here named a commit that did not exist in the companion at
+  all, and nothing caught it until the checkout was consulted; `tests/test_stitch.py`
+  now checks the pin's shape so an unresolvable one fails at home instead of
+  travelling in an artifact.
 - **It computes nothing.** No Jacobian, no Lyapunov solve, no device. A stitcher
   that also computed would be the megascript this avoids. The linear bulk belongs
   inside one kernel with an oracle match test, the way the sparse-belief exit test
