@@ -21,11 +21,13 @@ import json
 from pathlib import Path
 from typing import Mapping
 
+from gat.artifact_paths import validation_artifact
+
 CORPUS_SCHEMA = "invariant-corpus-v2"
 LEGACY_CORPUS_SCHEMAS = ("invariant-corpus-v1",)
 CHART_PREFIX = "chart."
 CLAIM_SCOPE = "computational-integrity-only"
-_DEFAULT = Path(__file__).resolve().parents[1] / "validation" / "invariant-corpus-v2.json"
+CORPUS_FILE = "invariant-corpus-v2.json"
 
 
 class CorpusError(ValueError):
@@ -159,7 +161,7 @@ class Corpus:
 
 
 def load_corpus(path: str | Path | None = None) -> Corpus:
-    target = Path(path) if path is not None else _DEFAULT
+    target = Path(path) if path is not None else validation_artifact(CORPUS_FILE)
     document = validate_corpus_document(json.loads(target.read_text(encoding="utf-8")))
     return Corpus(document, target)
 

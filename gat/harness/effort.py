@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Mapping
 
 from gat.adapters.external_commitment import canonical_digest
+from gat.artifact_paths import validation_artifact
 
 EFFORT_FORMAT = "satellite-effort-v1"
 PYTHON_AUTHORITY = "python"
@@ -27,9 +28,7 @@ KNOWN_SATELLITES = frozenset(
         "dense_sigma_rebuild",
     }
 )
-_DEFAULT_TABLE = (
-    Path(__file__).resolve().parents[2] / "validation" / "satellite-effort-v1.json"
-)
+EFFORT_TABLE_FILE = "satellite-effort-v1.json"
 
 
 @dataclass(frozen=True)
@@ -67,7 +66,8 @@ def _read_object(path: str | Path) -> dict[str, object]:
 
 
 def load_effort_table(path: str | Path | None = None) -> dict[str, object]:
-    table = _read_object(path or _DEFAULT_TABLE)
+    target = Path(path) if path is not None else validation_artifact(EFFORT_TABLE_FILE)
+    table = _read_object(target)
     if table.get("format") != EFFORT_FORMAT:
         raise ValueError("effort table format must be satellite-effort-v1")
     satellites = table.get("satellites")
