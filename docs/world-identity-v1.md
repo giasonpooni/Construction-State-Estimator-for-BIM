@@ -37,10 +37,38 @@ spelling.** Two checkouts of this repo at different absolute paths produce
 `validation/opening-fit-disposition-v1.json` and
 `validation/opening-fit-design-review-disposition-v1.json` pin
 `world_digest: be62ab70…` and `case_digest: 548200b5…`. No current path form
-reproduces those, and nothing in the tree reads either file — so the
-opening-fit replay, which is one of the two dispositions the kernel freeze
-protects, has been unverifiable rather than verified. Re-pinning it is a
-version bump, not a repair, so it is left as it stands and recorded here.
+reproduces those — so the opening-fit replay, which is one of the two
+dispositions the kernel freeze protects, has been unverifiable rather than
+verified. Re-pinning it is a version bump, not a repair, so it is left as it
+stands and recorded here.
+
+A second defect surfaced in the same pair, and it is not about paths. The
+design-review pin carries
+
+```json
+"policy_id": "design-review-v1",
+"disposition": "ACCEPT",
+"evidence_receipt_ids": [],
+"reasons": ["all checks are satisfied and required evidence is verified"]
+```
+
+No evidence was verified, and under `design-review-v1` none was required. The
+sentence was produced by a single `else` branch in
+`evaluate_acceptance_case` that ran whether or not the policy required
+evidence. The branch is now split, so a design-review `ACCEPT` says that the
+policy does not require verified as-built evidence, and every outcome carries
+`evidence_required_for_accept` — because two `ACCEPT`s can mean different
+things and a downstream reader has only the record.
+
+The shipped pins are not regenerated: their re-pin is the same kernel version
+bump as the path issue above, and bundling a correctness fix into a frozen
+replay silently is the thing the freeze exists to stop.
+`tests/test_workflow_acceptance.py::ShippedPinDriftTests` asserts both halves
+instead — that the file still carries the stale sentence, and that the runtime
+can no longer emit it — so the disagreement is in the suite rather than in
+nobody's head. `tests/test_bcf_export.py` reads the design-review pin as an
+export fixture (it is the `ACCEPT` that must refuse to produce a BCF topic),
+which is a use of its disposition, not of its digests.
 
 ## The portable identity
 
