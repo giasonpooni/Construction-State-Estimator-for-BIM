@@ -15,9 +15,13 @@ stdlib unittest only.
 
 from __future__ import annotations
 
+import hashlib
 import os
+import sys
 import unittest
 from pathlib import Path
+
+import numpy
 
 from gat.adapters.portable_identity import (
     IDENTITY_SCHEMA,
@@ -145,12 +149,31 @@ class WorldIdentityRecordTests(unittest.TestCase):
     def test_computing_the_identity_does_not_move_the_frozen_digest(self) -> None:
         # Additive means additive: the kernel's own digest for the relative
         # spelling CI uses must be exactly what it has always been.
+        #
+        # World.digest() is sha256 over three things -- the module digest, then
+        # full.mu and full.sigma as raw float64 bytes. A bare "a != b" on the
+        # composite says a digest moved and nothing about which part moved, and
+        # the three parts fail for completely different reasons: the module for
+        # a lowering or path-spelling change, mu and sigma for float arithmetic
+        # that differs by machine, BLAS build, or numpy version. So report all
+        # three. A refusal that does not say what to look at is a crash with
+        # better manners.
         session = GatSession.load_ifc("gat/demo/model.ifc")
         world_identity(session.world)
         portable_world_digest(session.world)
+        world = session.world
+        parts = (
+            f"module={world.module.digest()} "
+            f"mu={hashlib.sha256(world.full.mu.tobytes()).hexdigest()} "
+            f"sigma={hashlib.sha256(world.full.sigma.tobytes()).hexdigest()} "
+            f"mu_shape={world.full.mu.shape} sigma_shape={world.full.sigma.shape} "
+            f"source={world.module.meta.get('source')!r} "
+            f"numpy={numpy.__version__} python={sys.version.split()[0]}"
+        )
         self.assertEqual(
-            session.world.digest(),
+            world.digest(),
             "020383e8c426afc5cb5385de429c5a6b4fd98416c060ee16122b3ea98a2c30f5",
+            parts,
         )
 
 
