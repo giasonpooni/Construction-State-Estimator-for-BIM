@@ -19,7 +19,7 @@ from gat.engine.executor import ExecutionResult, World, execute
 from gat.engine.transform import Transformation
 from gat.engine.verify import VerificationReport, run_invariants
 from gat.errors import GatError, LoweringError
-from gat.ids import VarId
+from gat.ids import EntityId, VarId
 from gat.ir.core import Entity, Module
 from gat.ledger import ExecutionLedger, write_ledger
 from gat.trace import ExecutionTrace
@@ -53,7 +53,16 @@ class GatSession:
             module = _restrict_module(module, scope)
         return cls(World.compile(module), file)
 
-    def entity_by_name(self, entity_name: str) -> Entity:
+    def entity_by_name(self, entity_name: str) -> EntityId:
+        """Resolve a unique entity *name* to its canonical :class:`EntityId`.
+
+        Callers key modules, build ``VarId``s, and construct engineering
+        checks off the result, so the identity - not the ``Entity`` record -
+        is the contract.  ``Entity`` carries mappings and is therefore
+        unhashable; returning it here poisons every downstream dict lookup.
+        Use ``self.world.module.entity(...)`` when the record itself is
+        wanted.
+        """
         matches = [
             entity
             for entity in self.world.module.entities.values()
@@ -63,10 +72,10 @@ class GatSession:
             raise KeyError(
                 f"expected one entity named {entity_name!r}, found {len(matches)}"
             )
-        return matches[0]
+        return matches[0].id
 
     def var(self, entity_name: str, quantity: str) -> VarId:
-        return self.entity_by_name(entity_name).var(quantity)
+        return VarId(self.entity_by_name(entity_name), quantity)
 
     def run(
         self,
