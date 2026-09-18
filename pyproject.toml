@@ -7,7 +7,7 @@ name = "gat-bim"
 version = "0.1.0"
 description = "CSE: portable evidence-to-decision runtime for BIM"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Notation Systems" }]
 keywords = ["BIM", "IFC", "CSE", "gaussian", "uncertainty", "compiler", "architecture", "verification"]
@@ -15,8 +15,8 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
 ]
 dependencies = ["numpy>=1.24"]

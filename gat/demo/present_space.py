@@ -61,7 +61,7 @@ def _corpus_block(space_global_id: str | None) -> dict[str, object]:
         extra.append(
             {
                 "code": "corpus.identity",
-                "asks_for": "space GlobalId listed in invariant-corpus-v1",
+                "asks_for": "space GlobalId listed in invariant-corpus-v2",
             }
         )
     return {

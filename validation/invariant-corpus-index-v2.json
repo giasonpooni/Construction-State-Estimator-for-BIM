@@ -1,0 +1,135 @@
+{
+  "schema": "invariant-corpus-index-v2",
+  "claim_scope": "computational-integrity-only",
+  "canonical": "giasonpooni/Construction-State-Estimator-for-BIM",
+  "rule": "each repo keeps local I. none import another runtime. a needle is only unique with its chart.",
+  "members": [
+    {
+      "repo": "Construction-State-Estimator-for-BIM",
+      "role": "canonical",
+      "needles": [
+        "var.opening-width"
+      ],
+      "charts": {
+        "var.opening-width": "chart.cse-ifc-space"
+      }
+    },
+    {
+      "repo": "Fluid-State-Reconstruction-Testbed",
+      "role": "cite",
+      "needles": [
+        "var.storage"
+      ],
+      "charts": {
+        "var.storage": "chart.fsrt-balance"
+      }
+    },
+    {
+      "repo": "Jacobian-Sensitivity-Propagation-Testbed",
+      "role": "cite",
+      "needles": [
+        "var.dx"
+      ],
+      "charts": {
+        "var.dx": "chart.jspt-tangent"
+      }
+    },
+    {
+      "repo": "Parameterized-Lyapunov-Stability-Runtime",
+      "role": "cite",
+      "needles": [
+        "var.x"
+      ],
+      "charts": {
+        "var.x": "chart.plsr-plant"
+      }
+    },
+    {
+      "repo": "Geodesic-Flow-and-Jacobi-Field-Testbed",
+      "role": "cite",
+      "needles": [
+        "var.jacobi"
+      ],
+      "charts": {
+        "var.jacobi": "chart.gfjft-flow"
+      }
+    },
+    {
+      "repo": "Flat-Torus-Moduli-and-Geodesic-Explorer",
+      "role": "cite",
+      "needles": [
+        "var.geodesic-point"
+      ],
+      "charts": {
+        "var.geodesic-point": "chart.ftmge-lattice"
+      }
+    },
+    {
+      "repo": "Retrofitted-Computational-Instrumentation",
+      "role": "cite",
+      "needles": [
+        "var.indicated"
+      ],
+      "charts": {
+        "var.indicated": "chart.rci-indication"
+      }
+    },
+    {
+      "repo": "CNC-Machine-MCP",
+      "role": "cite",
+      "needles": [
+        "var.pose"
+      ],
+      "charts": {
+        "var.pose": "chart.cnc-axis"
+      }
+    },
+    {
+      "repo": "Atelier-MCP",
+      "role": "cite",
+      "needles": [
+        "var.stock"
+      ],
+      "charts": {
+        "var.stock": "chart.atelier-stock"
+      }
+    },
+    {
+      "repo": "Geodesic-Telemetry-Engine",
+      "role": "cite",
+      "needles": [
+        "var.state"
+      ],
+      "charts": {
+        "var.state": "chart.gte-manifold"
+      }
+    },
+    {
+      "repo": "State-Estimation-Testbed",
+      "role": "cite",
+      "needles": [
+        "var.x"
+      ],
+      "charts": {
+        "var.x": "chart.set-observation"
+      }
+    },
+    {
+      "repo": "Lattice-Calibration-Module",
+      "role": "cite",
+      "needles": [
+        "var.local-estimate"
+      ],
+      "charts": {
+        "var.local-estimate": "chart.lcm-constraint"
+      }
+    }
+  ],
+  "excluded": [
+    "third-party forks",
+    "PINN copies",
+    "Godot bindings",
+    "archived experiments"
+  ],
+  "chart_rule": "charts are globally unique. two members may declare the same needle id only in different charts, and a quantity may not be read across charts without the transport law JSPT owns (see validation/jspt-pin-v1.json)."
+}

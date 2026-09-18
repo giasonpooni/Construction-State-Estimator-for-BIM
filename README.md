@@ -65,7 +65,7 @@ gat-headless request.json -o response.json
 ```
 
 `--demo` binds the shipped instrument and torus *fixtures* to the Beam-B1
-pin. Those fixtures are not field evidence. Python 3.11+.
+pin. Those fixtures are not field evidence. Python 3.12+.
 
 Optional extras after the editable install:
 

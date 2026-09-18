@@ -1,6 +1,17 @@
 """Invariant reference corpus.
 
 I is declared identity. Inference may only needle names that already sit in I.
+
+v2 adds ``chart`` to every free coordinate. A needle names a quantity that is
+free until a declaration fixes it; the chart names the coordinate system that
+declaration fixes it *in*. Without it a needle id is ambiguous across the
+portfolio: PLSR and the State-Estimation-Testbed both declare ``var.x`` with
+quantity ``state``, but one is fixed by a declared plant A and the other by a
+declared observation H, so they are not the same coordinate and a covariance
+on one may not be read as a covariance on the other.
+
+v1 documents still load, so sibling corpora can migrate independently, but
+they carry no chart and nothing may assume one.
 """
 
 from __future__ import annotations
@@ -10,9 +21,11 @@ import json
 from pathlib import Path
 from typing import Mapping
 
-CORPUS_SCHEMA = "invariant-corpus-v1"
+CORPUS_SCHEMA = "invariant-corpus-v2"
+LEGACY_CORPUS_SCHEMAS = ("invariant-corpus-v1",)
+CHART_PREFIX = "chart."
 CLAIM_SCOPE = "computational-integrity-only"
-_DEFAULT = Path(__file__).resolve().parents[1] / "validation" / "invariant-corpus-v1.json"
+_DEFAULT = Path(__file__).resolve().parents[1] / "validation" / "invariant-corpus-v2.json"
 
 
 class CorpusError(ValueError):
@@ -20,8 +33,10 @@ class CorpusError(ValueError):
 
 
 def validate_corpus_document(document: Mapping[str, object]) -> dict[str, object]:
-    if document.get("schema") != CORPUS_SCHEMA:
-        raise CorpusError("schema must be invariant-corpus-v1")
+    schema = document.get("schema")
+    if schema != CORPUS_SCHEMA and schema not in LEGACY_CORPUS_SCHEMAS:
+        accepted = ", ".join((CORPUS_SCHEMA,) + LEGACY_CORPUS_SCHEMAS)
+        raise CorpusError(f"schema must be one of {accepted}")
     if document.get("claim_scope") != CLAIM_SCOPE:
         raise CorpusError("corpus claim_scope must stay computational-integrity-only")
     invariants = document.get("invariants")
@@ -42,6 +57,15 @@ def validate_corpus_document(document: Mapping[str, object]) -> dict[str, object
         seen.add(ident)
     if not any(isinstance(row, dict) and str(row.get("id", "")).startswith("var.") for row in free):
         raise CorpusError("free_coordinates must include a var.* needle")
+    if schema == CORPUS_SCHEMA:
+        for row in free:
+            chart = row.get("chart")
+            if not isinstance(chart, str) or not chart.startswith(CHART_PREFIX):
+                raise CorpusError(
+                    f"free coordinate {row.get('id')!r} needs a "
+                    f"{CHART_PREFIX}* chart naming the coordinate system its "
+                    "declaration fixes it in"
+                )
     return dict(document)
 
 
@@ -91,11 +115,42 @@ class Corpus:
                 found.append(guid)
         return frozenset(found)
 
+    @property
+    def schema(self) -> str:
+        schema = self.document.get("schema")
+        return schema if isinstance(schema, str) else ""
+
+    def chart_of(self, ident: str) -> str:
+        """The coordinate system ``ident`` is expressed in.
+
+        Raises on a v1 corpus: a legacy document declares no chart, and
+        guessing one is exactly the conflation this field exists to stop.
+        """
+        row = self.get(ident)
+        chart = row.get("chart")
+        if not isinstance(chart, str) or not chart:
+            raise CorpusError(
+                f"{ident!r} declares no chart; {self.path.name} is "
+                f"{self.schema or 'unversioned'}, not {CORPUS_SCHEMA}"
+            )
+        return chart
+
+    def charts(self) -> dict[str, str]:
+        """Every free coordinate that declares a chart, needle -> chart."""
+        found: dict[str, str] = {}
+        for row in self.free_coordinates:
+            ident, chart = row.get("id"), row.get("chart")
+            if isinstance(ident, str) and isinstance(chart, str) and chart:
+                found[ident] = chart
+        return found
+
     def needle(self, ident: str) -> dict[str, object]:
         row = self.get(ident)
         if ident.startswith("var.") or row.get("quantity"):
+            chart = row.get("chart")
             return {
                 "coordinate": ident,
+                "chart": chart if isinstance(chart, str) else None,
                 "row": row,
                 "in_corpus": True,
                 "may_observe": True,

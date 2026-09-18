@@ -1,5 +1,5 @@
 {
-  "schema": "invariant-corpus-v1",
+  "schema": "invariant-corpus-v2",
   "role": "declared identity of the plant. inference needles free coordinates only.",
   "claim_scope": "computational-integrity-only",
   "not": [
@@ -56,7 +56,10 @@
       "id": "pin.chain-jvp-i32",
       "kind": "numeric",
       "kernel": "chain_jvp_i32",
-      "y": [5, 3]
+      "y": [
+        5,
+        3
+      ]
     },
     {
       "id": "gate.sp1-refuse",
@@ -73,9 +76,14 @@
   "free_coordinates": [
     {
       "id": "var.opening-width",
+      "chart": "chart.cse-ifc-space",
       "owner": "id.opening-17",
       "quantity": "OverallWidth",
-      "needs": ["cal.declared", "bind.point_to_guid", "observe"]
+      "needs": [
+        "cal.declared",
+        "bind.point_to_guid",
+        "observe"
+      ]
     }
   ]
 }
