@@ -11,6 +11,7 @@
     gat view    model.ifc -o viewer.html         offline 3D viewer (+ --decision overlay, --audit)
     gat workbench model.ifc -o page.html       offline Workbench: eight modes, one identity
     gat bcf     disposition.json -o out.bcfzip  export a disposition as BCF 2.1
+    gat stitch  A.json receipt.json             type an instrument sequence; 2 on a type miss
 
 Every command is deterministic and never mutates the model.  ``--json``
 (where offered) switches to machine-readable output.
@@ -139,6 +140,27 @@ def _bind_decision(command: str, args: argparse.Namespace):
                 ) from exc
             raise
     return session, model_path, decision, request, response
+
+
+def _run_stitch(args: argparse.Namespace) -> int:
+    from gat.harness.stitch import StitchError, stitch_files
+
+    try:
+        record = stitch_files(args.plant, args.receipt, args.cite)
+    except StitchError as error:
+        # A type miss is a refusal, not a crash: the sequence stops and says why.
+        print(f"gat: the sequence does not compose: {error}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(record, indent=2, sort_keys=True))
+        return 0
+    for stage in record["sequence"]:
+        detail = {k: v for k, v in stage.items() if k != "stage"}
+        print(f"  {stage['stage']:12s} {detail}")
+    print("composes")
+    for line in record["not_claimed"]:
+        print(f"  not claimed: {line}")
+    return 0
 
 
 def _run_bcf(args: argparse.Namespace) -> int:
@@ -564,6 +586,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit a self-contained, script-free HTML timeline",
     )
     p.set_defaults(handler=_run_ledger)
+
+    p = commands.add_parser(
+        "stitch",
+        help="check that an instrument sequence types; refuse at the join",
+    )
+    p.add_argument("plant", help="A.json: the plant artifact (A = J(x*))")
+    p.add_argument("receipt", help="the certificate receipt for that exact A")
+    p.add_argument("--cite", help="optional disposition citing the certificate")
+    p.add_argument("--json", action="store_true", help="machine-readable record")
+    p.set_defaults(handler=_run_stitch)
 
     p = commands.add_parser(
         "bcf",

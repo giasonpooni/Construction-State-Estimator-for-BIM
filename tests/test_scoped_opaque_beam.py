@@ -148,6 +148,38 @@ class DeclaredFallbackGateTests(unittest.TestCase):
         )
 
 
+class LengthOnlyClosesNothingTests(unittest.TestCase):
+    """A scoped opaque beam cannot close anything, by absence and by gate."""
+
+    def test_length_only_is_insufficient_for_every_check_kind(self) -> None:
+        from gat.workflows.geometry_authority import (
+            authority_from_beam_status,
+            geometry_sufficient,
+        )
+
+        authority = authority_from_beam_status("LENGTH_ONLY")
+        for kind in ("CLEARANCE", "DIFFERENCE", "MINIMUM"):
+            self.assertFalse(geometry_sufficient(kind, authority), kind)
+        # A scan receipt is the documented upgrade, and only for clearance.
+        self.assertTrue(geometry_sufficient("CLEARANCE", authority, scan_covered=True))
+
+    def test_a_capacity_check_on_such_a_beam_is_refused(self) -> None:
+        from gat.engineering.beam import BeamBendingCheck, BeamBendingEvaluator
+
+        session = GatSession.from_text(
+            _unannotated(),
+            "unannotated-beam.ifc",
+            scope=IfcLoweringScope(frozenset({BEAM_ID})),
+        )
+        eid = next(iter(session.world.module.entities))
+        self.assertEqual(sorted(session.world.module.entities[eid].slots), ["Length"])
+        with self.assertRaisesRegex(ValueError, "structural contract"):
+            BeamBendingEvaluator().evaluate(
+                session.world,
+                BeamBendingCheck(eid, 301_000.0, 0.95, "capacity on a length-only beam"),
+            )
+
+
 @unittest.skipUnless(CORPUS, "public IFC corpus not fetched")
 class ClinicScopedWorldPinTests(unittest.TestCase):
     """Hold the public-model behaviour to validation/clinic-w460x60-scoped-world-v1.json."""
