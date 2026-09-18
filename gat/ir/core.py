@@ -159,6 +159,14 @@ class Entity:
     placement: Placement | None = None
     source_ref: int | None = None
 
+    @property
+    def ifc_class(self) -> str:
+        return self.id.ifc_class
+
+    @property
+    def global_id(self) -> str:
+        return self.id.global_id
+
     def var(self, quantity: str) -> VarId:
         return VarId(self.id, quantity)
 
@@ -182,8 +190,6 @@ class Module:
         self.entities = dict(sorted(self.entities.items()))
         self.rels = tuple(sorted(self.rels, key=Rel.sort_key))
         self.constraints = tuple(sorted(self.constraints, key=_constraint_sort_key))
-
-    # -- queries -----------------------------------------------------------
 
     def entity(self, eid: EntityId) -> Entity:
         return self.entities[eid]
