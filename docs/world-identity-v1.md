@@ -32,6 +32,13 @@ It does mean one thing that matters for the portfolio: **a pinned
 spelling.** Two checkouts of this repo at different absolute paths produce
 `ae337184…` and `53ef806a…` for the same file.
 
+> **Path spelling is not the only thing a pin carries.** Every digest in the
+> table above is also a fact about this container's processor. `World.digest()`
+> ends in the full-view covariance's float64 bytes, BLAS sums those in a
+> CPU-dependent order, and the first row is `020383e8…` here and `6df20d41…` on
+> a Haswell-class core. `docs/digest-portability-v1.md` has the measurements and
+> what it costs. Read this page as the path half of one problem.
+
 ## What that cost, concretely
 
 `validation/opening-fit-disposition-v1.json` and

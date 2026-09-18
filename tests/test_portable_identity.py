@@ -146,34 +146,95 @@ class WorldIdentityRecordTests(unittest.TestCase):
     def test_record_says_which_one_to_cite(self) -> None:
         self.assertIn("portable", self.record["rule"])
 
-    def test_computing_the_identity_does_not_move_the_frozen_digest(self) -> None:
-        # Additive means additive: the kernel's own digest for the relative
-        # spelling CI uses must be exactly what it has always been.
-        #
-        # World.digest() is sha256 over three things -- the module digest, then
-        # full.mu and full.sigma as raw float64 bytes. A bare "a != b" on the
-        # composite says a digest moved and nothing about which part moved, and
-        # the three parts fail for completely different reasons: the module for
-        # a lowering or path-spelling change, mu and sigma for float arithmetic
-        # that differs by machine, BLAS build, or numpy version. So report all
-        # three. A refusal that does not say what to look at is a crash with
-        # better manners.
+    def test_computing_the_identity_does_not_move_the_module_digest_or_the_mean(
+        self,
+    ) -> None:
+        """Pin the two parts of World.digest() that are facts about the model.
+
+        This test used to pin the composite world digest to
+        020383e8..., and CI proved that wrong. World.digest() is sha256 over
+        three things -- the module digest, then full.mu and full.sigma as raw
+        float64 bytes -- and the third is not reproducible across machines.
+        Measured here by forcing OpenBLAS kernels with OPENBLAS_CORETYPE:
+
+            SKYLAKEX     020383e8...   (this container, and the old pin)
+            HASWELL      6df20d41...   (what CI reported)
+            ZEN          6df20d41...
+            SANDYBRIDGE  b18ff0a9...
+            NEHALEM      c4a8d1b7...
+
+        Four digests, one file, one numpy, one Python. The cause is last-bit
+        reassociation in the BLAS that builds the full-view covariance:
+        SKYLAKEX against HASWELL differs in 2 of 3969 entries, by at most
+        1.920e-16 relative, which is 0.86 eps. Numerically nothing; to sha256,
+        a different world.
+
+        So the module digest and the mean are pinned exactly -- both were
+        bit-identical under all five kernels -- and the covariance is not. See
+        docs/digest-portability-v1.md.
+        """
         session = GatSession.load_ifc("gat/demo/model.ifc")
         world_identity(session.world)
         portable_world_digest(session.world)
         world = session.world
-        parts = (
-            f"module={world.module.digest()} "
-            f"mu={hashlib.sha256(world.full.mu.tobytes()).hexdigest()} "
-            f"sigma={hashlib.sha256(world.full.sigma.tobytes()).hexdigest()} "
-            f"mu_shape={world.full.mu.shape} sigma_shape={world.full.sigma.shape} "
+        context = (
             f"source={world.module.meta.get('source')!r} "
             f"numpy={numpy.__version__} python={sys.version.split()[0]}"
         )
         self.assertEqual(
-            world.digest(),
-            "020383e8c426afc5cb5385de429c5a6b4fd98416c060ee16122b3ea98a2c30f5",
-            parts,
+            world.module.digest(),
+            "cec15f081dfe1c9f6032ed492d2e0e238ab69566eda6be3db51f00552ab2e225",
+            context,
+        )
+        self.assertEqual(
+            hashlib.sha256(world.full.mu.tobytes()).hexdigest(),
+            "cf76cfddbb404f5955630410fc64035ec41fef688da40f60c3fc15cae7f06f0f",
+            context,
+        )
+        self.assertEqual(world.full.mu.shape, (63,))
+        self.assertEqual(world.full.sigma.shape, (63, 63))
+
+    def test_the_world_digest_is_that_composition_and_nothing_else(self) -> None:
+        # Recomposing it by hand is what licenses the claim above: if the
+        # composition ever grows a fourth input, the reasoning about which parts
+        # are portable stops holding and this fails.
+        world = GatSession.load_ifc("gat/demo/model.ifc").world
+        recomposed = hashlib.sha256()
+        recomposed.update(world.module.digest().encode())
+        recomposed.update(world.full.mu.tobytes())
+        recomposed.update(world.full.sigma.tobytes())
+        self.assertEqual(world.digest(), recomposed.hexdigest())
+
+    def test_one_ulp_in_the_covariance_moves_the_whole_world_digest(self) -> None:
+        # The mechanism, stated so it cannot be mistaken for flakiness. This
+        # holds on every machine, which is exactly why the composite cannot be
+        # pinned on any of them.
+        world = GatSession.load_ifc("gat/demo/model.ifc").world
+        nudged = world.full.sigma.copy()
+        self.assertNotEqual(nudged[0, 0], 0.0, "need a nonzero entry to nudge")
+        nudged[0, 0] = numpy.nextafter(nudged[0, 0], numpy.inf)
+
+        relative = abs(nudged[0, 0] - world.full.sigma[0, 0]) / abs(
+            world.full.sigma[0, 0]
+        )
+        self.assertLess(relative, numpy.finfo(numpy.float64).eps)
+
+        after = hashlib.sha256()
+        after.update(world.module.digest().encode())
+        after.update(world.full.mu.tobytes())
+        after.update(nudged.tobytes())
+        self.assertNotEqual(world.digest(), after.hexdigest())
+
+    def test_the_digest_is_stable_within_one_machine(self) -> None:
+        # What the freeze can actually rely on: replay on the same machine. Two
+        # independent lowerings of the same file agree bit for bit.
+        first = GatSession.load_ifc("gat/demo/model.ifc").world
+        second = GatSession.load_ifc("gat/demo/model.ifc").world
+        self.assertEqual(first.digest(), second.digest())
+        self.assertEqual(
+            first.full.sigma.tobytes(),
+            second.full.sigma.tobytes(),
+            "same machine, same bytes -- if this fails the problem is not BLAS",
         )
 
 

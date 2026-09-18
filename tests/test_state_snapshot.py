@@ -183,6 +183,38 @@ class StateSnapshotTests(unittest.TestCase):
             "raw belief covariance", tuple(check.name for check in report.failures)
         )
 
+    def test_the_raw_belief_survives_a_round_trip_bit_for_bit(self) -> None:
+        """The part of the snapshot that is portable, pinned as such.
+
+        reconstruct_snapshot also compares world.digest(), which ends in the
+        full view's float64 bytes and is therefore a property of the BLAS kernel
+        -- under OPENBLAS_CORETYPE=NEHALEM this exact sequence makes
+        read_snapshot refuse a file export_snapshot had just written, in one
+        process. See docs/digest-portability-v1.md.
+
+        The raw belief is different: its mean and covariance were bit-identical
+        under NEHALEM, SANDYBRIDGE, HASWELL, SKYLAKEX and ZEN, before and after
+        a transformation, and they survive the snapshot's decimal text exactly.
+        That is the invariant worth asserting, so assert it here rather than
+        leaving it as a thing the digest check happens to imply.
+        """
+        session = GatSession.load_ifc(MODEL)
+        session.run(
+            ObserveQuantity.single(
+                session.var("Office-A", "Volume"), 59.4, noise_sigma=0.05
+            )
+        )
+        before = session.world.belief
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "t1.gat.json")
+            session.export_snapshot(path)
+            after = GatSession.load_snapshot(path).world.belief
+
+        self.assertEqual(before.mu.tobytes(), after.mu.tobytes())
+        self.assertEqual(before.sigma.tobytes(), after.sigma.tobytes())
+        self.assertTrue(np.array_equal(after.sigma, after.sigma.T))
+
     def test_separate_process_portability_demo(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             with redirect_stdout(StringIO()):
