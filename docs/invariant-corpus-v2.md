@@ -72,3 +72,19 @@ python3 validation/migrate_corpus_v2.py <path-to-sibling-repo> <chart.id>
 
 Cross-repo copies must keep `claim_scope: computational-integrity-only`. They
 add local identities; they do not add a second engine.
+
+## Checking the index against reality
+
+The index asserts what twelve other repositories declare. To verify rather than
+trust it, point the checker at a directory holding sibling clones:
+
+```bash
+python3 validation/check_corpus_index.py ~/src
+```
+
+It reports, per member, whether the corpus exists, carries the needle the index
+claims, sits in the chart the index claims, still cites the canonical repo, and
+keeps `claim_scope` narrow — and it fails on a chart two members both claim. A
+member with no clone present is reported as unchecked, not as a failure:
+companions stay separate clones, so a partial checkout is normal. An unmigrated
+v1 sibling is not a contradiction either, since v1 carries no chart at all.
