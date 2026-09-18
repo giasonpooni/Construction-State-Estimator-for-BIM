@@ -46,6 +46,7 @@ from gat.adapters.ifc.reader import (
     properties_of,
     pset_value_refs,
     pset_values,
+    pset_single_number,
     pset_text_values,
     quantities_of,
     refs,
@@ -107,6 +108,32 @@ QUANTITY_UNITS: dict[str, Unit] = {
     "Width": Unit.M,
     "Height": Unit.M,
 }
+
+
+def _declared_fallback(
+    file: IfcFile,
+    defs: list[RawInstance],
+    canonical_class: str,
+    quantity: str,
+    is_scoped_opaque: bool,
+    scope: IfcLoweringScope | None,
+) -> tuple[float, int] | None:
+    """A required quantity read from a standard pset instead of a quantity set.
+
+    Only for an engineering element a scope named without its GAT contract.
+    Real exported beams routinely carry no ``IfcElementQuantity`` at all while
+    declaring ``Pset_BeamCommon.Span``, which is the buildingSMART property for
+    the span -- a declared number, the same class of input as a quantity, and
+    not tessellation.  Geometry authority is untouched: nothing here reads a
+    mesh or a swept solid.
+    """
+    if not is_scoped_opaque or scope is None:
+        return None
+    if canonical_class == "IfcBeam" and quantity == "Length":
+        if not scope.allow_derived_beam_length:
+            return None
+        return pset_single_number(file, defs, "Pset_BeamCommon", "Span")
+    return None
 
 
 def _sigma_for(
@@ -171,24 +198,26 @@ def lower_ifc(
                 canonical,
             )
 
+    # Engineering elements named by an explicit scope join the world even
+    # without their GAT contract pset. Unscoped they stay opaque, which is what
+    # keeps an ordinary real-world beam out of the architectural path; named,
+    # refusing them would make a scope useless on exactly the public models it
+    # exists to serve. They lower to their declared dimensions only -- no
+    # contract, no capacity slots.
+    scoped_opaque: set[int] = set()
     if scope is not None:
+        for sid, (inst, canonical, _marker) in annotated_candidates.items():
+            if sid in products:
+                continue
+            if scope.admits(global_id(inst)):
+                products[sid] = (
+                    EntityId(canonical, global_id(inst)),
+                    inst,
+                    canonical,
+                )
+                scoped_opaque.add(sid)
+
         lowerable = {eid.global_id for eid, _, _ in products.values()}
-        # Engineering elements that are in the file but carry no GAT contract
-        # pset are audit-only, not absent. Saying "absent" for a beam the file
-        # plainly contains sends the next reader looking for the wrong bug.
-        opaque = {
-            global_id(inst)
-            for inst, _, _ in annotated_candidates.values()
-        } - lowerable
-        named_opaque = sorted(scope.include_global_ids & opaque)
-        if named_opaque:
-            raise LoweringError(
-                "lowering scope names engineering elements that are present but "
-                f"not authoritative: {named_opaque}. A beam becomes a world "
-                "entity only with the GAT_Structural contract pset; "
-                "geometry-derived quantities are not implemented "
-                "(IfcLoweringScope.allow_derived_beam_length is declared, not wired)"
-            )
         missing = sorted(
             gid for gid in scope.include_global_ids if gid not in lowerable
         )
@@ -199,6 +228,7 @@ def lower_ifc(
             for sid, entry in products.items()
             if scope.admits(entry[0].global_id)
         }
+        scoped_opaque &= set(products)
 
     step_to_eid = {sid: eid for sid, (eid, _, _) in products.items()}
     prop_map = {sid: prop_map.get(sid, []) for sid in products}
@@ -212,6 +242,9 @@ def lower_ifc(
     openings: list[EntityId] = []
     doors: list[EntityId] = []
     beams: list[EntityId] = []
+    # Beams that carry the GAT_Structural contract. Only these get AISC
+    # capacity slots and the restatement constraints that go with them.
+    structural_beams: list[EntityId] = []
     priced_walls: set[EntityId] = set()
 
     for sid in sorted(products):
@@ -231,12 +264,17 @@ def lower_ifc(
         slots: dict[str, QtySlot] = {}
         entity_attrs: dict[str, str | int | float] = {}
         for qname in REQUIRED_QUANTITIES.get(canonical, ()):
-            if qname not in quantities:
+            measured = quantities.get(qname)
+            if measured is None:
+                measured = _declared_fallback(
+                    file, defs, canonical, qname, sid in scoped_opaque, scope
+                )
+            if measured is None:
                 raise LoweringError(
                     f"{canonical} {eid.global_id} ({name_of(inst)!r}) lacks "
                     f"required quantity {qname!r}"
                 )
-            source_value, qref = quantities[qname]
+            source_value, qref = measured
             value = length_units.to_metres(source_value)
             if qref in used_source_refs:
                 raise LoweringError(
@@ -258,7 +296,7 @@ def lower_ifc(
             )
             quantity_refs[var] = qref
 
-        if canonical == "IfcBeam":
+        if canonical == "IfcBeam" and sid not in scoped_opaque:
             required = {
                 "YieldStrengthMPa": Unit.MPA,
                 "PlasticSectionModulusMajorM3": Unit.M3,
@@ -311,6 +349,7 @@ def lower_ifc(
                 "resistance_factor": AISC360_22_PHI_B,
                 **AISC360_22_F2_LRFD_VALIDATION_PROFILE["required_scope"],
             }
+            structural_beams.append(eid)
 
         if canonical == "IfcWall" and "UnitCost" in material:
             mean, cost_ref = material["UnitCost"]
@@ -506,7 +545,7 @@ def lower_ifc(
         )
         add_derived(space, "Volume", Unit.M3, Mul(VarRef(floor), VarRef(clear_height)))
 
-    for beam in beams:
+    for beam in structural_beams:
         resistance_factor = float(entities[beam].attrs["resistance_factor"])
         nominal = add_derived(
             beam,
@@ -600,7 +639,7 @@ def lower_ifc(
             VarRef(clear_height),
         )
         constraints.append(ExprEquals(VarId(space, "Volume"), restatement))
-    for beam in beams:
+    for beam in structural_beams:
         resistance_factor = float(entities[beam].attrs["resistance_factor"])
         nominal_restatement = Mul(
             Const(1.0e6),
