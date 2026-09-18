@@ -52,6 +52,7 @@ from gat.adapters.ifc.reader import (
     resolve_placement,
 )
 from gat.adapters.ifc.schema import ANNOTATED_PRODUCT_CLASSES, PRODUCT_CLASSES
+from gat.adapters.ifc.scope import IfcLoweringScope
 from gat.adapters.ifc.units import LengthUnitContext, length_unit_context
 from gat.errors import LoweringError
 from gat.engineering.aisc360_22 import (
@@ -129,7 +130,19 @@ def _sigma_for(
     return default
 
 
-def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
+def lower_ifc(
+    file: IfcFile,
+    source: str = "<memory>",
+    scope: IfcLoweringScope | None = None,
+) -> Module:
+    """Lower the supported IFC subset into a :class:`Module`.
+
+    ``scope`` restricts lowering to an explicit subject set *before* any
+    product is validated, so a public multi-storey file can yield a world
+    for one beam without every other product in the file having to satisfy
+    whole-file v0 lowering.  Off-scope products stay audit-only; they never
+    silently join the world.
+    """
     length_units = length_unit_context(file)
 
     # -- products ----------------------------------------------------------
@@ -157,6 +170,35 @@ def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
                 inst,
                 canonical,
             )
+
+    if scope is not None:
+        lowerable = {eid.global_id for eid, _, _ in products.values()}
+        # Engineering elements that are in the file but carry no GAT contract
+        # pset are audit-only, not absent. Saying "absent" for a beam the file
+        # plainly contains sends the next reader looking for the wrong bug.
+        opaque = {
+            global_id(inst)
+            for inst, _, _ in annotated_candidates.values()
+        } - lowerable
+        named_opaque = sorted(scope.include_global_ids & opaque)
+        if named_opaque:
+            raise LoweringError(
+                "lowering scope names engineering elements that are present but "
+                f"not authoritative: {named_opaque}. A beam becomes a world "
+                "entity only with the GAT_Structural contract pset; "
+                "geometry-derived quantities are not implemented "
+                "(IfcLoweringScope.allow_derived_beam_length is declared, not wired)"
+            )
+        missing = sorted(
+            gid for gid in scope.include_global_ids if gid not in lowerable
+        )
+        if missing:
+            raise LoweringError(f"absent GlobalId in lowering scope: {missing}")
+        products = {
+            sid: entry
+            for sid, entry in products.items()
+            if scope.admits(entry[0].global_id)
+        }
 
     step_to_eid = {sid: eid for sid, (eid, _, _) in products.items()}
     prop_map = {sid: prop_map.get(sid, []) for sid in products}
@@ -315,10 +357,17 @@ def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
             "IfcBeam": beams,
         }[canonical].append(eid)
 
-    if len(storeys) != 1:
+    if len(storeys) > 1 or (scope is None and len(storeys) != 1):
         raise LoweringError(f"v0 expects exactly one storey, found {len(storeys)}")
-    storey = storeys[0]
-    clear_height = VarId(storey, "ClearHeight")
+    storey = storeys[0] if storeys else None
+    if storey is None and (walls or spaces):
+        # Wall.Height and Space.Volume are defined off storey.ClearHeight,
+        # so a scope that keeps either without the storey cannot be lowered.
+        raise LoweringError(
+            "lowering scope keeps walls or spaces but no storey to carry "
+            "ClearHeight; add the storey GlobalId to the scope"
+        )
+    clear_height = VarId(storey, "ClearHeight") if storey is not None else None
 
     # -- relationships -----------------------------------------------------
     rels: list[Rel] = []
@@ -573,16 +622,22 @@ def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
             )
         )
 
+    meta = {
+        "source": source,
+        "schema": file.schema,
+        "adapter": "gat.adapters.ifc v0",
+        "ifc_length_scale_to_metres": repr(length_units.scale_to_metres),
+        "ifc_length_unit": length_units.label,
+    }
+    if scope is not None:
+        # Only set under a scope: an unscoped module's meta -- and so its
+        # digest -- must stay exactly what it has always been.
+        meta["lowering_scope"] = sorted(scope.include_global_ids)
+
     module = Module(
         entities=entities,
         rels=tuple(rels),
         constraints=tuple(constraints),
-        meta={
-            "source": source,
-            "schema": file.schema,
-            "adapter": "gat.adapters.ifc v0",
-            "ifc_length_scale_to_metres": repr(length_units.scale_to_metres),
-            "ifc_length_unit": length_units.label,
-        },
+        meta=meta,
     )
     return module

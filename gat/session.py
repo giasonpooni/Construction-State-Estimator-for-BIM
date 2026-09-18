@@ -29,9 +29,8 @@ from gat.causal import (
 from gat.engine.executor import ExecutionResult, World, execute
 from gat.engine.transform import Transformation
 from gat.engine.verify import VerificationReport, run_invariants
-from gat.errors import GatError, LoweringError, VerificationError
+from gat.errors import GatError, VerificationError
 from gat.ids import EntityId, VarId
-from gat.ir.core import Entity, Module
 from gat.ledger import ExecutionLedger, write_ledger
 from gat.state_snapshot import read_snapshot, write_snapshot
 from gat.trace import ExecutionTrace
@@ -60,9 +59,7 @@ class GatSession:
     @classmethod
     def load_ifc(cls, path: str, scope: IfcLoweringScope | None = None) -> "GatSession":
         file = parse_ifc_file(path)
-        module = lower_ifc(file, source=path)
-        if scope is not None:
-            module = _restrict_module(module, scope)
+        module = lower_ifc(file, source=path, scope=scope)
         return cls(World.compile(module), file)
 
     @classmethod
@@ -74,9 +71,7 @@ class GatSession:
     ) -> "GatSession":
         """Lower IFC held in memory. The in-memory sibling of :meth:`load_ifc`."""
         file = parse_ifc(text)
-        module = lower_ifc(file, source=source)
-        if scope is not None:
-            module = _restrict_module(module, scope)
+        module = lower_ifc(file, source=source, scope=scope)
         return cls(World.compile(module), file)
 
     def entity_by_name(self, entity_name: str) -> EntityId:
@@ -297,37 +292,6 @@ class GatSession:
             loaded.world.digest(),
         )
         return session
-
-
-def _restrict_module(module: Module, scope: IfcLoweringScope) -> Module:
-    present = {entity.id.global_id for entity in module.entities.values()}
-    missing = sorted(gid for gid in scope.include_global_ids if gid not in present)
-    if missing:
-        raise LoweringError(f"absent GlobalId in lowering scope: {missing}")
-    keep = {
-        eid
-        for eid, entity in module.entities.items()
-        if scope.admits(entity.id.global_id)
-    }
-    entities = {eid: entity for eid, entity in module.entities.items() if eid in keep}
-    rels = tuple(
-        rel for rel in module.rels if rel.source in keep and rel.target in keep
-    )
-    kept_ids = {eid.global_id for eid in keep}
-    constraints = []
-    for constraint in module.constraints:
-        blob = repr(constraint)
-        if any(gid not in kept_ids and gid in blob for gid in present - kept_ids):
-            continue
-        constraints.append(constraint)
-    meta = dict(module.meta)
-    meta["lowering_scope"] = sorted(scope.include_global_ids)
-    return Module(
-        entities=entities,
-        rels=rels,
-        constraints=tuple(constraints),
-        meta=meta,
-    )
 
 
 def _is_observation(transformation: Transformation) -> bool:
