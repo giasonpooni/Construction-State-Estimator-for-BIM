@@ -10,6 +10,7 @@
     gat ledger  ledger.json [--html]             render an execution-ledger timeline
     gat view    model.ifc -o viewer.html         offline 3D viewer (+ --decision overlay, --audit)
     gat workbench model.ifc -o page.html       offline Workbench: eight modes, one identity
+    gat bcf     disposition.json -o out.bcfzip  export a disposition as BCF 2.1
 
 Every command is deterministic and never mutates the model.  ``--json``
 (where offered) switches to machine-readable output.
@@ -32,6 +33,7 @@ A proposed-element spec (for ``check --proposed``) is a small JSON file:
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import math
 import os
@@ -137,6 +139,34 @@ def _bind_decision(command: str, args: argparse.Namespace):
                 ) from exc
             raise
     return session, model_path, decision, request, response
+
+
+def _run_bcf(args: argparse.Namespace) -> int:
+    from gat.adapters.bcf import BcfExportError, write_bcfzip
+
+    with open(args.disposition, "r", encoding="utf-8") as stream:
+        document = json.load(stream)
+    # The CLI is the human boundary, so reading a clock here is legitimate while
+    # the adapter still refuses to invent one: a timestamp enters the record from
+    # outside, like every other piece of evidence.
+    created = args.created or (
+        datetime.datetime.now(datetime.timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+    try:
+        guids = write_bcfzip(
+            args.output, document, created=created, author=args.author
+        )
+    except BcfExportError as error:
+        print(f"gat: {error}", file=sys.stderr)
+        return 2
+    print(f"wrote {args.output}: {len(guids)} topic(s), BCF 2.1")
+    for guid in guids:
+        print(f"  {guid}")
+    print("a BCF topic is a request for evidence, not an approval")
+    return 0
 
 
 def _run_view(args: argparse.Namespace) -> int:
@@ -534,6 +564,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit a self-contained, script-free HTML timeline",
     )
     p.set_defaults(handler=_run_ledger)
+
+    p = commands.add_parser(
+        "bcf",
+        help="export an acceptance disposition as BCF 2.1 for a reviewer's tool",
+    )
+    p.add_argument(
+        "disposition", help="disposition JSON (gat-headless response or a pinned file)"
+    )
+    p.add_argument("-o", "--output", required=True, help="output .bcfzip path")
+    p.add_argument(
+        "--author", default="cse@notation.systems", help="CreationAuthor for every topic"
+    )
+    p.add_argument(
+        "--created",
+        help="ISO-8601 CreationDate; defaults to now in UTC (the library never reads a clock)",
+    )
+    p.set_defaults(handler=_run_bcf)
 
     p = commands.add_parser(
         "view",
