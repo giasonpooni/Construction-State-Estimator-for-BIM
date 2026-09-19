@@ -63,6 +63,82 @@ bound. Both matrices stay exactly symmetric.
 Two entries, at the last bit, flip a sha256 completely. That is what a hash is
 for, and it is why a hash over floats cannot express "the same estimate".
 
+## Full sweep: what moves and what does not
+
+Every digest the demo slice produces, computed under `SKYLAKEX`, `HASWELL`,
+`ZEN`, `SANDYBRIDGE` and `NEHALEM`.
+
+**Stable on all five** — safe to pin, safe to cite across machines:
+
+| identity | why it survives |
+|---|---|
+| `module.digest()` (both models) | hashes printed IR text, no floats |
+| `configuration_digest()` (before and after transforms) | the coarser quotient |
+| `GaussianState.digest()` — the **raw** belief | raw mu and Sigma are never BLAS products |
+| `full.mu` | the mean is a shorter contraction than the covariance |
+| `beam_model.ifc` `world_digest` | see the caveat below |
+| `margin_mean`, `margin_sigma`, `p_satisfies_lower` | decision numbers, bit-identical |
+| the disposition | `REQUEST_EVIDENCE` on every kernel |
+| `_scan_digest` of a scan | hashes the input points, which is what it is for |
+
+**Moves with the CPU** — four distinct values across the five kernels:
+
+| identity | note |
+|---|---|
+| `full.sigma` | the root cause |
+| `world_digest`, before and after each transform | ends in `full.sigma` |
+| `portable_world_digest` | same composition, `source` elided |
+| `AcceptanceCase.scope_digest` (the **case digest**) | embeds `world_digest` |
+| **BCF topic GUIDs** | `uuid5(TOPIC_NAMESPACE, f"{case_digest}/{check_id}")` |
+| `scene.version` / `RegistrationResult.scene_version` | is the world digest |
+| the fitted pose: `theta`, `t`, `nll`, `pose_sigma()`, `info_matrix` | last 1–2 ULPs |
+
+Nine moving identities, **one root cause**: `scope_digest` embeds
+`world_digest`, `scene.version` *is* the world digest, and the BCF GUID is
+derived from the case digest. Repairing `World.digest()` repairs all of them.
+
+Two of those deserve naming separately.
+
+**BCF topic GUIDs are not stable across machines.** `gat/adapters/bcf.py`
+derives them deterministically on purpose, so that re-exporting the same
+unresolved case yields the same topic and a BIM tool recognises it as the same
+issue instead of filing a duplicate. That property holds per machine only. Two
+engineers exporting the same case from the same model on different hardware
+produce different topic GUIDs, and the receiving tool has no way to tell they
+are the same issue. This is the one place where the defect is visible to
+somebody who never looks at a digest.
+
+**The registered pose itself moves, not only its hash.** `theta` differs in the
+16th significant digit between `NEHALEM` and the others, and `pose_sigma()`
+with it — and `pose_sigma` is what scan evidence reports as its uncertainty.
+Checked for the worse version of this and it is not there: `ScanRegistrar`
+selects among multi-start EM basins where "ties break by start index", so a tie
+inside float noise could have selected a different pose entirely. Measured over
+three scans, the best-to-second gap is 0.52 to 0.59 and the smallest gap between
+any two starts is 0.004, against an eps scale of 1e-15. Twelve orders of
+headroom. The basin choice is safe; only the winning pose's last bits move.
+
+### The beam digest is stable for a reason, not by guarantee
+
+`beam_model.ifc` gives the same `world_digest` on all five kernels, which is
+why the freeze's beam slice is intact. The reason is its dependency structure,
+not its size:
+
+| model | pushforward `J` | nonzeros per row | full view |
+|---|---|---|---|
+| `beam_model.ifc` | 6×4 | max **2** | 6×6 |
+| `model.ifc` | 63×24 | max **18**, mean 2.44 | 63×63 |
+
+Each entry of `J Σ Jᵀ` is a sum over the nonzeros of two rows. At two nonzeros
+that is a sum of at most four products, too short to reassociate. At eighteen
+it is a sum of up to 324, and it does.
+
+Size alone does not explain it: a dense 6×6 `H Σ Hᵀ` with pseudo-random entries
+already differs between `SKYLAKEX` and `NEHALEM`, as does a 4×4. So the beam's
+stability is a property of that model having no derived quantity that combines
+more than two raw variables. Add one and the beam digest becomes
+CPU-dependent too. It is not a safe harbour.
+
 ## What this invalidates
 
 1. **The freeze rule cannot tell a code change from a different machine.** A
@@ -87,10 +163,16 @@ for, and it is why a hash over floats cannot express "the same estimate".
 - The module digest, so every claim that turns on the lowering, the IFC
   content, or the path spelling is unaffected.
 - Any decision. `SATISFIED`/`VIOLATED`, `ACCEPT`/`REJECT`/`REQUEST_EVIDENCE`
-  and every margin turn on quantities far above 1e-16. No disposition in the
-  suite changes under any kernel: the whole suite passes under `NEHALEM`,
-  `SANDYBRIDGE`, `HASWELL`, `SKYLAKEX` and `ZEN`. **The estimates are fine.
-  The identity of the estimate is what is broken.**
+  and every margin turn on quantities far above 1e-16. Measured directly:
+  `margin_mean`, `margin_sigma` and `p_satisfies_lower` on the opening-fit
+  checks are bit-identical under all five kernels, and so is the disposition.
+  **The estimates are fine. The identity of the estimate is what is broken.**
+
+  The suite passes outright under `SANDYBRIDGE`, `HASWELL`, `SKYLAKEX` and
+  `ZEN`. Under `NEHALEM` two tests error, and both are digest-equality checks
+  rather than decisions — see the second finding below. An earlier draft of
+  this list said the suite passed under all five, which was written before the
+  sweep had been run and was wrong seven lines above the evidence against it.
 
 ## A second finding, from the same probe
 
@@ -159,13 +241,54 @@ to take deliberately rather than a repair to slip in. Three options:
 3. **Declare the digest machine-local and add a portable identity that is not a
    float hash.** Most honest, most work, and needs the same tolerance as (1).
 
-All three require one number: how close two covariances must be to count as
-the same estimate. That number does not exist in this repository yet, and no
-axiom produces it. Until it does, the finding is recorded and the pins stay as
-they are.
+**Option 1 already exists in this repository.** The audit that produced the
+sweep above found it: `configuration_digest` reads the same BLAS output the
+world digest does — `_entity_intrinsic` calls `world.full.mean(slot.var)` and
+`world.full.std(slot.var)` — and survives the kernel sweep because every value
+goes through `_q`, which rounds to `QUANT = 1e-6`, declared in
+`gat/engine/configuration.py` and stated in its module docstring. So the
+quantize-before-hashing remedy is not a design waiting for a number. It is a
+working precedent one module over, with its number, already proven portable on
+five kernels.
 
-The snapshot round-trip needs the same number, and would be fixed by the same
-choice: compare reconstructed beliefs to a declared tolerance rather than by
+That changes the recommendation. `World.digest()` should adopt the same treatment
+`configuration_digest` already applies, and the open question shrinks from "what
+tolerance?" to "is `QUANT` the right quantum for a covariance, whose entries here
+run to 4.55e+04 in the office model and 6.86e+07 in the beam?"
+
+**With one caveat that has to travel with it.** Rounding is not a homomorphism.
+Two values a hair apart still round differently if they straddle a boundary, so
+quantizing converts a certainty into a probability. Measured, on the values
+`configuration_digest` actually quantizes — 126 for the office model, 12 for the
+beam, being one mean and one standard deviation per slot rather than the whole
+covariance:
+
+| | office | beam |
+|---|---|---|
+| quantized values | 126 | 12 |
+| closest approach to a rounding flip | 1.364e-09 | 4.216e-08 |
+| worst cross-kernel perturbation observed | 1.455e-11 | 1.455e-11 |
+| margin | **94×** | 2900× |
+| expected flipped values if boundaries were uniform | 1.8e-03 | 1.8e-04 |
+
+So `configuration_digest` is portable with a 94× margin on the model that
+stresses it most, and portable with probability rather than by construction:
+about one model in 550 would land a value close enough to a boundary to flip.
+That is a number worth publishing next to the digest rather than discovering
+later. `tests/test_digest_portability.py` fails if either shipped model ever
+drifts within one perturbation of a boundary.
+
+The only remedy with no residual probability is to keep floats out of an
+equality-tested identity altogether — option 3 — comparing beliefs to a declared
+tolerance and citing the comparison, rather than hashing them and comparing hashes.
+
+The sparse-belief exit test still needs its own number, and it is a different
+number: `docs/sparse-belief-v1.md:41` wants a relative agreement bound between a
+dense and a sparse path, not a representation quantum. Quantization does not
+answer that one.
+
+The snapshot round-trip needs the same choice as the digest, and would be fixed
+by it: compare reconstructed beliefs to a declared tolerance rather than by
 float64 byte equality, and say in the record which tolerance was applied. The
 raw belief can keep its exact check, because that one is genuinely portable.
 
