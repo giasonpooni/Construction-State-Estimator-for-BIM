@@ -74,7 +74,7 @@ Every digest the demo slice produces, computed under all five kernels.
 | `full.sigma` | the root cause |
 | `world_digest`, before and after each transform | ends in `full.sigma` |
 | `AcceptanceCase.scope_digest` (the case digest) | embeds `world_digest` |
-| **BCF topic GUIDs** | `uuid5(TOPIC_NAMESPACE, f"{case_digest}/{check_id}")` |
+| **BCF topic GUIDs**, without an identity record | `uuid5(TOPIC_NAMESPACE, f"{case_digest}/{check_id}")` |
 | `scene.version` / `RegistrationResult.scene_version` | *is* the world digest |
 | the fitted pose: `theta`, `t`, `nll`, `pose_sigma()`, `info_matrix` | last 1–2 ULPs |
 
@@ -84,12 +84,51 @@ Repairing `World.digest()` repairs all of them.
 
 ### The two that are visible without looking at a digest
 
-**BCF topic GUIDs are not stable across machines.** `gat/adapters/bcf.py` derives
-them deterministically on purpose, so that re-exporting the same unresolved case
-yields the same topic and a BIM tool recognises it as the same issue instead of
-filing a duplicate. That property holds per machine only. Two engineers exporting
-the same case from the same model on different hardware produce different topic
-GUIDs, and the receiving tool cannot tell they are the same issue.
+**BCF topic GUIDs were not stable across machines. They are now, when an identity
+record is supplied.** `gat/adapters/bcf.py` derives them deterministically on
+purpose, so that re-exporting the same unresolved case yields the same topic and a
+BIM tool recognises it as the same issue instead of filing a duplicate. Derived
+from `case_digest`, that property held *per machine only*: two engineers exporting
+the same case from the same model on different hardware produced different topic
+GUIDs, and the receiving tool could not tell they were the same issue.
+
+`bcf_topics` now takes the `cse-world-identity-v1` record from the run that
+produced the disposition, and derives the GUID from a **portable topic key**
+instead — `sha256` over the portable digest, `case_id`, `workflow`, `subject`,
+`policy_id`, and each check's `(check_id, kind)`.
+
+Three things about that key are deliberate and each is asserted in
+`tests/test_bcf_export.py`:
+
+- **Every float-derived field is excluded**: `verdict`, `confidence`,
+  `p_satisfies_lower`, `p_satisfies_upper`. A verdict is a float comparison, so
+  near a threshold it is exactly what does not survive a change of processor.
+  Putting it in the key would reintroduce the defect. The consequence is that a
+  topic keeps its GUID across re-exports while its `TopicStatus` moves — which is
+  what tracking a topic in Solibri actually needs, and is stated in every topic
+  body rather than left to be discovered.
+- **The record must name this world.** Its `world_digest` has to equal the
+  disposition's, or the export is refused. Without that check, handing over any
+  identity file would relabel these topics portable while the number came from a
+  different run — a worse failure than the one being fixed, because it would look
+  correct. `gat bcf --world-identity` with a stranger's record exits 2 rather than
+  quietly falling back.
+- **Absent the record, the GUID stays machine-local and says so**, in the topic's
+  `Labels` (`identity:machine-local`), in the body a reviewer reads, and on the
+  CLI. A GUID that only looks portable is worse than one that admits it is not.
+
+**The aliasing this buys, stated where a reviewer sees it.** The portable digest is
+coarser by construction: two beliefs differing only in the 13th significant digit
+share it, and therefore share a topic GUID. That sentence is in the body of every
+portable topic. It is the correct trade for BCF — a reviewer's tool needs "the
+same issue" to mean the same issue across two laptops, and cannot use a bitwise
+identity for that — but it is not the trade to make for restart identity, which is
+why `portable_world_digest` is still referenced nowhere on a reload path.
+
+The CLI reads the record from a file rather than recomputing it from the model,
+and that is not laziness: re-lowering the IFC gives the **prior** belief, while the
+disposition was computed on a conditioned one. A digest derived that way would be
+portable and wrong.
 
 **The registered pose itself moves, not only its hash.** `theta` differs in the
 16th significant digit between `NEHALEM` and the others, and `pose_sigma()` with
@@ -297,9 +336,16 @@ dense and a sparse path, not a representation quantum.
 
 ## What the tests assert
 
+`tests/test_bcf_export.py` reproduces the cross-processor case rather than mocking
+it — the same case with a different `world_digest` and `case_digest` and the same
+portable digest, which is what a second engineer's export is — and asserts that the
+machine-local GUID moves under it while the portable one does not. The defect
+itself is asserted too, so the fix has something to be a fix of.
+
 `tests/test_digest_portability.py` pins the structural facts a kernel sweep
 cannot be run for in-process: which digests are composed from float bytes, that
-the case digest and BCF GUID inherit the world digest, that the beam's stability
+the case digest and the machine-local BCF GUID inherit the world digest, that the
+beam’s stability
 comes from its pushforward sparsity, that the decision numbers have twelve orders
 of margin over eps, that the invariant registry uses relative tolerances, and
 that `computational_equivalence`'s tolerances are still unused.

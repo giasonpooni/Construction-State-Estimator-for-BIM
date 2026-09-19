@@ -164,10 +164,17 @@ def _run_stitch(args: argparse.Namespace) -> int:
 
 
 def _run_bcf(args: argparse.Namespace) -> int:
-    from gat.adapters.bcf import BcfExportError, write_bcfzip
+    from gat.adapters.bcf import IDENTITY_PORTABLE, BcfExportError, write_bcfzip
 
     with open(args.disposition, "r", encoding="utf-8") as stream:
         document = json.load(stream)
+    # Read from a file rather than recomputed from the model: re-lowering the IFC
+    # would give the PRIOR belief, and the disposition was computed on a
+    # conditioned one, so a digest derived here would be portable and wrong.
+    identity = None
+    if args.world_identity:
+        with open(args.world_identity, "r", encoding="utf-8") as stream:
+            identity = json.load(stream)
     # The CLI is the human boundary, so reading a clock here is legitimate while
     # the adapter still refuses to invent one: a timestamp enters the record from
     # outside, like every other piece of evidence.
@@ -179,14 +186,25 @@ def _run_bcf(args: argparse.Namespace) -> int:
     )
     try:
         guids = write_bcfzip(
-            args.output, document, created=created, author=args.author
+            args.output,
+            document,
+            created=created,
+            author=args.author,
+            world_identity=identity,
         )
     except BcfExportError as error:
         print(f"gat: {error}", file=sys.stderr)
         return 2
+    kind = IDENTITY_PORTABLE if identity else "machine-local"
     print(f"wrote {args.output}: {len(guids)} topic(s), BCF 2.1")
     for guid in guids:
         print(f"  {guid}")
+    print(f"topic GUID identity: {kind}")
+    if identity is None:
+        print(
+            "  these GUIDs embed world_digest and are specific to this "
+            "processor; pass --world-identity for portable ones"
+        )
     print("a BCF topic is a request for evidence, not an approval")
     return 0
 
@@ -611,6 +629,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--created",
         help="ISO-8601 CreationDate; defaults to now in UTC (the library never reads a clock)",
+    )
+    p.add_argument(
+        "--world-identity",
+        help=(
+            "cse-world-identity-v1 JSON from the run that produced this "
+            "disposition. Supply it for portable topic GUIDs; without it the "
+            "GUIDs are specific to the processor the case ran on, and every "
+            "topic says so"
+        ),
     )
     p.set_defaults(handler=_run_bcf)
 

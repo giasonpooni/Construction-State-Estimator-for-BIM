@@ -5,10 +5,17 @@ exporting a disposition gives it the second consumer this runtime has never had
 -- and it works on the pinned dispositions in validation/, which until now were
 read by nothing at all.
 
-Two properties are asserted here because a generic BCF writer would lose them:
-the export is deterministic (GUIDs derived from the case digest, fixed zip
-timestamps, no clock read), and it carries the claim scope, so a topic cannot be
-mistaken for an approval once it is out of the runtime.
+Three properties are asserted here because a generic BCF writer would lose them:
+the export is deterministic (derived GUIDs, fixed zip timestamps, no clock read),
+it carries the claim scope so a topic cannot be mistaken for an approval once it
+is out of the runtime, and a topic GUID is portable across processors whenever an
+identity record is supplied -- or says it is not, when one is absent.
+
+The portability class below reproduces the real defect rather than mocking it: the
+same case on another CPU is the same model, the same belief to twelve significant
+digits, and a DIFFERENT world_digest and case_digest. That is what a second
+engineer's export looks like, and the machine-local GUID moves under it while the
+portable one does not.
 
 stdlib unittest only.
 """
@@ -24,11 +31,16 @@ from pathlib import Path
 
 from gat.adapters.bcf import (
     BCF_VERSION,
+    IDENTITY_MACHINE_LOCAL,
+    IDENTITY_PORTABLE,
+    IDENTITY_SCHEMA,
     NOT_AN_APPROVAL,
     BcfExportError,
     bcf_topics,
+    portable_topic_key,
     read_topic_guids,
     topic_guid,
+    topic_identity,
     write_bcfzip,
 )
 
@@ -41,6 +53,30 @@ AUTHOR = "cse@notation.systems"
 # BCF 2.1 declares Topic's children as an ordered sequence; a validating reader
 # rejects any other order.
 TOPIC_SEQUENCE = ["Title", "Priority", "Labels", "CreationDate", "CreationAuthor", "Description"]
+
+#: A portable digest is not derivable from a pinned document -- the document is
+#: all there is -- so it arrives from outside, which is exactly how the real
+#: caller supplies it.
+PORTABLE = "1f" * 32
+
+
+def identity_for(document, **overrides) -> dict:
+    """The record ``portable_identity.world_identity()`` emits, for this pin.
+
+    Built by hand rather than from a live world on purpose: the world whose
+    digest the pin carries is machine-local, so computing it here would make this
+    test fail on the processors it exists to defend.
+    """
+    record = {
+        "schema": IDENTITY_SCHEMA,
+        "claim_scope": "record-integrity-only",
+        "world_digest": document["world_digest"],
+        "portable_digest": PORTABLE,
+        "portable_significant_digits": 12,
+        "source": "gat/demo/model.ifc",
+    }
+    record.update(overrides)
+    return record
 
 
 class BcfTopicTests(unittest.TestCase):
@@ -94,11 +130,28 @@ class BcfTopicTests(unittest.TestCase):
             bcf_topics(self.pin, created=CREATED, author="")
 
     def test_the_portable_digest_is_carried_when_offered(self) -> None:
-        identity = {"portable_digest": "f" * 64, "source": "gat/demo/model.ifc"}
         topics = bcf_topics(
-            self.pin, created=CREATED, author=AUTHOR, world_identity=identity
+            self.pin,
+            created=CREATED,
+            author=AUTHOR,
+            world_identity=identity_for(self.pin),
         )
-        self.assertIn("f" * 64, topics[0]["description"])
+        self.assertIn(PORTABLE, topics[0]["description"])
+
+    def test_a_bare_dict_cannot_relabel_topics_portable(self) -> None:
+        """The old shape of this test, now refused.
+
+        ``{"portable_digest": ...}`` with no schema and no world_digest used to be
+        accepted and its digest printed in the body. It names no world, so nothing
+        establishes that the number belongs to this disposition.
+        """
+        with self.assertRaisesRegex(BcfExportError, "must be cse-world-identity-v1"):
+            bcf_topics(
+                self.pin,
+                created=CREATED,
+                author=AUTHOR,
+                world_identity={"portable_digest": "f" * 64},
+            )
 
 
 class BcfArchiveTests(unittest.TestCase):
@@ -198,6 +251,60 @@ class BcfCliTests(unittest.TestCase):
             self.assertEqual(main(["bcf", str(DESIGN_REVIEW), "-o", str(out)]), 2)
             self.assertFalse(out.exists())
 
+    def test_cli_world_identity_produces_the_portable_guids(self) -> None:
+        from gat.cli import main
+
+        document = json.loads(PIN.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as tmp:
+            record = Path(tmp) / "identity.json"
+            record.write_text(json.dumps(identity_for(document)), encoding="utf-8")
+            portable, local = Path(tmp) / "p.bcfzip", Path(tmp) / "l.bcfzip"
+            self.assertEqual(
+                main(["bcf", str(PIN), "-o", str(portable),
+                      "--created", CREATED, "--world-identity", str(record)]),
+                0,
+            )
+            self.assertEqual(
+                main(["bcf", str(PIN), "-o", str(local), "--created", CREATED]), 0
+            )
+            expected = [
+                str(topic["guid"])
+                for topic in bcf_topics(
+                    document,
+                    created=CREATED,
+                    author=AUTHOR,
+                    world_identity=identity_for(document),
+                )
+            ]
+            self.assertEqual(sorted(read_topic_guids(portable)), sorted(expected))
+            self.assertNotEqual(
+                sorted(read_topic_guids(portable)), sorted(read_topic_guids(local))
+            )
+
+    def test_cli_refuses_an_identity_for_another_world_rather_than_ignoring_it(self) -> None:
+        """Exit 2, not a quiet fall back to machine-local GUIDs.
+
+        Supplying the wrong identity file is a mistake worth stopping for: the
+        export would otherwise succeed and be labelled portable on a number from
+        a different run.
+        """
+        from gat.cli import main
+
+        document = json.loads(PIN.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as tmp:
+            record = Path(tmp) / "stranger.json"
+            record.write_text(
+                json.dumps(identity_for(document, world_digest="99" * 32)),
+                encoding="utf-8",
+            )
+            out = Path(tmp) / "out.bcfzip"
+            self.assertEqual(
+                main(["bcf", str(PIN), "-o", str(out),
+                      "--created", CREATED, "--world-identity", str(record)]),
+                2,
+            )
+            self.assertFalse(out.exists())
+
 
 class BcfLiveDispositionTests(unittest.TestCase):
     """The same export runs on a freshly computed outcome, not only on a pin."""
@@ -260,3 +367,210 @@ class BcfLiveDispositionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TopicIdentityTests(unittest.TestCase):
+    """Which identity a topic GUID rests on, and what moves it.
+
+    The defect: ``case_digest`` embeds ``world_digest``, and ``World.digest()``
+    hashes ``full.sigma.tobytes()``, which BLAS sums in a CPU-dependent order. So
+    two engineers exporting the same case on different hardware got different
+    topics -- the one defect of that kind visible without opening hex.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.pin = json.loads(PIN.read_text(encoding="utf-8"))
+
+    def _guids(self, document, identity=None) -> list[str]:
+        return [
+            str(topic["guid"])
+            for topic in bcf_topics(
+                document, created=CREATED, author=AUTHOR, world_identity=identity
+            )
+        ]
+
+    def _on_another_processor(self) -> dict:
+        """The same case, exported by a second engineer.
+
+        Same model, same belief to twelve significant digits -- so the same
+        portable digest -- and a different local digest, because sigma's bytes
+        differ in the last bits. Nothing else about the case changes.
+        """
+        other = json.loads(json.dumps(self.pin))
+        other["world_digest"] = "ab" * 32
+        other["case_digest"] = "cd" * 32
+        for check in other["checks"]:
+            check["world_digest"] = "ab" * 32
+        return other
+
+    # -- the fix ------------------------------------------------------------
+    def test_the_portable_guid_survives_a_change_of_processor(self) -> None:
+        here = self._guids(self.pin, identity_for(self.pin))
+        there = self._guids(
+            self._on_another_processor(), identity_for(self._on_another_processor())
+        )
+        self.assertEqual(here, there)
+
+    def test_the_machine_local_guid_does_not(self) -> None:
+        """The defect itself, asserted so the fix has something to be a fix of."""
+        self.assertNotEqual(
+            self._guids(self.pin), self._guids(self._on_another_processor())
+        )
+
+    def test_the_two_kinds_of_guid_are_different_guids(self) -> None:
+        self.assertNotEqual(
+            self._guids(self.pin), self._guids(self.pin, identity_for(self.pin))
+        )
+
+    # -- the old behaviour is still exactly the old behaviour ----------------
+    def test_without_an_identity_record_nothing_moved(self) -> None:
+        key, kind = topic_identity(self.pin, None)
+        self.assertEqual(key, self.pin["case_digest"])
+        self.assertEqual(kind, IDENTITY_MACHINE_LOCAL)
+        self.assertEqual(
+            self._guids(self.pin),
+            [topic_guid(self.pin["case_digest"], c) for c in ("height", "width")],
+        )
+
+    # -- which identity, said out loud --------------------------------------
+    def test_every_topic_says_which_identity_its_guid_rests_on(self) -> None:
+        for identity, kind in ((None, IDENTITY_MACHINE_LOCAL),
+                               (identity_for(self.pin), IDENTITY_PORTABLE)):
+            with self.subTest(kind=kind):
+                topics = bcf_topics(
+                    self.pin, created=CREATED, author=AUTHOR, world_identity=identity
+                )
+                for topic in topics:
+                    self.assertEqual(topic["identity"], kind)
+                    self.assertIn(f"identity:{kind}", topic["labels"])
+                    self.assertIn(f"topic GUID identity: {kind}", topic["description"])
+
+    def test_a_machine_local_export_warns_in_the_body_a_reviewer_reads(self) -> None:
+        body = str(self._describe_first(None))
+        self.assertIn("specific to the processor", body)
+        self.assertIn("may be a DIFFERENT topic", body)
+
+    def test_a_portable_export_states_the_thirteenth_digit_aliasing(self) -> None:
+        body = str(self._describe_first(identity_for(self.pin)))
+        self.assertIn("13th significant digit", body)
+        self.assertIn("keeps its GUID across re-exports", body)
+
+    def _describe_first(self, identity):
+        return bcf_topics(
+            self.pin, created=CREATED, author=AUTHOR, world_identity=identity
+        )[0]["description"]
+
+    # -- what the portable key is a function of ----------------------------
+    def test_a_verdict_does_not_move_the_portable_guid(self) -> None:
+        """Stated in the docstring, so asserted rather than left to be found.
+
+        A verdict is a float comparison, so near a threshold it is precisely what
+        does not survive a change of processor. Keeping it out is the point; the
+        consequence is that a topic keeps its GUID while its status moves, which
+        is what tracking a topic in a reviewer's tool needs.
+        """
+        flipped = json.loads(json.dumps(self.pin))
+        for check in flipped["checks"]:
+            check["verdict"] = "VIOLATED"
+            check["confidence"] = 0.12
+            check["p_satisfies_lower"] = 0.01
+        self.assertEqual(
+            portable_topic_key(self.pin, PORTABLE),
+            portable_topic_key(flipped, PORTABLE),
+        )
+
+    def test_a_different_question_does_move_it(self) -> None:
+        for field, value in (
+            ("case_id", "another-case"),
+            ("subject", "Door-2 into Opening-1"),
+            ("policy_id", "gat-design-review-v1"),
+            ("workflow", "ACCEPTANCE"),
+        ):
+            with self.subTest(field=field):
+                other = dict(self.pin, **{field: value})
+                self.assertNotEqual(
+                    portable_topic_key(self.pin, PORTABLE),
+                    portable_topic_key(other, PORTABLE),
+                )
+
+    def test_a_check_changing_kind_moves_it(self) -> None:
+        other = json.loads(json.dumps(self.pin))
+        other["checks"][0]["kind"] = "CLEARANCE"
+        self.assertNotEqual(
+            portable_topic_key(self.pin, PORTABLE),
+            portable_topic_key(other, PORTABLE),
+        )
+
+    def test_a_different_belief_moves_it(self) -> None:
+        self.assertNotEqual(
+            portable_topic_key(self.pin, PORTABLE),
+            portable_topic_key(self.pin, "2e" * 32),
+        )
+
+    def test_the_key_does_not_depend_on_check_order(self) -> None:
+        shuffled = json.loads(json.dumps(self.pin))
+        shuffled["checks"].reverse()
+        self.assertEqual(
+            portable_topic_key(self.pin, PORTABLE),
+            portable_topic_key(shuffled, PORTABLE),
+        )
+
+    # -- refusals -----------------------------------------------------------
+    def test_an_identity_for_another_world_is_refused(self) -> None:
+        stranger = identity_for(self.pin, world_digest="99" * 32)
+        with self.assertRaisesRegex(BcfExportError, "different world"):
+            topic_identity(self.pin, stranger)
+
+    def test_an_identity_with_no_portable_digest_is_refused(self) -> None:
+        record = identity_for(self.pin)
+        del record["portable_digest"]
+        with self.assertRaisesRegex(BcfExportError, "no portable_digest"):
+            topic_identity(self.pin, record)
+
+    def test_a_prefix_is_not_a_portable_digest(self) -> None:
+        for bad in (PORTABLE[:16], PORTABLE.upper(), "", "zz" * 32):
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(BcfExportError, "64-character"):
+                    topic_identity(self.pin, identity_for(self.pin, portable_digest=bad))
+
+    def test_a_non_mapping_identity_is_refused(self) -> None:
+        with self.assertRaisesRegex(BcfExportError, "JSON object or None"):
+            topic_identity(self.pin, ["not", "a", "record"])
+
+    def test_a_document_with_no_case_digest_and_no_identity_is_refused(self) -> None:
+        naked = {k: v for k, v in self.pin.items() if k != "case_digest"}
+        with self.assertRaisesRegex(BcfExportError, "case_digest"):
+            topic_identity(naked, None)
+
+    # -- replay still holds, on both paths ---------------------------------
+    def test_a_portable_export_is_still_byte_identical_twice(self) -> None:
+        identity = identity_for(self.pin)
+        with tempfile.TemporaryDirectory() as tmp:
+            first, second = Path(tmp) / "a.bcfzip", Path(tmp) / "b.bcfzip"
+            for path in (first, second):
+                write_bcfzip(
+                    path,
+                    self.pin,
+                    created=CREATED,
+                    author=AUTHOR,
+                    world_identity=identity,
+                )
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+
+    def test_the_archive_is_named_by_the_portable_guid(self) -> None:
+        identity = identity_for(self.pin)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "out.bcfzip"
+            guids = write_bcfzip(
+                path,
+                self.pin,
+                created=CREATED,
+                author=AUTHOR,
+                world_identity=identity,
+            )
+            self.assertEqual(sorted(read_topic_guids(path)), sorted(guids))
+            self.assertNotEqual(
+                sorted(guids),
+                sorted(self._guids(self.pin)),
+            )

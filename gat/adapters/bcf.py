@@ -8,10 +8,34 @@ who did not produce it -- the second consumer this runtime has never had.
 
 Two properties are kept that a generic BCF writer would lose.
 
-*Replay.* Topic GUIDs are derived from the case digest and the check id, not
-generated, so exporting the same disposition twice produces byte-identical
-markup. Nothing here reads a clock: BCF requires a creation date, so the caller
-supplies one. CSE does not invent time any more than it invents evidence.
+*Replay.* Topic GUIDs are derived, not generated, so exporting the same
+disposition twice produces byte-identical markup. Nothing here reads a clock:
+BCF requires a creation date, so the caller supplies one. CSE does not invent
+time any more than it invents evidence.
+
+*Portability, and which identity a GUID rests on.* A topic GUID derived from
+``case_digest`` is machine-local, because ``case_digest`` embeds ``world_digest``
+and ``World.digest()`` hashes ``full.sigma.tobytes()`` -- BLAS sums in a
+CPU-dependent order, so two engineers on different hardware exporting the same
+case got different topics. This is the one defect of that kind a superintendent
+could see without opening hex.
+
+So a topic GUID rests on ``portable_world_digest`` whenever the caller can supply
+one, via a ``cse-world-identity-v1`` record from the run that produced the
+disposition. When it cannot, the GUID falls back to ``case_digest`` and both the
+topic label and its body say ``identity: machine-local``, because a GUID that
+only looks portable is worse than one that admits it is not.
+
+The portable key deliberately drops every float-derived answer -- ``confidence``,
+``verdict``, ``p_satisfies_*`` -- and keeps the question: the portable digest, the
+case, the subject, the policy, and each check's ``(check_id, kind)``. A verdict is
+a float comparison, so near a threshold it is exactly what does not survive a
+change of processor, and putting it in the key would reintroduce the defect this
+removes. Two consequences, both stated in the topic body rather than left for a
+reader to discover: a topic keeps its GUID across re-exports while its
+``TopicStatus`` moves, which is what tracking a topic in Solibri needs; and two
+beliefs differing only in the 13th significant digit share a portable digest and
+therefore share a topic.
 
 *Claim scope.* A BCF topic is a request, never an authorization. Every topic
 carries the disposition, ``may_authorize``, the world digest it was computed on
@@ -26,6 +50,8 @@ stdlib only: zipfile and xml.etree.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 import xml.etree.ElementTree as ET
 import zipfile
@@ -36,8 +62,24 @@ BCF_VERSION = "2.1"
 BCF_SCHEMA = "cse-bcf-export-v1"
 
 #: Fixed namespace so a topic GUID is a function of the disposition, not of when
-#: it was exported. uuid5 over (case_digest, check_id) inside this namespace.
+#: it was exported. uuid5 over (key, check_id) inside this namespace, where the
+#: key is a portable topic key when one can be computed and ``case_digest``
+#: otherwise.
 TOPIC_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "https://notation.systems/cse/bcf")
+
+#: The identity a topic GUID rests on, carried as a label and in the body so it
+#: travels with the file rather than living only here.
+IDENTITY_PORTABLE = "portable"
+IDENTITY_MACHINE_LOCAL = "machine-local"
+
+#: Named so a key can be recognised, and versioned so changing what goes into it
+#: is a visible schema change rather than a silent renumbering of every topic.
+TOPIC_KEY_SCHEMA = "cse-bcf-topic-key-v1"
+
+#: The identity record ``gat.adapters.portable_identity.world_identity`` emits.
+#: Mirrored as a string, not imported, so this module still runs on a document
+#: and an identity file with no live session.
+IDENTITY_SCHEMA = "cse-world-identity-v1"
 
 #: A disposition is a recommendation. BCF has no field for that, so it is said
 #: in every topic body instead of being dropped on export.
@@ -62,9 +104,102 @@ class BcfExportError(ValueError):
     """The disposition cannot be expressed as BCF without inventing something."""
 
 
-def topic_guid(case_digest: str, check_id: str) -> str:
-    """Deterministic topic GUID. Same disposition in, same GUID out."""
-    return str(uuid.uuid5(TOPIC_NAMESPACE, f"{case_digest}/{check_id}"))
+def topic_guid(key: str, check_id: str) -> str:
+    """Deterministic topic GUID. Same key in, same GUID out.
+
+    ``key`` is whatever identifies the case: a portable topic key from
+    :func:`portable_topic_key`, or ``case_digest`` when no identity record is
+    available. The function does not know which, on purpose -- the caller decides
+    and :func:`topic_identity` records the decision.
+    """
+    return str(uuid.uuid5(TOPIC_NAMESPACE, f"{key}/{check_id}"))
+
+
+def _hex64(value: object, what: str) -> str:
+    text = value if isinstance(value, str) else ""
+    if len(text) != 64 or any(c not in "0123456789abcdef" for c in text):
+        raise BcfExportError(
+            f"{what} must be a 64-character lowercase sha256; got {value!r}. "
+            "A prefix is not a digest: a topic GUID derived from one would look "
+            "as authoritative as any other and identify a different thing."
+        )
+    return text
+
+
+def portable_topic_key(
+    document: Mapping[str, object], portable_digest: str
+) -> str:
+    """The case, identified without the processor it ran on.
+
+    Everything in the key is either a string from the model or the portable
+    digest. Every float-derived field is excluded -- see the module docstring for
+    why a verdict cannot be in a key that is meant to survive a change of CPU.
+    """
+    payload = {
+        "schema": TOPIC_KEY_SCHEMA,
+        "portable_digest": _hex64(portable_digest, "portable_digest"),
+        "case_id": str(_require(document, "case_id")),
+        "workflow": str(document.get("workflow") or ""),
+        "subject": str(document.get("subject") or ""),
+        "policy_id": str(document.get("policy_id") or ""),
+        "checks": sorted(
+            (
+                {
+                    "check_id": str(check.get("check_id")),
+                    "kind": str(check.get("kind")),
+                }
+                for check in document.get("checks") or ()
+                if isinstance(check, Mapping)
+            ),
+            key=lambda entry: entry["check_id"],
+        ),
+    }
+    canonical = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def topic_identity(
+    document: Mapping[str, object],
+    world_identity: Mapping[str, object] | None,
+) -> tuple[str, str]:
+    """The key a topic GUID rests on, and which kind of identity that is.
+
+    An identity record for a *different* world cannot be used to make this
+    disposition's topics look portable, so the record's ``world_digest`` must
+    match the document's. That check is the whole value of passing the record
+    rather than a bare digest: without it, handing over any identity file would
+    relabel these topics portable while the number came from another run.
+    """
+    if world_identity is None:
+        return str(_require(document, "case_digest")), IDENTITY_MACHINE_LOCAL
+
+    if not isinstance(world_identity, Mapping):
+        raise BcfExportError("world_identity must be a JSON object or None")
+
+    schema = world_identity.get("schema")
+    if schema != IDENTITY_SCHEMA:
+        raise BcfExportError(
+            f"world identity must be {IDENTITY_SCHEMA}, got {schema!r}"
+        )
+
+    declared = world_identity.get("world_digest")
+    on_the_case = document.get("world_digest")
+    if declared != on_the_case:
+        raise BcfExportError(
+            "world identity is for a different world: it declares world_digest "
+            f"{declared!r} and the disposition was computed on {on_the_case!r}. "
+            "A portable digest from another run does not make these topics "
+            "portable; it makes them wrong."
+        )
+
+    portable = world_identity.get("portable_digest")
+    if portable is None:
+        raise BcfExportError(
+            "world identity carries no portable_digest, so it cannot make a "
+            "topic GUID portable. Omit the record to export machine-local "
+            "GUIDs, which at least say so."
+        )
+    return portable_topic_key(document, str(portable)), IDENTITY_PORTABLE
 
 
 def _require(document: Mapping[str, object], key: str) -> object:
@@ -84,6 +219,7 @@ def _describe(
     document: Mapping[str, object],
     request: Mapping[str, object],
     world_identity: Mapping[str, object] | None,
+    identity_kind: str = IDENTITY_MACHINE_LOCAL,
 ) -> str:
     check = _check_by_id(document, str(request.get("check_id")))
     lines = [
@@ -112,6 +248,23 @@ def _describe(
     if world_identity:
         lines.append(f"portable_digest: {world_identity.get('portable_digest')}")
         lines.append(f"source: {world_identity.get('source')}")
+    lines += ["", f"topic GUID identity: {identity_kind}"]
+    if identity_kind == IDENTITY_PORTABLE:
+        lines += [
+            "  This GUID is derived from portable_world_digest, so the same case "
+            "exported on another processor is the same topic.",
+            "  It is derived from the case, the subject, the policy and each "
+            "check's kind -- not from any verdict or confidence. So this topic "
+            "keeps its GUID across re-exports while its TopicStatus moves, and "
+            "two beliefs differing only in the 13th significant digit share it.",
+        ]
+    else:
+        lines += [
+            "  This GUID is derived from case_digest, which embeds world_digest "
+            "and is therefore specific to the processor this ran on. The same "
+            "case exported elsewhere may be a DIFFERENT topic. Export with a "
+            "cse-world-identity-v1 record to get a portable GUID.",
+        ]
     lines += ["", NOT_AN_APPROVAL]
     return "\n".join(lines)
 
@@ -132,7 +285,7 @@ def bcf_topics(
     if not created or not author:
         raise BcfExportError("BCF requires a creation date and author; supply both")
     disposition = str(_require(document, "disposition"))
-    case_digest = str(_require(document, "case_digest"))
+    key, identity_kind = topic_identity(document, world_identity)
     requests = document.get("evidence_requests") or ()
 
     topics: list[dict[str, object]] = []
@@ -143,7 +296,8 @@ def bcf_topics(
         check_id = str(request.get("check_id"))
         topics.append(
             {
-                "guid": topic_guid(case_digest, check_id),
+                "guid": topic_guid(key, check_id),
+                "identity": identity_kind,
                 "title": f"{request.get('target')}: {request.get('action')}",
                 "status": _STATUS.get(disposition, "Open"),
                 "priority": _PRIORITY.get(disposition, "Normal"),
@@ -153,8 +307,11 @@ def bcf_topics(
                     str(document.get("workflow") or "ACCEPTANCE"),
                     disposition,
                     "claim_scope:record-integrity-only",
+                    f"identity:{identity_kind}",
                 ],
-                "description": _describe(document, request, world_identity),
+                "description": _describe(
+                    document, request, world_identity, identity_kind
+                ),
             }
         )
     return topics
