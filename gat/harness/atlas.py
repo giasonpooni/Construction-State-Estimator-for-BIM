@@ -65,6 +65,26 @@ class Atlas:
         self.edges: list[Edge] = []
 
     def add_slot(self, slot: Slot) -> Slot:
+        existing = self.slots.get(slot.id)
+        if existing is not None and existing.world != slot.world:
+            # slot_id() is built from ifc_class, global_id, quantity and unit --
+            # the world is deliberately NOT in it, so the same quantity in two
+            # worlds collapses to one dict key. Before this guard, re-declaring a
+            # slot in another world silently replaced it, and every edge already
+            # pointing at that id had its world changed underneath it. add_edge
+            # validates worlds when the edge is inserted and never again, so a
+            # redeclaration could turn a validated same-world edge into a
+            # cross-world one retroactively -- producing a document that asserts
+            # "every edge stays inside one world" while carrying an edge that
+            # does not. Found by probing the gate rather than by a failing test,
+            # which is why the guard is here and not in add_edge.
+            raise AtlasError(
+                f"slot refused: {slot.id} is already declared in world "
+                f"{existing.world!r} and cannot be re-declared in "
+                f"{slot.world!r}. A slot's world is fixed once declared, because "
+                "edges are validated against it. Relate the two worlds by citing "
+                "them side by side (atlas_cov.cite_disposition_worlds)."
+            )
         self.slots[slot.id] = slot
         return slot
 
@@ -73,6 +93,23 @@ class Atlas:
             raise AtlasError("edge endpoints must be atlas slots")
         if edge.kind not in {"representation", "observation", "coupling"}:
             raise AtlasError("edge kind must be representation, observation, or coupling")
+        source_world = self.slots[edge.source].world
+        target_world = self.slots[edge.target].world
+        if source_world != target_world:
+            # identity_gap states the rule in prose -- "share Guid; cite digest;
+            # do not equate worlds" -- and forced_common_world stays false. An
+            # atlas edge is transport: it carries a value from one coordinate to
+            # another and so asserts they measure one thing. No kind of edge may
+            # do that across worlds, a coupling with a written reason least of
+            # all, because a reason is prose and this is the one claim the
+            # system exists to refuse. Relate two worlds by citing them side by
+            # side (atlas_cov.cite_disposition_worlds), never by transporting
+            # between them.
+            raise AtlasError(
+                f"edge refused: {edge.source} is in world {source_world!r} and "
+                f"{edge.target} is in world {target_world!r}; worlds are cited, "
+                "not transported"
+            )
         _finite(edge.scale, "scale")
         _finite(edge.offset, "offset")
         if edge.kind == "observation":
@@ -86,6 +123,10 @@ class Atlas:
             raise AtlasError("coupling edge refused: reason required")
         self.edges.append(edge)
         return edge
+
+    def worlds(self) -> tuple[str, ...]:
+        """Every world this atlas has slots in, in sorted order."""
+        return tuple(sorted({slot.world for slot in self.slots.values()}))
 
     def walk(self, source: str, target: str, value: float) -> dict[str, object]:
         if source == target:
@@ -108,6 +149,8 @@ class Atlas:
             "schema": "cse-atlas-v1",
             "claim_scope": "record-integrity-only",
             "law": "x' = T x + c; covariance transform remains JSPT",
+            "worlds": list(self.worlds()),
+            "world_rule": "every edge stays inside one world; worlds are cited, not transported",
             "slots": [
                 {
                     "id": slot.id,

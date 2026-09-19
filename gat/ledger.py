@@ -928,6 +928,18 @@ class ExecutionLedger:
         provenance: Mapping[str, object] | None = None,
     ) -> LedgerEvent:
         """Record a typed event that is about the world but does not mutate it."""
+        if not isinstance(record, CausalRecord):
+            # The four guards below all name what they refused. This one was
+            # missing, so a caller who passed the wrong type reached
+            # record.world_digest and got AttributeError naming an internal
+            # attribute -- a refusal that is correct and says nothing useful.
+            # GatSession.record_policy, record_approval and record_external_action
+            # are thin wrappers over this method, so this is the boundary where
+            # the check belongs rather than three copies upstream.
+            raise LedgerError(
+                "a causal record must be an AssessmentRecord, PolicyRecord, "
+                f"ApprovalRecord or ExternalActionRecord; got {type(record).__name__}"
+            )
         digest = world.digest()
         if self._events[-1].result_world_digest != digest:
             raise LedgerError("ledger head does not describe the session's current world")

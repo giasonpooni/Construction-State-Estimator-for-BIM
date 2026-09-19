@@ -281,6 +281,13 @@ class ScanRegistrar:
         """(Re)build the smoothed mixture at the given regularization scale."""
         covs = self.base_covs + (reg_sigma**2) * np.eye(3)
         self.inv_covs = np.linalg.inv(covs)
+        # Sigma_k^-1 mu_k, needed once per M step and constant between them. The
+        # M step used to recompute it inside a three-operand einsum over M=1500
+        # points, which cost 15.5 ms a call against 0.17 ms for a precomputed
+        # (K, 3) matmul -- 60x, on every one of the 108 M steps the demo runs.
+        # It belongs here because it depends only on inv_covs and means, and
+        # inv_covs changes only when the smoothing scale does.
+        self.inv_cov_means = np.einsum("kij,kj->ki", self.inv_covs, self.means)
         sign, logdet = np.linalg.slogdet(covs)
         self.log_norm = -0.5 * (3.0 * math.log(2.0 * math.pi) + logdet)
         self.log_w = np.log(self.weights / self.weights.sum())
@@ -295,7 +302,44 @@ class ScanRegistrar:
     def _log_components(self, model_points: np.ndarray) -> np.ndarray:
         """(M, K) log[(1-pi) w_k N_k(x_m)] — the inlier component logs."""
         d = model_points[:, None, :] - self.means[None, :, :]     # (M, K, 3)
-        m2 = np.einsum("mki,kij,mkj->mk", d, self.inv_covs, d)
+        # Two contractions rather than one three-operand einsum. Same quantity,
+        # d_mk^T Sigma_k^-1 d_mk, and 3.1x faster at the demo's shapes (M=1500,
+        # K=190): 3.6 ms against 11.0 ms. np.einsum with three operands and no
+        # `optimize` runs a naive C loop, and this is the hottest line in the
+        # repository -- 18.9 s of the geometry demo's 31.6 s, which was itself
+        # about two thirds of the whole test suite's wall time. Passing
+        # optimize=True was measured too and is SLOWER here (12.5 ms): the
+        # path-finding overhead is paid on all 1354 calls and exceeds what it
+        # saves at this size.
+        #
+        # This changes the order of a floating-point sum, so it changes results
+        # in the last bits: 4.4e-16 relative on this line, and the EM trajectory
+        # differs from there. That is legitimate for this module and nowhere
+        # else, because the pose it produces is already not reproducible across
+        # processors -- theta differs in the 16th digit between OpenBLAS kernels
+        # (docs/digest-portability-v1.md) -- so nothing downstream can depend on
+        # an exact value, and nothing does: recovery is asserted against
+        # tolerances and determinism only within one process.
+        t = np.einsum("mki,kij->mkj", d, self.inv_covs, optimize=True)
+        m2 = np.einsum("mkj,mkj->mk", t, d)
+        # What is left is the (M, K, 3) centered difference above -- 6.8 MB per
+        # call at the demo's shapes, 445 calls. It can be avoided by expanding
+        #
+        #     d^T A d = x^T A x - 2 x^T (A mu) + mu^T A mu
+        #
+        # which needs only two (M, K) gemms and no M*K*3 tensor. Measured and
+        # DECLINED: the expansion cancels catastrophically exactly where it
+        # matters. Relative error against a long-double reference, for a
+        # component with sigma ~ 1 cm:
+        #
+        #     |x - mu| ~ 1e-1   centered 0.0e+00   expanded 8.8e-11
+        #     |x - mu| ~ 1e-3   centered 0.0e+00   expanded 6.1e-08
+        #     |x - mu| ~ 1e-6   centered 0.0e+00   expanded 3.6e-02
+        #     |x - mu| ~ 1e-9   centered 0.0e+00   expanded 1.9e+05
+        #
+        # A scan point sitting on a component mean is the case with the largest
+        # responsibility, so the expansion is worst precisely where the fit is
+        # decided. Do not "optimize" this into the expanded form.
         return (
             math.log(1.0 - self.outlier_pi)
             + self.log_w[None, :]
@@ -325,7 +369,7 @@ class ScanRegistrar:
         """Closed-form t (GLS) then one Armijo-guarded Gauss-Newton yaw step."""
         # Effective per-point precision and precision-weighted target.
         A = np.einsum("mk,kij->mij", gamma, self.inv_covs)           # (M, 3, 3)
-        b = np.einsum("mk,kij,kj->mi", gamma, self.inv_covs, self.means)
+        b = gamma @ self.inv_cov_means                               # (M, 3)
 
         def solve_t(theta: float) -> np.ndarray:
             R = rot_z(theta)

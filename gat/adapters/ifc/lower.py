@@ -46,12 +46,14 @@ from gat.adapters.ifc.reader import (
     properties_of,
     pset_value_refs,
     pset_values,
+    pset_single_number,
     pset_text_values,
     quantities_of,
     refs,
     resolve_placement,
 )
 from gat.adapters.ifc.schema import ANNOTATED_PRODUCT_CLASSES, PRODUCT_CLASSES
+from gat.adapters.ifc.scope import IfcLoweringScope
 from gat.adapters.ifc.units import LengthUnitContext, length_unit_context
 from gat.errors import LoweringError
 from gat.engineering.aisc360_22 import (
@@ -108,6 +110,32 @@ QUANTITY_UNITS: dict[str, Unit] = {
 }
 
 
+def _declared_fallback(
+    file: IfcFile,
+    defs: list[RawInstance],
+    canonical_class: str,
+    quantity: str,
+    is_scoped_opaque: bool,
+    scope: IfcLoweringScope | None,
+) -> tuple[float, int] | None:
+    """A required quantity read from a standard pset instead of a quantity set.
+
+    Only for an engineering element a scope named without its GAT contract.
+    Real exported beams routinely carry no ``IfcElementQuantity`` at all while
+    declaring ``Pset_BeamCommon.Span``, which is the buildingSMART property for
+    the span -- a declared number, the same class of input as a quantity, and
+    not tessellation.  Geometry authority is untouched: nothing here reads a
+    mesh or a swept solid.
+    """
+    if not is_scoped_opaque or scope is None:
+        return None
+    if canonical_class == "IfcBeam" and quantity == "Length":
+        if not scope.allow_derived_beam_length:
+            return None
+        return pset_single_number(file, defs, "Pset_BeamCommon", "Span")
+    return None
+
+
 def _sigma_for(
     canonical_class: str,
     quantity: str,
@@ -129,7 +157,19 @@ def _sigma_for(
     return default
 
 
-def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
+def lower_ifc(
+    file: IfcFile,
+    source: str = "<memory>",
+    scope: IfcLoweringScope | None = None,
+) -> Module:
+    """Lower the supported IFC subset into a :class:`Module`.
+
+    ``scope`` restricts lowering to an explicit subject set *before* any
+    product is validated, so a public multi-storey file can yield a world
+    for one beam without every other product in the file having to satisfy
+    whole-file v0 lowering.  Off-scope products stay audit-only; they never
+    silently join the world.
+    """
     length_units = length_unit_context(file)
 
     # -- products ----------------------------------------------------------
@@ -158,6 +198,38 @@ def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
                 canonical,
             )
 
+    # Engineering elements named by an explicit scope join the world even
+    # without their GAT contract pset. Unscoped they stay opaque, which is what
+    # keeps an ordinary real-world beam out of the architectural path; named,
+    # refusing them would make a scope useless on exactly the public models it
+    # exists to serve. They lower to their declared dimensions only -- no
+    # contract, no capacity slots.
+    scoped_opaque: set[int] = set()
+    if scope is not None:
+        for sid, (inst, canonical, _marker) in annotated_candidates.items():
+            if sid in products:
+                continue
+            if scope.admits(global_id(inst)):
+                products[sid] = (
+                    EntityId(canonical, global_id(inst)),
+                    inst,
+                    canonical,
+                )
+                scoped_opaque.add(sid)
+
+        lowerable = {eid.global_id for eid, _, _ in products.values()}
+        missing = sorted(
+            gid for gid in scope.include_global_ids if gid not in lowerable
+        )
+        if missing:
+            raise LoweringError(f"absent GlobalId in lowering scope: {missing}")
+        products = {
+            sid: entry
+            for sid, entry in products.items()
+            if scope.admits(entry[0].global_id)
+        }
+        scoped_opaque &= set(products)
+
     step_to_eid = {sid: eid for sid, (eid, _, _) in products.items()}
     prop_map = {sid: prop_map.get(sid, []) for sid in products}
 
@@ -170,6 +242,9 @@ def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
     openings: list[EntityId] = []
     doors: list[EntityId] = []
     beams: list[EntityId] = []
+    # Beams that carry the GAT_Structural contract. Only these get AISC
+    # capacity slots and the restatement constraints that go with them.
+    structural_beams: list[EntityId] = []
     priced_walls: set[EntityId] = set()
 
     for sid in sorted(products):
@@ -189,12 +264,17 @@ def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
         slots: dict[str, QtySlot] = {}
         entity_attrs: dict[str, str | int | float] = {}
         for qname in REQUIRED_QUANTITIES.get(canonical, ()):
-            if qname not in quantities:
+            measured = quantities.get(qname)
+            if measured is None:
+                measured = _declared_fallback(
+                    file, defs, canonical, qname, sid in scoped_opaque, scope
+                )
+            if measured is None:
                 raise LoweringError(
                     f"{canonical} {eid.global_id} ({name_of(inst)!r}) lacks "
                     f"required quantity {qname!r}"
                 )
-            source_value, qref = quantities[qname]
+            source_value, qref = measured
             value = length_units.to_metres(source_value)
             if qref in used_source_refs:
                 raise LoweringError(
@@ -216,7 +296,7 @@ def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
             )
             quantity_refs[var] = qref
 
-        if canonical == "IfcBeam":
+        if canonical == "IfcBeam" and sid not in scoped_opaque:
             required = {
                 "YieldStrengthMPa": Unit.MPA,
                 "PlasticSectionModulusMajorM3": Unit.M3,
@@ -269,6 +349,7 @@ def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
                 "resistance_factor": AISC360_22_PHI_B,
                 **AISC360_22_F2_LRFD_VALIDATION_PROFILE["required_scope"],
             }
+            structural_beams.append(eid)
 
         if canonical == "IfcWall" and "UnitCost" in material:
             mean, cost_ref = material["UnitCost"]
@@ -315,10 +396,17 @@ def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
             "IfcBeam": beams,
         }[canonical].append(eid)
 
-    if len(storeys) != 1:
+    if len(storeys) > 1 or (scope is None and len(storeys) != 1):
         raise LoweringError(f"v0 expects exactly one storey, found {len(storeys)}")
-    storey = storeys[0]
-    clear_height = VarId(storey, "ClearHeight")
+    storey = storeys[0] if storeys else None
+    if storey is None and (walls or spaces):
+        # Wall.Height and Space.Volume are defined off storey.ClearHeight,
+        # so a scope that keeps either without the storey cannot be lowered.
+        raise LoweringError(
+            "lowering scope keeps walls or spaces but no storey to carry "
+            "ClearHeight; add the storey GlobalId to the scope"
+        )
+    clear_height = VarId(storey, "ClearHeight") if storey is not None else None
 
     # -- relationships -----------------------------------------------------
     rels: list[Rel] = []
@@ -457,7 +545,7 @@ def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
         )
         add_derived(space, "Volume", Unit.M3, Mul(VarRef(floor), VarRef(clear_height)))
 
-    for beam in beams:
+    for beam in structural_beams:
         resistance_factor = float(entities[beam].attrs["resistance_factor"])
         nominal = add_derived(
             beam,
@@ -551,7 +639,7 @@ def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
             VarRef(clear_height),
         )
         constraints.append(ExprEquals(VarId(space, "Volume"), restatement))
-    for beam in beams:
+    for beam in structural_beams:
         resistance_factor = float(entities[beam].attrs["resistance_factor"])
         nominal_restatement = Mul(
             Const(1.0e6),
@@ -573,16 +661,22 @@ def lower_ifc(file: IfcFile, source: str = "<memory>") -> Module:
             )
         )
 
+    meta = {
+        "source": source,
+        "schema": file.schema,
+        "adapter": "gat.adapters.ifc v0",
+        "ifc_length_scale_to_metres": repr(length_units.scale_to_metres),
+        "ifc_length_unit": length_units.label,
+    }
+    if scope is not None:
+        # Only set under a scope: an unscoped module's meta -- and so its
+        # digest -- must stay exactly what it has always been.
+        meta["lowering_scope"] = sorted(scope.include_global_ids)
+
     module = Module(
         entities=entities,
         rels=tuple(rels),
         constraints=tuple(constraints),
-        meta={
-            "source": source,
-            "schema": file.schema,
-            "adapter": "gat.adapters.ifc v0",
-            "ifc_length_scale_to_metres": repr(length_units.scale_to_metres),
-            "ifc_length_unit": length_units.label,
-        },
+        meta=meta,
     )
     return module

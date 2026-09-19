@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 import hashlib
+import json
 import os
+from pathlib import Path
 import unittest
 
 import gat.demo
@@ -150,6 +152,38 @@ class WorkflowAcceptanceTests(unittest.TestCase):
         outcome = evaluate_acceptance_case(self.case, policy=design_policy)
         self.assertEqual(outcome.disposition, AcceptanceDisposition.ACCEPT)
 
+    def test_the_record_says_which_rule_produced_the_accept(self) -> None:
+        # The fail-closed rule is a policy field with a safe default, not a
+        # property of the type, so two ACCEPTs can mean different things. A
+        # reader downstream has only the record, so the record has to say which.
+        design_policy = AcceptancePolicy(
+            "design-review-v1",
+            require_verified_evidence_for_accept=False,
+        )
+        design = evaluate_acceptance_case(self.case, policy=design_policy).to_dict()
+        self.assertIs(design["evidence_required_for_accept"], False)
+        self.assertEqual(design["disposition"], "ACCEPT")
+
+        covered = self.receipt("width", "height")
+        verified = evaluate_acceptance_case(self.case, (covered,)).to_dict()
+        self.assertIs(verified["evidence_required_for_accept"], True)
+        self.assertEqual(verified["disposition"], "ACCEPT")
+
+    def test_a_design_review_accept_does_not_claim_evidence_was_verified(self) -> None:
+        # Both branches used to emit "required evidence is verified". Under a
+        # policy that does not require it, that sentence is simply false.
+        design_policy = AcceptancePolicy(
+            "design-review-v1",
+            require_verified_evidence_for_accept=False,
+        )
+        design = evaluate_acceptance_case(self.case, policy=design_policy)
+        reason = " ".join(design.reasons)
+        self.assertIn("does not require verified", reason)
+        self.assertNotIn("required evidence is verified", reason)
+
+        verified = evaluate_acceptance_case(self.case, (self.receipt("width", "height"),))
+        self.assertIn("required evidence is verified", " ".join(verified.reasons))
+
     def test_case_digest_is_deterministic_and_state_bound(self) -> None:
         same = AcceptanceCase(
             self.case.case_id,
@@ -169,6 +203,110 @@ class WorkflowAcceptanceTests(unittest.TestCase):
             (changed_check, self.case.checks[1]),
         )
         self.assertNotEqual(self.case.scope_digest, changed.scope_digest)
+
+
+class ShippedPinDriftTests(unittest.TestCase):
+    """The shipped opening-fit pins disagree with the code. That is tracked, not hidden.
+
+    Two separate facts, both recorded in docs/world-identity-v1.md:
+
+    1. No current path spelling reproduces their world_digest, so the opening-fit
+       replay has been unverifiable rather than verified.
+    2. The design-review pin states "all checks are satisfied and required
+       evidence is verified" under a policy that required none. The code no
+       longer emits that sentence.
+
+    Re-pinning either is a kernel version bump on a frozen slice, so the files
+    stay as they are and the disagreement is asserted here instead. This test
+    fails the day somebody re-pins without updating the record of why -- which
+    is the behaviour wanted. It is not a test that the drift is acceptable.
+    """
+
+    ROOT = Path(__file__).resolve().parents[1] / "validation"
+
+    def test_the_design_review_pin_still_carries_the_sentence_the_code_dropped(
+        self,
+    ) -> None:
+        pin = json.loads(
+            (self.ROOT / "opening-fit-design-review-disposition-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(pin["disposition"], "ACCEPT")
+        self.assertEqual(pin["policy_id"], "design-review-v1")
+        self.assertEqual(pin["evidence_receipt_ids"], [])
+        self.assertIn(
+            "all checks are satisfied and required evidence is verified",
+            pin["reasons"],
+            "the pin's stale reason string is the thing being tracked",
+        )
+        self.assertNotIn(
+            "evidence_required_for_accept",
+            pin,
+            "the pin predates the field; a v2 re-pin is a kernel version bump",
+        )
+
+    def test_the_code_cannot_emit_that_sentence_under_that_policy_any_more(self) -> None:
+        # The half that matters: whatever the shipped file says, the runtime no
+        # longer produces a design-review ACCEPT that claims verified evidence.
+        session = GatSession.load_ifc(
+            os.path.join(os.path.dirname(gat.demo.__file__), "model.ifc")
+        )
+        checks = tuple(
+            difference_check(
+                check_id,
+                assess_difference(
+                    session.world,
+                    DifferenceDecision(
+                        session.var("Opening-1", quantity),
+                        session.var("Door-1", quantity),
+                        minimum_margin=0.05,
+                        confidence=0.95,
+                        label=f"Door-1 {quantity.lower()} fit",
+                    ),
+                ),
+            )
+            for check_id, quantity in (("width", "Width"), ("height", "Height"))
+        )
+        live = evaluate_acceptance_case(
+            AcceptanceCase(
+                "opening-fit-demo",
+                WorkflowKind.OPENING_VERIFICATION,
+                "Door-1 into Opening-1",
+                checks,
+            ),
+            policy=AcceptancePolicy(
+                "design-review-v1",
+                require_verified_evidence_for_accept=False,
+            ),
+        ).to_dict()
+        self.assertEqual(live["disposition"], "ACCEPT")
+        self.assertIs(live["evidence_required_for_accept"], False)
+        self.assertNotIn(
+            "all checks are satisfied and required evidence is verified",
+            live["reasons"],
+        )
+
+    def test_the_pins_world_digest_is_not_reproducible_here(self) -> None:
+        # Recorded so the unverifiable replay stays named. If a path spelling in
+        # this checkout ever does reproduce it, that is worth knowing too.
+        pin = json.loads(
+            (self.ROOT / "opening-fit-disposition-v1.json").read_text(encoding="utf-8")
+        )
+        model = os.path.join(os.path.dirname(gat.demo.__file__), "model.ifc")
+        spellings = (
+            "gat/demo/model.ifc",
+            "./gat/demo/model.ifc",
+            model,
+            os.path.abspath(model),
+        )
+        reproduced = set()
+        for spelling in spellings:
+            try:
+                reproduced.add(GatSession.load_ifc(spelling).world.digest())
+            except Exception:  # noqa: BLE001 - a spelling that will not load is not a match
+                continue
+        self.assertNotIn(pin["world_digest"], reproduced)
 
 
 if __name__ == "__main__":

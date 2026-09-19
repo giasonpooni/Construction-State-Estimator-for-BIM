@@ -50,9 +50,24 @@ from gat.workflows.acceptance import (
     assess_difference,
     clearance_check,
     difference_check,
-    evaluate_acceptance_case,
     minimum_check,
 )
+
+# Deliberately from the package, not from gat.workflows.acceptance.
+#
+# gat.workflows.geometry_gate wraps evaluate_acceptance_case and installs itself
+# by rebinding the name inside the acceptance module at import time. Importing
+# the symbol from gat.workflows.acceptance therefore yields the gated function
+# only because gat/workflows/__init__.py already ran and patched it. That holds
+# today, and it holds for a reason nothing in the tree states or checks: no
+# import path reaches this module before that line of __init__ executes.
+#
+# This is the read-only JSON boundary -- the deployment surface -- and the gate
+# it would lose is the one that stops a GAUSSIAN_PROXY clearance from closing an
+# as-built case. Importing from the package makes the gated function the only
+# thing this name can be bound to, instead of the thing it happens to be bound
+# to. tests/test_geometry_gate_binding.py pins it for every other consumer.
+from gat.workflows import evaluate_acceptance_case
 from gat.workflows.change_impact import preview_change
 
 

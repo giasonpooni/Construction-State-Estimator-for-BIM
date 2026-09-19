@@ -10,6 +10,8 @@
     gat ledger  ledger.json [--html]             render an execution-ledger timeline
     gat view    model.ifc -o viewer.html         offline 3D viewer (+ --decision overlay, --audit)
     gat workbench model.ifc -o page.html       offline Workbench: eight modes, one identity
+    gat bcf     disposition.json -o out.bcfzip  export a disposition as BCF 2.1
+    gat stitch  A.json receipt.json             type an instrument sequence; 2 on a type miss
 
 Every command is deterministic and never mutates the model.  ``--json``
 (where offered) switches to machine-readable output.
@@ -32,6 +34,7 @@ A proposed-element spec (for ``check --proposed``) is a small JSON file:
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import math
 import os
@@ -137,6 +140,55 @@ def _bind_decision(command: str, args: argparse.Namespace):
                 ) from exc
             raise
     return session, model_path, decision, request, response
+
+
+def _run_stitch(args: argparse.Namespace) -> int:
+    from gat.harness.stitch import StitchError, stitch_files
+
+    try:
+        record = stitch_files(args.plant, args.receipt, args.cite)
+    except StitchError as error:
+        # A type miss is a refusal, not a crash: the sequence stops and says why.
+        print(f"gat: the sequence does not compose: {error}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(record, indent=2, sort_keys=True))
+        return 0
+    for stage in record["sequence"]:
+        detail = {k: v for k, v in stage.items() if k != "stage"}
+        print(f"  {stage['stage']:12s} {detail}")
+    print("composes")
+    for line in record["not_claimed"]:
+        print(f"  not claimed: {line}")
+    return 0
+
+
+def _run_bcf(args: argparse.Namespace) -> int:
+    from gat.adapters.bcf import BcfExportError, write_bcfzip
+
+    with open(args.disposition, "r", encoding="utf-8") as stream:
+        document = json.load(stream)
+    # The CLI is the human boundary, so reading a clock here is legitimate while
+    # the adapter still refuses to invent one: a timestamp enters the record from
+    # outside, like every other piece of evidence.
+    created = args.created or (
+        datetime.datetime.now(datetime.timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+    try:
+        guids = write_bcfzip(
+            args.output, document, created=created, author=args.author
+        )
+    except BcfExportError as error:
+        print(f"gat: {error}", file=sys.stderr)
+        return 2
+    print(f"wrote {args.output}: {len(guids)} topic(s), BCF 2.1")
+    for guid in guids:
+        print(f"  {guid}")
+    print("a BCF topic is a request for evidence, not an approval")
+    return 0
 
 
 def _run_view(args: argparse.Namespace) -> int:
@@ -534,6 +586,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit a self-contained, script-free HTML timeline",
     )
     p.set_defaults(handler=_run_ledger)
+
+    p = commands.add_parser(
+        "stitch",
+        help="check that an instrument sequence types; refuse at the join",
+    )
+    p.add_argument("plant", help="A.json: the plant artifact (A = J(x*))")
+    p.add_argument("receipt", help="the certificate receipt for that exact A")
+    p.add_argument("--cite", help="optional disposition citing the certificate")
+    p.add_argument("--json", action="store_true", help="machine-readable record")
+    p.set_defaults(handler=_run_stitch)
+
+    p = commands.add_parser(
+        "bcf",
+        help="export an acceptance disposition as BCF 2.1 for a reviewer's tool",
+    )
+    p.add_argument(
+        "disposition", help="disposition JSON (gat-headless response or a pinned file)"
+    )
+    p.add_argument("-o", "--output", required=True, help="output .bcfzip path")
+    p.add_argument(
+        "--author", default="cse@notation.systems", help="CreationAuthor for every topic"
+    )
+    p.add_argument(
+        "--created",
+        help="ISO-8601 CreationDate; defaults to now in UTC (the library never reads a clock)",
+    )
+    p.set_defaults(handler=_run_bcf)
 
     p = commands.add_parser(
         "view",

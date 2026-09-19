@@ -39,7 +39,7 @@ class CorpusTests(unittest.TestCase):
                 output_path=f"{raw}/present.json",
             )
         self.assertTrue(payload["corpus"]["space_in_corpus"])
-        self.assertEqual(payload["corpus"]["schema"], "invariant-corpus-v1")
+        self.assertEqual(payload["corpus"]["schema"], "invariant-corpus-v2")
         self.assertIn("var.opening-width", payload["corpus"]["needles"])
 
     def test_unknown_guid_opens_corpus_identity(self) -> None:

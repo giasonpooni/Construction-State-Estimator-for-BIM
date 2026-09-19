@@ -459,6 +459,13 @@ class AcceptanceOutcome:
     uncovered_check_ids: tuple[str, ...]
     evidence_requests: tuple[EvidenceRequest, ...]
     evidence_receipt_ids: tuple[str, ...]
+    #: Echoed from the policy that produced this outcome. The fail-closed rule
+    #: is a policy field with a safe default, not a property of the type, so a
+    #: caller may switch it off -- gat/demo/workflow.py does, legitimately, for
+    #: design review before anything is built. A reader of the record cannot
+    #: tell a verified ACCEPT from a design-review ACCEPT unless the record
+    #: says which rule was in force, so it says.
+    evidence_required_for_accept: bool = True
 
     @property
     def may_authorize(self) -> bool:
@@ -473,6 +480,7 @@ class AcceptanceOutcome:
             "subject": self.case.subject,
             "world_digest": self.case.world_digest,
             "policy_id": self.policy_id,
+            "evidence_required_for_accept": self.evidence_required_for_accept,
             "disposition": self.disposition.value,
             "may_authorize": self.may_authorize,
             "reasons": list(self.reasons),
@@ -578,6 +586,16 @@ def evaluate_acceptance_case(
     elif uncovered:
         disposition = AcceptanceDisposition.REQUEST_EVIDENCE
         reasons.append("satisfied checks lack verified evidence for this exact world")
+    elif not policy.require_verified_evidence_for_accept:
+        # The satisfied-checks branch below states that required evidence is
+        # verified. Under a policy that does not require it, that sentence
+        # would be false, and a record whose stated reason overstates the rule
+        # it applied is worse than no reason at all.
+        disposition = AcceptanceDisposition.ACCEPT
+        reasons.append(
+            "all checks are satisfied; this policy does not require verified "
+            "as-built evidence for acceptance"
+        )
     else:
         disposition = AcceptanceDisposition.ACCEPT
         reasons.append("all checks are satisfied and required evidence is verified")
@@ -592,6 +610,7 @@ def evaluate_acceptance_case(
         uncovered_check_ids=uncovered,
         evidence_requests=tuple(generated),
         evidence_receipt_ids=tuple(sorted(valid_receipt_ids)),
+        evidence_required_for_accept=policy.require_verified_evidence_for_accept,
     )
 
 

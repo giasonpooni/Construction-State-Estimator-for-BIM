@@ -122,6 +122,34 @@ def pset_value_refs(
     return out
 
 
+def pset_single_number(
+    file: IfcFile, defs: list[RawInstance], pset_name: str, prop_name: str
+) -> tuple[float, int] | None:
+    """``(value, property step id)`` for one numeric property, or ``None``.
+
+    Unlike :func:`pset_value_refs` this reads only the named property, so a
+    text or boolean sibling in the same set cannot break the read.  Real
+    ``Pset_BeamCommon`` carries ``Reference``, ``IsExternal`` and
+    ``LoadBearing`` next to ``Span``.
+    """
+    for definition in defs:
+        if definition.type_name != "IFCPROPERTYSET":
+            continue
+        if attr(definition, "Name") != pset_name:
+            continue
+        for pref in refs(attr(definition, "HasProperties")):
+            prop = file.deref(pref)
+            if prop.type_name != "IFCPROPERTYSINGLEVALUE":
+                continue
+            if attr(prop, "Name") != prop_name:
+                continue
+            value = attr(prop, "NominalValue")
+            if value is None:
+                continue
+            return (numeric(value), prop.step_id)
+    return None
+
+
 def pset_values(file: IfcFile, defs: list[RawInstance], pset_name: str) -> dict[str, float]:
     """Numeric single values of the named property set, if present."""
     return {k: v for k, (v, _) in pset_value_refs(file, defs, pset_name).items()}
