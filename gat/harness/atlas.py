@@ -65,6 +65,26 @@ class Atlas:
         self.edges: list[Edge] = []
 
     def add_slot(self, slot: Slot) -> Slot:
+        existing = self.slots.get(slot.id)
+        if existing is not None and existing.world != slot.world:
+            # slot_id() is built from ifc_class, global_id, quantity and unit --
+            # the world is deliberately NOT in it, so the same quantity in two
+            # worlds collapses to one dict key. Before this guard, re-declaring a
+            # slot in another world silently replaced it, and every edge already
+            # pointing at that id had its world changed underneath it. add_edge
+            # validates worlds when the edge is inserted and never again, so a
+            # redeclaration could turn a validated same-world edge into a
+            # cross-world one retroactively -- producing a document that asserts
+            # "every edge stays inside one world" while carrying an edge that
+            # does not. Found by probing the gate rather than by a failing test,
+            # which is why the guard is here and not in add_edge.
+            raise AtlasError(
+                f"slot refused: {slot.id} is already declared in world "
+                f"{existing.world!r} and cannot be re-declared in "
+                f"{slot.world!r}. A slot's world is fixed once declared, because "
+                "edges are validated against it. Relate the two worlds by citing "
+                "them side by side (atlas_cov.cite_disposition_worlds)."
+            )
         self.slots[slot.id] = slot
         return slot
 

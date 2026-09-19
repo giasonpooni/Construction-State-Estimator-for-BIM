@@ -130,5 +130,63 @@ class WorldGateTests(unittest.TestCase):
         json.dumps(document)
 
 
+class SlotWorldIsFixedTests(unittest.TestCase):
+    """A slot's world cannot change after it is declared.
+
+    The gate in add_edge validates worlds once, at insertion. slot_id() is built
+    from ifc_class, global_id, quantity and unit and deliberately omits the
+    world, so the same quantity in two worlds is one dict key -- and before this
+    guard, re-declaring a slot in another world silently replaced it and changed
+    the world of every edge already pointing at that id.
+
+    Found by probing the gate directly. The result was a document asserting
+    "every edge stays inside one world; worlds are cited, not transported" while
+    carrying an edge from world-one to world-two. That is the single claim this
+    module exists to refuse, so it is worth a test that cannot be read as a nit.
+    """
+
+    def test_slot_id_deliberately_omits_the_world(self) -> None:
+        # Recording the design fact the guard compensates for. If the world ever
+        # joins the id, this test fails and the guard can be reconsidered.
+        self.assertEqual(
+            slot_id("IfcBeam", "B1", "Capacity", "N*m"),
+            "IfcBeam:B1.Capacity[N*m]",
+        )
+
+    def test_redeclaring_a_slot_in_another_world_is_refused(self) -> None:
+        atlas = Atlas()
+        atlas.add_slot(Slot("IfcBeam", "B1", "Capacity", "N*m", "world-one"))
+        with self.assertRaisesRegex(AtlasError, "world is fixed once declared"):
+            atlas.add_slot(Slot("IfcBeam", "B1", "Capacity", "N*m", "world-two"))
+
+    def test_an_identical_redeclaration_is_still_idempotent(self) -> None:
+        atlas = Atlas()
+        first = atlas.add_slot(Slot("IfcBeam", "B1", "Capacity", "N*m", "world-one"))
+        again = atlas.add_slot(Slot("IfcBeam", "B1", "Capacity", "N*m", "world-one"))
+        self.assertEqual(first, again)
+        self.assertEqual(len(atlas.slots), 1)
+
+    def test_a_validated_edge_cannot_become_cross_world_afterwards(self) -> None:
+        atlas = Atlas()
+        atlas.add_slot(Slot("IfcBeam", "B1", "Capacity", "N*m", "world-one"))
+        atlas.add_slot(Slot("IfcBeam", "B1", "Length", "m", "world-one"))
+        source = slot_id("IfcBeam", "B1", "Capacity", "N*m")
+        target = slot_id("IfcBeam", "B1", "Length", "m")
+        atlas.add_edge(
+            Edge(source, target, "representation", 1.0, 0.0, reason="one world")
+        )
+
+        with self.assertRaises(AtlasError):
+            atlas.add_slot(Slot("IfcBeam", "B1", "Capacity", "N*m", "world-two"))
+
+        # The edge still stays inside one world, and the document's rule is true.
+        self.assertEqual(atlas.slots[source].world, atlas.slots[target].world)
+        for edge in atlas.edges:
+            with self.subTest(edge=edge.source):
+                self.assertEqual(
+                    atlas.slots[edge.source].world, atlas.slots[edge.target].world
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
