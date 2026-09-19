@@ -18,7 +18,7 @@ CSE   budget_cite.observe_from_budget  admits u_c, gated by the bind
       ObserveQuantity.single(var, value, u_c)
 ```
 
-`gat/adapters/budget_cite.py` on the CSE side, `instrument_chain/budget_cite.py`
+`gat/adapters/budget_cite.py` on the CSE side, `RCI:src/instrument_chain/budget_cite.py`
 on the RCI side. Neither imports the other. `BUDGET_SCHEMA` and
 `ADMISSIBLE_TRACEABILITY` are mirrored and asserted equal to RCI's wherever RCI
 is importable, the same agreement-not-import pattern as the JSPT ownership pin and

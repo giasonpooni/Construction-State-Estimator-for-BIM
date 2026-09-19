@@ -26,7 +26,13 @@ import unittest
 
 import gat.demo
 from gat.harness.inspectability import _is_bind, bind_refusals, fold_inspectability
-from gat.harness.point_bind import bind_point, bind_point_file
+from gat.harness.point_bind import (
+    FORBIDDEN_KEYS,
+    _looks_like_display_name,
+    assert_bind_in_world,
+    bind_point,
+    bind_point_file,
+)
 from gat.session import GatSession
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -275,6 +281,180 @@ class WhatIsNotABindTests(unittest.TestCase):
         document["digest"] = "0" * 64
         with self.assertRaisesRegex(ValueError, "digest does not match"):
             bind_point(document)
+
+
+class TheOpenBagTests(unittest.TestCase):
+    """The required set is strict. The bag is open. Pin what that costs.
+
+    A bind file legitimately carries prose -- a note, an omitted_on_purpose block,
+    a surveyor's name -- so closing the schema would reject the next honest field.
+    Open also means an agent can write ``authorized: true``. The cost is bounded
+    three ways: those keys are refused by name, unknown keys are outside the
+    digest, and PointBind.to_document() drops them.
+    """
+
+    @staticmethod
+    def _with(where: str, key: str, value: object) -> dict:
+        document = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+        document.pop("digest", None)
+        target = document if where == "root" else document["payload"]
+        target[key] = value
+        return document
+
+    def test_an_authority_claim_is_refused_by_name_not_dropped(self) -> None:
+        """Silently dropping it is safe for the runtime and wrong for the author.
+
+        Someone who wrote ``authorized: true`` into a bind and saw it accepted
+        would believe the bind carried an authority it never had. FORBIDDEN_KEYS
+        is not an open-ended blocklist; it is this repository's authority
+        vocabulary.
+        """
+        for where in ("root", "payload"):
+            for key in sorted(FORBIDDEN_KEYS):
+                with self.subTest(where=where, key=key):
+                    with self.assertRaises(ValueError) as caught:
+                        bind_point(self._with(where, key, True))
+                    self.assertIn("cannot claim", str(caught.exception))
+
+    def test_a_second_claim_scope_is_refused(self) -> None:
+        # One record, one scope. A nested one reads like a narrower promise than
+        # the root makes.
+        with self.assertRaisesRegex(ValueError, "second claim_scope"):
+            bind_point(self._with("payload", "claim_scope", "field-evidence"))
+
+    def test_harmless_extra_keys_are_still_allowed(self) -> None:
+        document = self._with("root", "note", "crew note")
+        document["payload"]["surveyor"] = "R. Okafor"
+        bind = bind_point(document)
+        self.assertEqual(bind.point_id, "P-Opening-1")
+
+    def test_extra_keys_change_no_scope_and_close_no_other_hole(self) -> None:
+        """The test the open bag requires: extra keys buy nothing.
+
+        The bind hole closes because the bind is valid. identity.space and
+        evidence.as_built stay exactly as they were -- a bind cannot buy a scan by
+        carrying a word.
+        """
+        space = json.loads(SPACE.read_text(encoding="utf-8"))
+        plain = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+        loaded = self._with("root", "note", "crew note")
+        loaded["payload"]["surveyor"] = "R. Okafor"
+        loaded["payload"]["confidence"] = "high"
+
+        for label, document in (("plain", plain), ("loaded", loaded)):
+            with self.subTest(bind=label):
+                index = fold_inspectability(
+                    space=space, receipts=[], commitments=[], binds=[(document, "b.json")]
+                )
+                codes = {row["code"] for row in index.document["open_requests"]}
+                self.assertNotIn("bind.point_to_guid", codes)
+                self.assertIn("evidence.as_built", codes)
+                self.assertEqual(
+                    bind_point(document).to_document()["claim_scope"],
+                    "record-integrity-only",
+                )
+
+    def test_unknown_keys_are_outside_the_digest(self) -> None:
+        plain = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+        plain.pop("digest", None)
+        loaded = self._with("payload", "surveyor", "R. Okafor")
+        self.assertEqual(bind_point(plain).digest, bind_point(loaded).digest)
+
+    def test_unknown_keys_do_not_survive_to_document(self) -> None:
+        # So an agent-supplied word cannot reach a packet a human reads.
+        document = self._with("payload", "surveyor", "R. Okafor")
+        emitted = bind_point(document).to_document()
+        self.assertNotIn("surveyor", emitted["payload"])
+        self.assertNotIn("surveyor", emitted)
+
+
+class TheGuidCheckIsNotTheRegexTests(unittest.TestCase):
+    """_looks_like_display_name is lint. assert_bind_in_world is the identity law."""
+
+    def test_the_lint_catches_this_projects_display_names_and_little_else(self) -> None:
+        for flagged in ("Opening-1", "Beam-B1", "Door-3", "Room A"):
+            with self.subTest(value=flagged):
+                self.assertTrue(_looks_like_display_name(flagged))
+        # And these sail through, which is the point of calling it lint.
+        for missed in ("RoomA", "GATOPN00000000000002", "1xS3BCk291UvhgP2a6eTKA"):
+            with self.subTest(value=missed):
+                self.assertFalse(_looks_like_display_name(missed))
+
+    def test_a_name_the_lint_misses_is_stopped_by_the_world(self) -> None:
+        """The executable version of "the regex is not the Guid law".
+
+        RoomA is not a GlobalId, the lint does not flag it, bind_point accepts it,
+        and assert_bind_in_world refuses it. If anyone reads the pattern as the
+        identity check, this is the case that shows the gap.
+        """
+        document = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+        document.pop("digest", None)
+        document["global_id"] = document["payload"]["global_id"] = "RoomA"
+
+        bind = bind_point(document)  # lint does not stop it
+        self.assertEqual(bind.global_id, "RoomA")
+
+        world = GatSession.load_ifc(
+            str(Path(gat.demo.__file__).resolve().parent / "model.ifc")
+        ).world
+        with self.assertRaisesRegex(ValueError, "not in the compiled world"):
+            assert_bind_in_world(bind, world)
+
+    def test_a_truncated_guid_is_also_only_stopped_by_the_world(self) -> None:
+        document = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+        document.pop("digest", None)
+        truncated = OPENING_1[:-2]
+        document["global_id"] = document["payload"]["global_id"] = truncated
+        self.assertFalse(_looks_like_display_name(truncated))
+        world = GatSession.load_ifc(
+            str(Path(gat.demo.__file__).resolve().parent / "model.ifc")
+        ).world
+        with self.assertRaises(ValueError):
+            assert_bind_in_world(bind_point(document), world)
+
+
+class QuantitySurvivesValidationTests(unittest.TestCase):
+    """quantity is in the schema and read by the budget seam, so it must round trip."""
+
+    def test_quantity_survives_a_validate_and_reserialise(self) -> None:
+        """It did not. PointBind dropped it and to_document rebuilt payload.
+
+        So a bind that had been validated and written back out lost its quantity,
+        and gat.adapters.budget_cite then refused the very bind bind_point had
+        just accepted. Found by running the seam on a round-tripped bind.
+        """
+        bind = bind_point_file(EXAMPLE)
+        self.assertEqual(bind.quantity, "Width")
+        emitted = bind_point(bind.to_document())
+        self.assertEqual(emitted.quantity, "Width")
+        self.assertEqual(emitted.digest, bind.digest)
+
+    def test_quantity_is_part_of_the_identity(self) -> None:
+        # A bind licensing Width is a different claim from one licensing Height.
+        document = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+        document.pop("digest", None)
+        width = bind_point(document).digest
+        document["payload"]["quantity"] = "Height"
+        self.assertNotEqual(bind_point(document).digest, width)
+
+    def test_a_short_digest_prefix_is_not_a_digest(self) -> None:
+        # One width for every digest in a bind. A reader should never have to
+        # guess whether a 16-character string is whole or the front of one.
+        document = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+        document.pop("digest", None)
+        document["payload"]["receipt_digest"] = "a" * 16
+        with self.assertRaisesRegex(ValueError, "prefix is not a digest"):
+            bind_point(document)
+        document["payload"]["receipt_digest"] = "a" * 64
+        self.assertEqual(bind_point(document).receipt_digest, "a" * 64)
+
+    def test_the_shipped_p204_fixture_round_trips(self) -> None:
+        bind = bind_point_file(STRICT_FIXTURE)
+        self.assertEqual(bind.quantity, "Width")
+        self.assertEqual(bind.point_id, "P-204")
+        # Its declared digest matches, which is what makes the file self-checking.
+        declared = json.loads(STRICT_FIXTURE.read_text(encoding="utf-8"))["digest"]
+        self.assertEqual(bind.digest, declared)
 
 
 class ABindMovesNothingTests(unittest.TestCase):

@@ -13,17 +13,24 @@
   ],
   "additionalProperties": true,
   "properties": {
-    "schema": {"const": "cse-point-bind-v1"},
+    "schema": {
+      "const": "cse-point-bind-v1"
+    },
     "claim_scope": {
       "const": "record-integrity-only",
       "description": "A bind claims record integrity and nothing else. It is not field evidence and does not make a quantity traceable."
     },
-    "point_id": {"type": "string", "minLength": 1},
+    "point_id": {
+      "type": "string",
+      "minLength": 1
+    },
     "global_id": {
       "type": "string",
       "minLength": 1,
-      "description": "An IFC GlobalId, not a display name. 'Opening-1' is a label a human chose; GATOPN0000000000000200 is an identity the file carries.",
-      "not": {"pattern": "(\\s|^(Opening|Door|Office|L3|Wall|Beam)-)"}
+      "description": "An IFC GlobalId. The `not` pattern below is LINT, not the identity law: it catches the display names this project's demos use (Opening-1, Beam-B1) because pasting one in is the common mistake, and it catches nothing else -- RoomA passes, a truncated Guid passes, a Guid from another file passes. Identity is established by assert_bind_in_world (the Guid, with that class, is in the compiled world) together with the ifc_class enum. A bind that satisfies this pattern has been spell-checked; a bind that satisfies assert_bind_in_world names something that exists.",
+      "not": {
+        "pattern": "(\\s|^(Opening|Door|Office|L3|Wall|Beam)-)"
+      }
     },
     "ifc_class": {
       "enum": [
@@ -56,9 +63,18 @@
       ],
       "additionalProperties": true,
       "properties": {
-        "point_id": {"type": "string", "minLength": 1},
-        "global_id": {"type": "string", "minLength": 1},
-        "ifc_class": {"type": "string", "minLength": 1},
+        "point_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "global_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ifc_class": {
+          "type": "string",
+          "minLength": 1
+        },
         "frame_id": {
           "type": "string",
           "minLength": 1,
@@ -74,13 +90,19 @@
           "exclusiveMinimum": 0,
           "description": "Positive and finite. Zero would claim an exact point, which no layout process delivers."
         },
-        "sigma_unit": {"type": "string", "minLength": 1},
+        "sigma_unit": {
+          "type": "string",
+          "minLength": 1
+        },
         "sigma_reason": {
           "type": "string",
           "minLength": 1,
           "description": "Where sigma came from, in prose a surveyor would accept. A number with no reason is not a budget."
         },
-        "name": {"type": "string", "minLength": 1},
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
         "space_id": {
           "type": "string",
           "minLength": 1,
@@ -93,15 +115,16 @@
         },
         "receipt_digest": {
           "type": "string",
-          "pattern": "^[0-9a-f]{16,64}$",
-          "description": "Optional. Links this bind to an evidence receipt. It does NOT close the fold's evidence.as_built hole -- identity and evidence are two holes, and a bind that cites a receipt is still only an identity claim."
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Optional. Links this bind to an evidence receipt. A full 64-character sha256, the same width as every other digest here -- short prefixes appear only in test fixtures and are not a reason to widen a schema, because a reader should never have to guess whether a 16-character string is a whole digest or the front of one. It does NOT close the fold's evidence.as_built hole: identity and evidence are two holes, and a bind that cites a receipt is still only an identity claim."
         },
         "world_digest": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$",
           "description": "Optional. Which lowering the Guid was checked against. Local to a machine and a path spelling: see docs/digest-portability-v1.md. A bind that records it can be re-checked offline; one that does not must be re-checked against a live world."
         }
-      }
+      },
+      "additionalProperties_note": "Open on purpose: a bind file carries prose a closed schema would reject -- a note, an omitted_on_purpose block, a surveyor's name. Open also means an agent can write authorized: true or traceable: true. gat.harness.point_bind refuses those by name, anywhere in the document, via FORBIDDEN_KEYS, and refuses a second claim_scope nested under payload. They are refused rather than dropped, because a silently dropped claim leaves whoever wrote it believing the bind carried it. Unknown keys that are not authority claims are kept out of the digest and dropped by PointBind.to_document()."
     }
   },
   "not_claimed": [
@@ -109,6 +132,9 @@
     "a bind does not condition belief or shrink Sigma",
     "a gat.harness --commit digest is not a bind",
     "a JSON object that only says schema: cse-point-bind-v1 is not a bind",
-    "a paragraph from an MCP agent is not a bind"
-  ]
+    "a paragraph from an MCP agent is not a bind",
+    "the global_id pattern is lint; assert_bind_in_world is the identity check"
+  ],
+  "additionalProperties_note": "Open on purpose: a bind file carries prose a closed schema would reject -- a note, an omitted_on_purpose block, a surveyor's name. Open also means an agent can write authorized: true or traceable: true. gat.harness.point_bind refuses those by name, anywhere in the document, via FORBIDDEN_KEYS, and refuses a second claim_scope nested under payload. They are refused rather than dropped, because a silently dropped claim leaves whoever wrote it believing the bind carried it. Unknown keys that are not authority claims are kept out of the digest and dropped by PointBind.to_document().",
+  "digest_note": "The digest covers point_id, ifc_class, global_id, name, space_id, frame_id, epoch, sigma, sigma_unit, sigma_reason, quantity, receipt_digest and world_digest. quantity is inside it because a bind licensing Width is a different claim from one licensing Height, so two binds identical but for quantity must not share an identity."
 }
