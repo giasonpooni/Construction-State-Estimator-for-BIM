@@ -1,0 +1,114 @@
+{
+  "$id": "cse-point-bind-v1",
+  "title": "Point-to-IfcGuid bind",
+  "description": "A bind is a named identity claim: this layout point is that IFC entity, declared to a stated sigma in a stated frame at a stated epoch. It is not a measurement, not a harness digest, and not an authorization. Written down as a schema because until it was, every MCP client invented its own shape -- and the fold accepted three fields as a bind.",
+  "type": "object",
+  "required": [
+    "schema",
+    "claim_scope",
+    "point_id",
+    "global_id",
+    "ifc_class",
+    "payload"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schema": {"const": "cse-point-bind-v1"},
+    "claim_scope": {
+      "const": "record-integrity-only",
+      "description": "A bind claims record integrity and nothing else. It is not field evidence and does not make a quantity traceable."
+    },
+    "point_id": {"type": "string", "minLength": 1},
+    "global_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "An IFC GlobalId, not a display name. 'Opening-1' is a label a human chose; GATOPN0000000000000200 is an identity the file carries.",
+      "not": {"pattern": "(\\s|^(Opening|Door|Office|L3|Wall|Beam)-)"}
+    },
+    "ifc_class": {
+      "enum": [
+        "IfcOpeningElement",
+        "IfcDoor",
+        "IfcWall",
+        "IfcWallStandardCase",
+        "IfcSpace",
+        "IfcBeam"
+      ],
+      "description": "Bindable classes only. Widening this list is a claim that the lowerer carries that class, so it is a code change, not a file edit."
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Canonical digest over payload. When present it must match; a declared digest that does not match its own payload is refused rather than recomputed."
+    },
+    "payload": {
+      "type": "object",
+      "description": "The bound claim. sigma is required: a bind that does not say how well the point is known cannot be used to license an observation, and 'the CAD said so' is a sigma with a reason, not an absence of one.",
+      "required": [
+        "point_id",
+        "global_id",
+        "ifc_class",
+        "frame_id",
+        "epoch",
+        "sigma",
+        "sigma_unit",
+        "sigma_reason"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "point_id": {"type": "string", "minLength": 1},
+        "global_id": {"type": "string", "minLength": 1},
+        "ifc_class": {"type": "string", "minLength": 1},
+        "frame_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Which coordinate frame the point is in. Two frames are not one frame because both are called 'site'."
+        },
+        "epoch": {
+          "type": "string",
+          "minLength": 1,
+          "description": "When the bind was established. 'design-declared' is a legitimate epoch and is not a field resection."
+        },
+        "sigma": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Positive and finite. Zero would claim an exact point, which no layout process delivers."
+        },
+        "sigma_unit": {"type": "string", "minLength": 1},
+        "sigma_reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where sigma came from, in prose a surveyor would accept. A number with no reason is not a budget."
+        },
+        "name": {"type": "string", "minLength": 1},
+        "space_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The IfcSpace this point sits in, as space:ifc:<GlobalId>. Optional, and it is the field the inspectability fold reads to place a bind in a space."
+        },
+        "quantity": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional. The quantity a later observation would touch, so the bind says which slot it licenses rather than leaving a client to guess. Naming it does not observe it."
+        },
+        "receipt_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16,64}$",
+          "description": "Optional. Links this bind to an evidence receipt. It does NOT close the fold's evidence.as_built hole -- identity and evidence are two holes, and a bind that cites a receipt is still only an identity claim."
+        },
+        "world_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Optional. Which lowering the Guid was checked against. Local to a machine and a path spelling: see docs/digest-portability-v1.md. A bind that records it can be re-checked offline; one that does not must be re-checked against a live world."
+        }
+      }
+    }
+  },
+  "not_claimed": [
+    "a bind is not field evidence",
+    "a bind does not condition belief or shrink Sigma",
+    "a gat.harness --commit digest is not a bind",
+    "a JSON object that only says schema: cse-point-bind-v1 is not a bind",
+    "a paragraph from an MCP agent is not a bind"
+  ]
+}

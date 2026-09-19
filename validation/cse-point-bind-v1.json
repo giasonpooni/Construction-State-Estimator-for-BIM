@@ -1,10 +1,25 @@
 {
   "schema": "cse-point-bind-v1",
-  "claim_scope": "identity-bind-only",
+  "claim_scope": "record-integrity-only",
   "point_id": "P-Opening-1",
-  "ifc_class": "IfcOpeningElement",
   "global_id": "GATOPN0000000000000200",
-  "name": "Opening-1",
-  "space_id": "space:ifc:GATSPC0000000000000300",
-  "note": "Example bind file. Not field evidence. A harness --commit digest cannot stand in for this record."
+  "ifc_class": "IfcOpeningElement",
+  "payload": {
+    "point_id": "P-Opening-1",
+    "global_id": "GATOPN0000000000000200",
+    "ifc_class": "IfcOpeningElement",
+    "name": "Opening-1",
+    "space_id": "space:ifc:GATSPC0000000000000300",
+    "quantity": "Width",
+    "frame_id": "office-a-layout-v0",
+    "epoch": "design-declared",
+    "sigma": 0.005,
+    "sigma_unit": "m",
+    "sigma_reason": "Declared layout tolerance for the Opening-1 setting-out point. Design-declared, not a field resection, and not traceable to a standard."
+  },
+  "note": "Example bind against validation/cse-point-bind-v1.schema.json. Not field evidence. A gat.harness --commit digest cannot stand in for this record, and neither can a JSON object that only carries the schema name. Earlier versions of this file declared claim_scope identity-bind-only and no sigma, which the validator that defines this schema refused -- the repository's own example of cse-point-bind-v1 was not one.",
+  "omitted_on_purpose": {
+    "world_digest": "A world digest is local to one machine and one path spelling (docs/digest-portability-v1.md), so a shipped example cannot carry one that is true anywhere else. A bind written on site records it; this one names the world by citing the demo model instead.",
+    "receipt_digest": "Left out rather than invented. A receipt digest that points at no receipt is worse than an absent field, and identity is a different hole from evidence.as_built in any case."
+  }
 }

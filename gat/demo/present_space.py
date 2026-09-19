@@ -15,7 +15,7 @@ from gat.corpus import CorpusError, load_corpus
 from gat.engine.transform import ObserveQuantity
 from gat.errors import GatError
 from gat.harness.bundle import load_json
-from gat.harness.inspectability import BIND_SCHEMA, fold_inspectability
+from gat.harness.inspectability import BIND_SCHEMA, _is_bind, bind_refusals, fold_inspectability
 from gat.session import GatSession
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -174,7 +174,12 @@ def present_space(
             "sigma": None if calibration is None else calibration.get("sigma"),
         },
         "bind": {
-            "present": any(row.get("schema") == BIND_SCHEMA for row, _ in binds),
+            # Was `row.get("schema") == BIND_SCHEMA`, so a JSON object carrying
+            # nothing but the schema name reported a bind as present -- the exact
+            # case docs/cse-point-bind-v1.md lists as not a bind. The packet a
+            # superintendent reads now agrees with the fold and the schema file.
+            "present": any(_is_bind(row) for row, _ in binds),
+            "refused": bind_refusals(binds),
         },
         "corpus": {
             "schema": corpus_block["schema"],
