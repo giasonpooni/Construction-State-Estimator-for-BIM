@@ -17,33 +17,47 @@ twelve sibling repos cite. A pinned ``world_digest`` in ``validation/`` is only
 reproducible from the exact working directory and the exact path spelling that
 produced it, and a citation that cannot be re-derived is a note, not a pin.
 
-So this module adds a second identity rather than changing the first. The
-portable digest is computed the same way, over the same bytes, with ``source``
-normalized out. Nothing here moves ``World.digest()`` or any value pinned
-against it.
+So this module adds a second identity rather than changing the first. Nothing
+here moves ``World.digest()`` or any value pinned against it.
 
-**What "portable" does and does not mean here.** This docstring used to open by
-claiming an identity that "survives leaving the machine it was computed on",
-and that was wrong. Both digests end in ``full.sigma.tobytes()`` -- the raw
-float64 bytes of a covariance built by BLAS -- and BLAS sums in an order that
-depends on the CPU it finds. The table above is a fact about this processor:
-the same code on a Haswell-class core gives ``6df20d41...`` for the first row.
-Eliding ``source`` fixes path spelling and nothing else. See
-``docs/digest-portability-v1.md`` for the measurements.
+**Two things make it portable, and it took two passes to get both.** Eliding
+``source`` fixes path spelling. It does not fix the other half: ``World.digest()``
+ends in ``full.sigma.tobytes()``, the raw float64 bytes of a covariance built by
+BLAS, and BLAS sums in a CPU-dependent order. The first version of this module
+copied that composition and so inherited the problem, while its docstring claimed
+an identity that "survives leaving the machine it was computed on". That claim was
+retracted, and is now earned instead: the full view is hashed as canonical decimal
+text at ``PORTABLE_SIGNIFICANT_DIGITS``, so a last-bit difference cannot reach the
+hash. Measured across five forced OpenBLAS kernels (``SKYLAKEX``, ``HASWELL``,
+``ZEN``, ``SANDYBRIDGE``, ``NEHALEM``), on ``gat/demo/model.ifc``:
+
+    World.digest()            4 distinct values
+    portable_world_digest()   1
 
     world_digest      this lowering, here, named this way, on this CPU
-    portable_digest   this model and this belief, in any checkout, on this CPU
+    portable_digest   this model and this belief to 12 significant digits,
+                      in any checkout, on any processor
 
-Use ``world_digest`` to check that a decision and a model are the same
-lowering. Use ``portable_digest`` when the claim has to cross a repository or a
-checkout. Neither crosses a processor, and until the covariance is compared to
-a declared tolerance instead of by byte equality, neither can.
+Use ``world_digest`` to check that a decision and a model are the same lowering --
+that is what its path- and CPU-sensitivity is *for*, and why the CLI can tell a
+caller their decision "was evaluated on a different world than the model". Use
+``portable_digest`` when the claim has to cross a repository, a checkout, or a
+machine.
+
+The trade is explicit and is the point: the portable digest is coarser. Two
+beliefs differing in the 13th significant digit share it. For an identity that is
+the correct resolution -- they are the same estimate by any engineering standard
+-- but it means the portable digest can never be used to claim bitwise restart
+identity. ``computational_equivalence`` is the tool for that, and
+``docs/digest-portability-v1.md`` has the measurements behind the digit count.
 """
 
 from __future__ import annotations
 
 import hashlib
 from dataclasses import replace
+
+import numpy as np
 
 from gat.engine.executor import World
 from gat.ir.core import Module
@@ -71,17 +85,70 @@ def portable_module_digest(module: Module) -> str:
     return hashlib.sha256(print_module(normalized).encode("utf-8")).hexdigest()
 
 
-def portable_world_digest(world: World) -> str:
-    """``World.digest()`` computed over a location-free module digest.
+#: Significant decimal digits kept from each full-view value before hashing.
+#:
+#: The reason this exists at all: ``World.digest()`` hashes the covariance as raw
+#: float64 bytes, BLAS sums in a CPU-dependent order, and float addition is not
+#: associative -- so the same model gives four different digests across five
+#: OpenBLAS kernels. A digest that is meant to cross a machine cannot be a hash
+#: of raw BLAS output. See docs/digest-portability-v1.md.
+#:
+#: Why twelve. The worst cross-kernel relative difference measured was 1.920e-16,
+#: which is 0.86 eps. Rounding flips when a value sits within its own wobble of a
+#: rounding boundary, so the question is the *per-value* margin. Measured over
+#: every full-view value of both shipped models:
+#:
+#:     digits   office worst ratio   beam worst ratio
+#:       15           1.31              3.42
+#:       14          24.6              34.2
+#:       13         261               342
+#:       12        2620              3420
+#:       10           1.15e+05          3.42e+05
+#:        8           2.62e+07          3.42e+07
+#:        6           1.85              3.42e+09
+#:
+#: Twelve keeps a 2620x margin on the model that stresses it, with no value
+#: within one perturbation of a flip, and still keeps twelve digits of the
+#: covariance -- far more precision than a representation quantum would leave.
+#:
+#: Note the 6-digit row: a *coarser* grid scored 1.85, worse than 12. Coarser is
+#: not monotonically safer, because a coarser grid can place a boundary right
+#: beside a value. The margin has to be measured, not reasoned about.
+PORTABLE_SIGNIFICANT_DIGITS = 12
 
-    Mirrors the kernel's own composition -- module digest, then the full-view
-    mean and covariance -- so the belief still participates. Two worlds with
-    equal portable digests are the same model carrying the same belief.
+
+def _canonical_number(value: float) -> str:
+    """One full-view value as canonical decimal text.
+
+    Decimal formatting rather than arithmetic rounding, for three reasons:
+    CPython's float formatting is correctly rounded and platform-independent, it
+    avoids the representation error in ``10.0 ** k``, and it avoids numpy's
+    banker's rounding landing differently on a tie. It also keeps this digest the
+    same kind of object the kernel's module digest already is -- a hash of
+    canonical text rather than of machine words.
+    """
+    return f"{float(value):.{PORTABLE_SIGNIFICANT_DIGITS - 1}e}"
+
+
+def portable_world_digest(world: World) -> str:
+    """A world identity that survives both a rename and a change of processor.
+
+    Same composition as the kernel's -- module digest, then the full-view mean
+    and covariance, so the belief still participates -- with two differences:
+    ``source`` is elided from the module, and every float is hashed as canonical
+    decimal text at ``PORTABLE_SIGNIFICANT_DIGITS`` rather than as raw bytes.
+
+    Two worlds with equal portable digests are the same model carrying the same
+    belief to twelve significant digits, wherever either was computed.
     """
     digest = hashlib.sha256()
     digest.update(portable_module_digest(world.module).encode("utf-8"))
-    digest.update(world.full.mu.tobytes())
-    digest.update(world.full.sigma.tobytes())
+    digest.update(f"digits={PORTABLE_SIGNIFICANT_DIGITS}".encode("utf-8"))
+    for array in (world.full.mu, world.full.sigma):
+        digest.update(b"|")
+        for value in np.asarray(array, dtype=float).ravel(order="C"):
+            digest.update(_canonical_number(value).encode("utf-8"))
+            digest.update(b",")
     return digest.hexdigest()
 
 
@@ -97,11 +164,14 @@ def world_identity(world: World) -> dict[str, object]:
         "claim_scope": "record-integrity-only",
         "world_digest": world.digest(),
         "portable_digest": portable_world_digest(world),
+        "portable_significant_digits": PORTABLE_SIGNIFICANT_DIGITS,
         "source": world.module.meta.get("source"),
         "location_meta_elided": list(LOCATION_META_KEYS),
         "rule": (
-            "world_digest is this lowering named this way; portable_digest is "
-            "this model and belief anywhere. cite the portable one across repos."
+            "world_digest is this lowering named this way, on this CPU; "
+            "portable_digest is this model and belief to "
+            f"{PORTABLE_SIGNIFICANT_DIGITS} significant digits, anywhere. "
+            "cite the portable one across repos or machines."
         ),
     }
 

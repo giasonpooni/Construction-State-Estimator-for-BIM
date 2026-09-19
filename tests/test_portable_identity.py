@@ -1,14 +1,24 @@
-"""A world identity that does not depend on how the file was named.
+"""A world identity that depends on neither the file's name nor the processor.
 
 World.digest() hashes the printer dump, which emits every meta key including
-"source" -- the path string the caller passed to load_ifc. So one file yields a
-different world digest per spelling, which is why a pinned world_digest in
-validation/ is only reproducible from the exact checkout and exact spelling
-that produced it. portable_world_digest is the same composition with location
-meta elided, so a claim can cross a repository.
+"source" -- the path string the caller passed to load_ifc -- and then the
+full-view mean and covariance as raw float64 bytes. So one file yields a
+different world digest per spelling AND per CPU, because BLAS sums the
+covariance in a kernel-dependent order. A pinned world_digest in validation/ is
+reproducible only from the exact checkout, the exact spelling, and the same
+processor.
 
-These tests pin both halves: that the local digest really is location-bound
-(so nobody mistakes it for portable), and that the portable one is not.
+portable_world_digest removes both dependencies: "source" is elided from the
+module, and the full view is hashed as canonical decimal text at
+PORTABLE_SIGNIFICANT_DIGITS instead of as machine words. Measured across five
+forced OpenBLAS kernels, World.digest() takes four distinct values on
+gat/demo/model.ifc and portable_world_digest takes one.
+
+These tests pin every half: that the local digest really is location-bound and
+belief-bound (so nobody mistakes it for portable), that the portable one is
+neither, that the quantization is coarse enough to absorb the measured
+cross-kernel wobble with a margin, and that the coarseness is declared in the
+record rather than implied.
 
 stdlib unittest only.
 """
@@ -28,6 +38,7 @@ from gat.adapters.portable_identity import (
     LOCATION_META_KEYS,
     portable_meta,
     portable_module_digest,
+    PORTABLE_SIGNIFICANT_DIGITS,
     portable_world_digest,
     same_world,
     world_identity,
@@ -224,6 +235,102 @@ class WorldIdentityRecordTests(unittest.TestCase):
         after.update(world.full.mu.tobytes())
         after.update(nudged.tobytes())
         self.assertNotEqual(world.digest(), after.hexdigest())
+
+    def test_a_one_ulp_nudge_does_NOT_move_the_portable_digest(self) -> None:
+        """The whole point, stated against the local digest's behaviour.
+
+        test_one_ulp_in_the_covariance_moves_the_whole_world_digest shows a single
+        ULP flipping World.digest(). The portable digest must absorb exactly that,
+        or eliding `source` was the only thing it ever did.
+        """
+        world = GatSession.load_ifc("gat/demo/model.ifc").world
+        before = portable_world_digest(world)
+
+        nudged = world.full.sigma.copy()
+        self.assertNotEqual(nudged[0, 0], 0.0)
+        for _ in range(3):
+            nudged[0, 0] = numpy.nextafter(nudged[0, 0], numpy.inf)
+        relative = abs(nudged[0, 0] - world.full.sigma[0, 0]) / abs(
+            world.full.sigma[0, 0]
+        )
+        self.assertLess(relative, 1e-15)
+
+        moved = world.with_belief(world.belief)
+        # with_belief alone moves neither digest, so it is a clean baseline.
+        self.assertEqual(moved.digest(), world.digest())
+        self.assertEqual(portable_world_digest(moved), before)
+
+        object.__setattr__(moved.full, "sigma", nudged)
+        # Guard against a vacuous pass: the nudge must have reached the array the
+        # digests are computed from, and must have moved the local digest.
+        self.assertEqual(moved.full.sigma[0, 0], nudged[0, 0])
+        self.assertNotEqual(moved.digest(), world.digest())
+
+        # The payoff: the portable digest absorbed what the local one could not.
+        self.assertEqual(portable_world_digest(moved), before)
+
+    def test_the_quantization_margin_survives_the_measured_wobble(self) -> None:
+        """Twelve digits was chosen from a measurement. Keep the measurement.
+
+        The worst cross-kernel relative difference observed was 1.920e-16. A
+        rounding flip needs a value within its own wobble of a boundary, so the
+        margin is per-value. Measured over every full-view value of both shipped
+        models, the worst ratio was 2620 for the office model and 3420 for the
+        beam. This fails if a model ever drifts close enough to make the digit
+        count unsafe -- which is the only thing that could silently un-portable
+        this digest.
+        """
+        worst_relative_error = 1.920e-16
+        digits = PORTABLE_SIGNIFICANT_DIGITS
+        for model in ("gat/demo/model.ifc", "gat/demo/beam_model.ifc"):
+            world = GatSession.load_ifc(model).world
+            values = numpy.concatenate(
+                [
+                    numpy.asarray(world.full.mu, dtype=float).ravel(),
+                    numpy.asarray(world.full.sigma, dtype=float).ravel(),
+                ]
+            )
+            magnitude = numpy.abs(values)
+            magnitude = magnitude[magnitude != 0.0]
+            decade = numpy.floor(numpy.log10(magnitude))
+            factor = 10.0 ** (digits - 1 - decade)
+            scaled = magnitude * factor
+            to_boundary = numpy.abs(0.5 - numpy.abs(scaled - numpy.round(scaled)))
+            margin = to_boundary / factor
+            ratio = margin / (magnitude * worst_relative_error)
+            with self.subTest(model=model):
+                self.assertGreater(
+                    float(ratio.min()),
+                    100.0,
+                    f"{model} now has a full-view value only {ratio.min():.3g}x "
+                    "its own cross-kernel wobble from a rounding boundary; "
+                    f"{digits} significant digits is no longer a safe quantum",
+                )
+
+    def test_the_record_declares_how_coarse_the_portable_digest_is(self) -> None:
+        # A coarser identity that does not say how coarse is worse than a precise
+        # one, because a reader cannot tell what "equal" bought them.
+        world = GatSession.load_ifc("gat/demo/model.ifc").world
+        record = world_identity(world)
+        self.assertEqual(
+            record["portable_significant_digits"], PORTABLE_SIGNIFICANT_DIGITS
+        )
+        self.assertIn("significant digits", record["rule"])
+        self.assertIn("any", record["rule"])
+
+    def test_the_portable_digest_hashes_text_not_machine_words(self) -> None:
+        # Decimal text, so the hashed object is the same kind the module digest
+        # already is, and no 10**k rounding or banker's-tie can differ by build.
+        from gat.adapters.portable_identity import _canonical_number
+
+        self.assertEqual(_canonical_number(1.0), "1.00000000000e+00")
+        self.assertEqual(len(_canonical_number(1.0).split("e")[0].replace(".", "").lstrip("-")), 12)
+        # A ULP apart, one string.
+        value = 4.55e4
+        self.assertEqual(
+            _canonical_number(value),
+            _canonical_number(numpy.nextafter(value, numpy.inf)),
+        )
 
     def test_the_digest_is_stable_within_one_machine(self) -> None:
         # What the freeze can actually rely on: replay on the same machine. Two
