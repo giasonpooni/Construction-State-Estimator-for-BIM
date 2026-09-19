@@ -24,9 +24,26 @@ What this module deliberately is not:
 - It computes nothing. No Jacobian, no Lyapunov solve, no device. The linear bulk
   belongs inside one kernel with an oracle match test; a stitcher that also
   computed would be the megascript this is meant to avoid.
-- It invents no verdicts. PLSR's shipped vocabulary is VERIFIED / INVALID /
-  NOT_CHECKED. Codes that have been discussed but not shipped are not accepted
-  here, because an axiom system whose terms exist only in prose refuses nothing.
+- It invents no verdicts. PLSR ships TWO vocabularies and this module refuses to
+  let them touch. ``lyapunov.runtime.verdict`` returns a ``Verdict.status`` from
+  {certified, violated, outside-level, inconclusive}, lower case, and that is
+  the stability claim. ``lyapunov.host_callback.ProofStatus`` is
+  {NOT_CHECKED, INVALID, VERIFIED}, upper case, and says only whether a bound
+  host checked an SP1 proof's arithmetic. Codes discussed but not shipped are
+  refused, because an axiom system whose terms exist only in prose refuses
+  nothing.
+
+  This paragraph previously named the proof statuses as "PLSR's shipped
+  vocabulary" for verdicts, which is the conflation the constants below were
+  written to stop. Running the real companion is what caught it; the docstring
+  was not updated with the code it describes.
+
+- **It does not check that the verdict is true of A.** It checks that the
+  receipt is bound to this exact A and speaks a real vocabulary. Whether the
+  matrix actually decreases is PLSR's claim, made where the solve happened, and
+  re-deriving it here would be the computation this module refuses to do. So a
+  forged receipt saying ``certified`` for an A with positive eigenvalues
+  composes, and should: the axioms constrain the form of a claim, not its truth.
 """
 
 from __future__ import annotations
@@ -130,7 +147,21 @@ class CertificateReceipt:
     proof_status: str = "NOT_CHECKED"
     global_claim: bool = False
     vertex_set: int = 0
+    #: The sublevel-set bound the sample was checked against, or None.
+    #:
+    #: Optional upstream: lyapunov.runtime.verdict takes ``level: float | None``
+    #: and applies no bound when it is None, returning "outside-level" only when
+    #: one was given and V(x) exceeded it. So a certified sample with no level is
+    #: a legitimate claim -- just a weaker one than a certified sample inside a
+    #: declared level. Refusing an absent level would invent a law the companion
+    #: does not have, which is not what mirroring means.
+    level: float | None = None
     notes: str = ""
+
+    @property
+    def level_bounded(self) -> bool:
+        """Whether the verdict was checked against a declared sublevel set."""
+        return self.level is not None
 
     @property
     def supports(self) -> bool:
@@ -245,6 +276,26 @@ def read_receipt(document: Mapping[str, object]) -> CertificateReceipt:
             "a global stability claim must declare the vertex set it covers; a "
             "certified sample is one point, not a proof over a parameter box"
         )
+    level = document.get("level")
+    if level is not None:
+        # Absent is legal. Present and malformed is not: the companion compares
+        # ``sample.value > level`` against a V it has already required to be
+        # non-negative, so a non-positive level admits nothing but an exact
+        # equilibrium, and an infinite level is a claim of unbounded validity
+        # smuggled in as a number rather than declared as a global_claim.
+        if isinstance(level, bool) or not isinstance(level, (int, float)):
+            raise StitchError("level must be a number when present")
+        level = float(level)
+        if not math.isfinite(level):
+            raise StitchError(
+                "level must be finite; an infinite sublevel set is a global claim "
+                "and must be declared as one with its vertex set"
+            )
+        if level <= 0.0:
+            raise StitchError(
+                f"level must be positive; {level!r} bounds a region containing at "
+                "most the equilibrium, which no sample outside it can satisfy"
+            )
     return CertificateReceipt(
         plant_digest=_text(document, "plant_digest", "certificate receipt"),
         verdict=verdict,
@@ -253,6 +304,7 @@ def read_receipt(document: Mapping[str, object]) -> CertificateReceipt:
         proof_status=proof_status,
         global_claim=global_claim,
         vertex_set=vertex_set,
+        level=level,
         notes=str(document.get("notes") or ""),
     )
 
@@ -311,7 +363,9 @@ def stitch(
              "verdict": receipt.verdict, "supports": receipt.supports,
              "proof_status": receipt.proof_status,
              "global_claim": receipt.global_claim,
-             "vertex_set": receipt.vertex_set},
+             "vertex_set": receipt.vertex_set,
+             "level": receipt.level,
+             "level_bounded": receipt.level_bounded},
             {"stage": "disposition",
              "cited": cite_document is not None,
              "may_authorize": False},
@@ -336,6 +390,16 @@ def stitch(
             "a proof_status is about arithmetic, not about stability",
             "a certificate on A = J(x*) says nothing about evidence for the world",
             "no device or backend took part in this composition",
+            # The one that was missing, and the most important. Composition
+            # checks that the receipt is bound to this exact A and speaks a real
+            # vocabulary. It does not re-derive the verdict, so it cannot detect
+            # a receipt that is well-formed and false.
+            "this composition did not verify the verdict against A; "
+            "form was checked, not truth",
+            # A certified sample with no level is a weaker claim than one inside
+            # a declared level, and before this field existed the record could
+            # not tell them apart.
+            "an unbounded certified sample claims no region; read level_bounded",
         ],
     }
 

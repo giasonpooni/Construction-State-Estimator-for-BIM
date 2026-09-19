@@ -73,3 +73,34 @@ prose refuses nothing.
   version, not an optimization.
 - **It decides nothing.** `composes: true` means the sequence types. The
   supervisor still decides, and the record says so in `not_claimed`.
+- **It does not check that the verdict is true of `A`.** This is the boundary of
+  the whole approach and it is worth stating with the evidence. Probed directly:
+  an `A` with eigenvalues +1 and +2, a zero matrix, and a discrete-time `A` with
+  spectral radius 2 all compose with `verdict: certified` and `supports: true`.
+  That is correct behaviour — re-deriving the verdict is the computation this
+  module refuses to do, and PLSR made the claim where the solve happened — but
+  the record listed five things it did not claim and this was not among them.
+  It is now the sixth, and `tests/test_stitch.py` pins it with the unstable
+  matrix.
+
+  A refusal calculus gives you *no false composition*. It does not give you *no
+  false claims*. A well-formed lie composes.
+
+## `level`
+
+`lyapunov.runtime.verdict` takes `level: float | None`, applies no bound when it
+is `None`, and returns `outside-level` only when a level was given and `V(x)`
+exceeded it. So there are two different certified claims upstream — a sample
+that passes with no region declared, and a sample that passes inside a declared
+sublevel set — and the stitcher did not read `level` at all: the word appeared
+only inside the string `"outside-level"`. Both claims produced an identical
+record.
+
+Now the receipt carries `level` and the record carries `level` and
+`level_bounded`, so a reader can tell them apart. An absent level stays legal,
+because it is legal upstream, and refusing it would invent a law the companion
+does not have. A level that is *present* must be a finite number greater than
+zero: the companion compares `sample.value > level` against a `V` it has already
+required to be non-negative, so a non-positive level admits nothing but an exact
+equilibrium, and an infinite level is a claim of unbounded validity smuggled in
+as a number instead of declared as a `global_claim` with its vertex set.

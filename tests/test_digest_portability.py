@@ -149,6 +149,68 @@ class WhatIsComposedFromFloatBytesTests(unittest.TestCase):
                 )
 
 
+class TheRemedyIsAlreadyHereTests(unittest.TestCase):
+    """Three layers handle reassociation. The digest path is the outlier."""
+
+    def test_the_invariant_registry_uses_relative_tolerances(self) -> None:
+        # The verification layer was written with reassociation in mind. If it
+        # ever starts comparing a computed float exactly, the one part of the
+        # runtime that is robust to a different CPU stops being robust.
+        source = Path("gat/engine/verify.py").read_text(encoding="utf-8")
+        self.assertIn("tol = 1e-9 * max(1.0, abs(expected))", source)
+        self.assertIn("resid > c.tol * max(1.0, abs(expected))", source)
+
+    def test_computational_equivalence_carries_the_remedy_and_nobody_uses_it(
+        self,
+    ) -> None:
+        """Its docstring names cross-platform carriers; its tolerances are dead.
+
+        This is the finding written down before it was measured. The test pins
+        both halves: the parameters exist and default to exact, and no caller in
+        gat/ passes a nonzero value. It fails the day somebody does -- which is
+        the day the snapshot round-trip could become portable.
+        """
+        import inspect
+
+        from gat.state_snapshot import computational_equivalence
+
+        signature = inspect.signature(computational_equivalence)
+        self.assertEqual(signature.parameters["atol"].default, 0.0)
+        self.assertEqual(signature.parameters["rtol"].default, 0.0)
+        self.assertIn(
+            "cross-platform carriers", computational_equivalence.__doc__ or ""
+        )
+
+        callers = []
+        for path in sorted(Path("gat").rglob("*.py")):
+            body = path.read_text(encoding="utf-8")
+            if "computational_equivalence(" not in body:
+                continue
+            for line in body.splitlines():
+                if "computational_equivalence(" in line and "def " not in line:
+                    callers.append((str(path), line.strip()))
+        self.assertTrue(callers, "expected at least one caller to audit")
+        for path, line in callers:
+            with self.subTest(caller=path):
+                self.assertNotIn("atol=", line)
+                self.assertNotIn("rtol=", line)
+
+    def test_the_snapshot_check_compares_a_digest_not_the_beliefs(self) -> None:
+        # reconstruct_snapshot has computational_equivalence available and does
+        # not use it for its portability check. It compares world.digest()
+        # against the recorded string -- the byte comparison the tolerances were
+        # added to avoid.
+        source = Path("gat/state_snapshot.py").read_text(encoding="utf-8")
+        self.assertIn(
+            'if world.digest() != source_world_digest:',
+            source,
+        )
+        self.assertIn(
+            'raise SnapshotError("reconstructed world digest differs from source")',
+            source,
+        )
+
+
 class InheritedIdentityTests(unittest.TestCase):
     """Nine moving identities, one root cause. Pin the inheritance."""
 

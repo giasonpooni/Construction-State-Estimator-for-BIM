@@ -282,6 +282,42 @@ The only remedy with no residual probability is to keep floats out of an
 equality-tested identity altogether — option 3 — comparing beliefs to a declared
 tolerance and citing the comparison, rather than hashing them and comparing hashes.
 
+### The digest path is the outlier in its own codebase
+
+The audit checked how every layer that compares floats does it. Three of four
+already handle reassociation, by three different correct methods:
+
+| layer | how it compares | portable |
+|---|---|---|
+| `gat/engine/verify.py` invariants | relative tolerance, `1e-9 * max(1, abs(expected))` | yes |
+| `gat/engine/configuration.py` | quantizes to `QUANT = 1e-6` before hashing | yes, with the margin above |
+| `computational_equivalence` | takes `atol` and `rtol` | yes — **if they are ever passed** |
+| `World.digest()`, `reconstruct_snapshot` | raw float64 bytes | **no** |
+
+The invariant registry never compares a computed float exactly; it always
+divides by a tolerance scaled to the expected magnitude. So the runtime's
+*verification* layer was written with reassociation in mind, and its *identity*
+layer was not.
+
+And `computational_equivalence` in `gat/state_snapshot.py` already carries the
+remedy, with the use case named in its own docstring:
+
+> The default is exact same-platform identity. Nonzero tolerances support
+> cross-platform carriers while identity, topology and expression semantics
+> remain exact.
+
+That is this finding, written down before it was measured. The parameters exist,
+they default to `0.0`, and **nothing in the repository ever passes a nonzero
+value** — `tests/test_digest_portability.py` pins that, so the day someone uses
+them the test says so. Meanwhile `reconstruct_snapshot` does not call
+`computational_equivalence` at all for its portability check: it compares
+`world.digest()` against the recorded string, which is the byte comparison the
+tolerances were added to avoid.
+
+So the snapshot half of the remedy is not a design decision. It is calling the
+function that is already there, with a tolerance instead of zero, and recording
+which tolerance was applied.
+
 The sparse-belief exit test still needs its own number, and it is a different
 number: `docs/sparse-belief-v1.md:41` wants a relative agreement bound between a
 dense and a sparse path, not a representation quantum. Quantization does not

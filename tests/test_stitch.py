@@ -236,6 +236,63 @@ class JoinTests(unittest.TestCase):
         law = stitch(plant, _receipt(plant))["law_applied"]
         self.assertIn("not the commit that fixed them", law["note"])
 
+    def test_a_level_is_optional_because_it_is_optional_upstream(self) -> None:
+        # lyapunov.runtime.verdict takes level: float | None and applies no bound
+        # when it is None. Refusing an absent level would invent a stricter law
+        # than the instrument being mirrored.
+        plant = _plant()
+        receipt = _receipt(plant)
+        receipt.pop("level", None)
+        record = stitch(plant, receipt)
+        certificate = record["sequence"][1]
+        self.assertIsNone(certificate["level"])
+        self.assertIs(certificate["level_bounded"], False)
+        self.assertIs(certificate["supports"], True)
+
+    def test_a_declared_level_is_carried_into_the_record(self) -> None:
+        # Before this, the stitcher never read `level` at all -- it appeared only
+        # inside the string "outside-level" -- so a sample certified inside a
+        # declared region and one certified with no region produced identical
+        # records. The companion distinguishes them; now so does this.
+        plant = _plant()
+        record = stitch(plant, _receipt(plant, level=2.5))
+        certificate = record["sequence"][1]
+        self.assertEqual(certificate["level"], 2.5)
+        self.assertIs(certificate["level_bounded"], True)
+
+    def test_a_malformed_level_is_refused(self) -> None:
+        plant = _plant()
+        for bad, reason in (
+            (0.0, "positive"),
+            (-5.0, "positive"),
+            (float("inf"), "finite"),
+            (float("nan"), "finite"),
+            ("2.5", "number"),
+            (True, "number"),
+        ):
+            with self.subTest(level=bad):
+                with self.assertRaisesRegex(StitchError, reason):
+                    stitch(plant, _receipt(plant, level=bad))
+
+    def test_the_record_says_it_did_not_verify_the_verdict(self) -> None:
+        """A well-formed lie composes. The record has to admit that.
+
+        Probed during the audit: an A with eigenvalues +1 and +2, a zero matrix,
+        and a discrete A with spectral radius 2 all compose with
+        verdict "certified" and supports true. That is correct -- re-deriving the
+        verdict would be the computation this module refuses to do -- but the
+        record listed five things it did not claim and this was not among them.
+        """
+        plant = _plant(matrix=[[1.0, 0.0], [0.0, 2.0]])  # manifestly unstable
+        record = stitch(plant, _receipt(plant))
+        self.assertIs(record["composes"], True)
+        self.assertIs(record["sequence"][1]["supports"], True)
+        self.assertIn(
+            "this composition did not verify the verdict against A; "
+            "form was checked, not truth",
+            record["not_claimed"],
+        )
+
     def test_what_the_record_refuses_to_claim(self) -> None:
         plant = _plant()
         record = stitch(plant, _receipt(plant))
