@@ -41,6 +41,45 @@ from gat.workflows import (
 MODEL = os.path.join(os.path.dirname(gat.demo.__file__), "model.ifc")
 
 
+class CausalRecordTypeGuardTests(unittest.TestCase):
+    """record_causal had four named guards and no type check.
+
+    GatSession.record_policy, record_approval and record_external_action are
+    thin wrappers over ExecutionLedger.record_causal, and the annotation is not
+    enforcement. A caller passing the wrong type reached record.world_digest and
+    got AttributeError naming an internal attribute, where every other guard in
+    that method says what it refused.
+    """
+
+    def test_a_non_record_is_refused_by_name(self) -> None:
+        session = GatSession.load_ifc(MODEL)
+        for bad in ("policy-v1", {"note": "x"}, None, 7, ["policy-v1"]):
+            with self.subTest(value=type(bad).__name__):
+                with self.assertRaises(LedgerError) as caught:
+                    session.record_policy(bad)
+                message = str(caught.exception)
+                self.assertIn("causal record must be", message)
+                self.assertIn(type(bad).__name__, message)
+
+    def test_all_three_wrappers_share_the_guard(self) -> None:
+        session = GatSession.load_ifc(MODEL)
+        for method in (
+            session.record_policy,
+            session.record_approval,
+            session.record_external_action,
+        ):
+            with self.subTest(method=method.__name__):
+                with self.assertRaises(LedgerError):
+                    method("not a record")
+
+    def test_nothing_was_written_by_the_refusal(self) -> None:
+        session = GatSession.load_ifc(MODEL)
+        before = len(session.ledger.events)
+        with self.assertRaises(LedgerError):
+            session.record_policy("not a record")
+        self.assertEqual(len(session.ledger.events), before)
+
+
 class CausalLedgerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.session = GatSession.load_ifc(MODEL)
