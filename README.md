@@ -19,7 +19,9 @@ an optional signed restart carrier, not the product.
 It is **not** a learned model, a Revit replacement, an FEM solver, or a
 digital-twin platform.
 
-Status: experimental v0. License: MIT. Core dependency: `numpy`.
+Status: experimental v0. Proposed original-source license: MPL-2.0, pending review.
+Core dependency: `numpy`. Legacy MIT grants and nested GPL/data-license
+exceptions are preserved; see [LICENSE-POLICY.md](LICENSE-POLICY.md).
 
 Architecture notes, research questions, and naming live in
 [`docs/treatise.md`](docs/treatise.md).

@@ -2,6 +2,6 @@
 name = "cse-fixedpoint-kernel"
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
+license = "MPL-2.0"
 description = "i32 discrete maps for a future SP1 guest. No IEEE-754."
 publish = false

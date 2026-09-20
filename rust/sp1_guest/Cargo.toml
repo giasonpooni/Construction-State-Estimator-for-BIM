@@ -2,7 +2,7 @@
 name = "cse-sp1-guest"
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
+license = "MPL-2.0"
 description = "Guest-shaped host runner for the i32 kernels. Not an SP1 prove."
 publish = false
 

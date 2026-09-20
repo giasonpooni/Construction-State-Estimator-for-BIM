@@ -2,7 +2,7 @@
 name = "cse-effort-gate"
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
+license = "MPL-2.0"
 description = "Live satellite-effort authority. Policy only. Does not run CUDA or SP1."
 publish = false
 
