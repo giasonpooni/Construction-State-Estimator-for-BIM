@@ -315,24 +315,13 @@ For reference, `configuration_digest`'s own margin at `QUANT = 1e-6`, over the
 Comfortable, and a probability rather than a proof: if boundary positions were
 uniform, about one model in 550 would land close enough to flip.
 
-### What is not fixed, and why
+### Current limitations
 
-`World.digest()` still hashes raw bytes. Any fix moves every digest on all four
-frozen slices at once, which is the largest possible version bump, so it is a
-decision to take deliberately rather than a repair to slip in. The open question
-is no longer "what tolerance?" — it is whether `PORTABLE_SIGNIFICANT_DIGITS` is
-the right resolution for the *kernel's* identity, given that the kernel's
-sensitivity to path spelling is deliberate and its sensitivity to processor is
-not.
-
-The snapshot round-trip needs the same decision and would be fixed by calling the
-function already there: `computational_equivalence` with a tolerance instead of
-zero, recording which tolerance was applied. The raw belief can keep its exact
-check, because that one is genuinely portable.
-
-The sparse-belief exit test still needs its own number, and it is a different
-number: `docs/sparse-belief-v1.md:41` wants a relative agreement bound between a
-dense and a sparse path, not a representation quantum.
+`World.digest()` still hashes raw bytes, so its covariance contribution can vary
+with processor and BLAS dispatch. The portable digest does not replace kernel
+identity, snapshot verification, or restart identity. Snapshot round-trips retain
+the existing exact checks and can fail when the declared execution envelope is
+not met. No sparse belief representation is implemented.
 
 ## What the tests assert
 

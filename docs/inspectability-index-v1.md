@@ -28,7 +28,7 @@ human inspector (unchanged)
 be presented for authorization. It is not an `ApprovalRecord` and not an
 occupancy permit.
 
-## Why an id is the generative piece
+## Identity and binding
 
 Variable identity in the ledger is already structural
 (`ifc_class`, `global_id`, `quantity`). Teams do not stall on that math.
@@ -95,49 +95,7 @@ external-commitment adapter:
 - IFC world / case receipt already in the execution ledger
 - `rci-evidence-commitment-v1`
 - `torus-report-commitment-v1`
-- a future `foreign-job-commitment-v1` (survey job file, cloud, layout
-  CSV) with claim scope `record-integrity-only`
 
 A citation does not condition belief. A later `ObserveQuantity` or
 `ObserveLinearized` transition is the only path from a field file into
 the Gaussian state, and that path remains the kernel.
-
-## Pace thesis (not a pin)
-
-The working hypothesis: most failed or aborted inspection visits are
-*package* failures (unnamed bind, wrong revision, missing setup, open
-RFI), not code-interpretation failures. If the index makes those holes
-visible before the visit, time-to-first-complete-package drops.
-
-That hypothesis is allowed in argument. It is forbidden as a README
-number, a harness claim, or a committee metric until a project records:
-
-- open `REQUEST_EVIDENCE` count per `space_id`
-- calendar time from "we think we are done" to "no unnamed holes"
-- official visits until inspection is even started
-
-Do not write "4/5 faster" into a pin file.
-
-## Non-claims
-
-- The index does not pass inspection.
-- The index does not authorize work (`ApprovalRecord` stays separate).
-- The index does not register a point cloud or interpret GPR.
-- Adding a survey digest does not change Beam-B1 or opening-fit replay.
-- Headless `ACCEPT` with `require_verified_evidence_for_accept: false`
-  remains design-only review and must not be copied onto this index as
-  as-built readiness.
-
-## Relation to existing satellites
-
-| Existing object | Role |
-|---|---|
-| Acceptance case / `gat-headless` | Computes one workflow disposition |
-| Execution ledger | Authoritative history for one world |
-| Causal `assessment` / `approval` | Evaluation and stamp, belief unchanged |
-| Experiment harness | Binds independent tool digests |
-| This index | Names the space those objects are about |
-
-If a change to this document would alter a disposition, digest, or
-replay on opening fit, clearance, beam verdict, or RFI preview, stop.
-That is a kernel version bump, not an index edit.

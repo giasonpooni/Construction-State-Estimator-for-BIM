@@ -104,5 +104,4 @@ The record says what the publisher claims occurred. An `authority` string or
 `authorization_ref` is not an identity proof. A trusted OpenUSD carrier
 signature authenticates the carrier publisher and the complete ledger head,
 not necessarily the named approver. Independent approver signatures,
-certificates, revocation, and external action receipts remain future trust
-adapters.
+certificates, revocation, and external action receipt verification are not implemented.
