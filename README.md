@@ -126,8 +126,8 @@ session.export_ifc("out/model_transformed.ifc")
 ## Honesty (v0)
 
 - Covariance is first-order. Means of derived quantities are exact re-evaluations.
-- Dense `float64` covariance is the verified oracle. Sparse / factor-graph
-  belief is planned, not shipped. See [`docs/sparse-belief-v1.md`](docs/sparse-belief-v1.md).
+- Dense `float64` covariance is the verified oracle. A sparse belief representation
+  is not implemented; resident covariance storage is O(n²).
 - The v0 IFC adapter reads quantities and placements, not general solids.
   Beams are `SWEPT_SOLID`, `LENGTH_ONLY`, or `BLOCKED` — never a silent bbox.
 - Gaussian clash is a proxy; openings are not subtracted. That support is
@@ -165,7 +165,6 @@ satellite. See [`docs/kernel-v1.md`](docs/kernel-v1.md).
 - [`docs/kernel-v1.md`](docs/kernel-v1.md)
 - [`docs/experiment-index-v1.md`](docs/experiment-index-v1.md) — how to try each tool
 - [`docs/experiment-harness-v1.md`](docs/experiment-harness-v1.md) — bind companion records
-- [`docs/sparse-belief-v1.md`](docs/sparse-belief-v1.md)
 - [`docs/ifcopenshell-adapter-v0.md`](docs/ifcopenshell-adapter-v0.md)
 - [`docs/proof-carrying-state-v1.md`](docs/proof-carrying-state-v1.md) — replayable transition commitment
 - [`docs/workflow-deployment-v1.md`](docs/workflow-deployment-v1.md)

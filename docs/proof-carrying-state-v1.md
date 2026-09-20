@@ -97,9 +97,7 @@ inspectable summary:
 The first implemented SP1 experiment is the bounded AISC F2-1 beam yielding
 calculation in [`sp1-beam-guest-v1.md`](sp1-beam-guest-v1.md). It uses
 milli-MPa, mm3, and milli-N*mm checked integers and keeps the Gaussian update
-outside the proof boundary. A future fixed-point `Sigma' = J Sigma J^T`
-experiment would require separately reviewed scaling and quantization-error
-bounds.
+outside the proof boundary. Covariance propagation is not proven by this guest.
 
 ## Creation and verification
 
@@ -168,14 +166,3 @@ Deployments must enforce an allowed tuple of proof system, proof type, program
 digest, verifying-key digest, and numerical profile. They must also evaluate
 the proof system's actual privacy properties. GAT deliberately does not infer
 zero knowledge from a label in the manifest.
-
-## OpenUSD carrier direction
-
-The proof artifact remains content-addressed and external. A future OpenUSD
-carrier revision may embed the small manifest or a manifest reference beneath
-authoritative state and bind its digest into the carrier signature. It should
-not embed large proofs by default, and it should commit to GAT's canonical
-semantic state rather than raw `.usdc` file bytes.
-
-That carrier change remains deferred until the beam guest has passed
-adversarial and performance testing with retained proof artifacts.

@@ -15,3 +15,10 @@ htmlcov/
 .DS_Store
 sp1/beam/target/
 *.sp1-proof
+
+# Local development notes
+.private/
+AGENTS.md
+CLAUDE.md
+HANDOFF.md
+*_HANDOFF.md

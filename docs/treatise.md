@@ -51,7 +51,6 @@ not a satellite.
 
 - [`kernel-v1.md`](kernel-v1.md)
 - [`geometry-authority-v1.md`](geometry-authority-v1.md)
-- [`sparse-belief-v1.md`](sparse-belief-v1.md)
 - [`ifcopenshell-adapter-v0.md`](ifcopenshell-adapter-v0.md)
 - [`proof-carrying-state-v1.md`](proof-carrying-state-v1.md)
 - [`real-ifc-validation-v1.md`](real-ifc-validation-v1.md)

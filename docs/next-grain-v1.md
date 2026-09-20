@@ -1,4 +1,4 @@
-# Next grain (Office-A declared + RCI + tank)
+# Declared calibration examples (Office-A and Tank-T1)
 
 ```bash
 python -m gat.demo.calibrate_verify --demo -o out/calibrate-verify
