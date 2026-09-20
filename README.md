@@ -1,5 +1,9 @@
 # Construction State Estimator (CSE)
 
+Part of **Notation Systems' computational instrumentation and evidence infrastructure** for industrial and cyber-physical systems.
+
+[Stack map](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/STACK.md) · [Component role and interfaces](docs/STACK_ROLE.md)
+
 Portable **evidence-to-decision** runtime for BIM. CSE compiles IFC design
 intent into an auditable architectural belief, conditions that belief on
 physical evidence, and returns a fail-closed disposition:
@@ -21,9 +25,9 @@ digital-twin platform.
 
 Status: experimental v0. License: MIT. Core dependency: `numpy`.
 
-Architecture notes, research questions, and naming live in
+Architecture, scope, and naming are documented in
 [`docs/treatise.md`](docs/treatise.md).
-Seating chart: [`docs/MAP.md`](docs/MAP.md).
+Component relationships: [`docs/MAP.md`](docs/MAP.md).
 
 ## Loop
 
@@ -160,7 +164,7 @@ satellite. See [`docs/kernel-v1.md`](docs/kernel-v1.md).
 ## Docs
 
 - [`docs/treatise.md`](docs/treatise.md) — public name, architecture, proof language
-- [`docs/MAP.md`](docs/MAP.md) — seating chart
+- [`docs/MAP.md`](docs/MAP.md) — component relationships
 - [`docs/geometry-authority-v1.md`](docs/geometry-authority-v1.md)
 - [`docs/kernel-v1.md`](docs/kernel-v1.md)
 - [`docs/experiment-index-v1.md`](docs/experiment-index-v1.md) — how to try each tool
