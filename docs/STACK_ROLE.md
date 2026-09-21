@@ -14,6 +14,32 @@ This component owns **bim evidence-to-decision computation**. The [stack map](ht
 
 BIM priors and synthetic fixtures do not establish as-built acceptance. The bounded arithmetic guest does not prove the observations or general building safety.
 
+## Evidence coverage and disposition
+
+```mermaid
+flowchart TD
+  C["Checks for one world"] --> B{"Receipt identity binding"}
+  R["Evidence receipts"] --> B
+  B -->|"stale world or unknown check"| X["Reject invalid binding"]
+  B -->|"matching references"| V["Verified coverage by check"]
+  P["Declared acceptance policy"] --> D{"Disposition priority"}
+  V --> D
+  C --> D
+  D -->|"any violated check"| N["REJECT"]
+  D -->|"unresolved or uncovered"| E["REQUEST_EVIDENCE"]
+  D -->|"all satisfied and policy met"| A["ACCEPT recommendation"]
+  A -.->|"separate approval responsibility"| H["Human or deployment authority"]
+```
+
+Solid arrows summarize the implemented case evaluator in
+`gat/workflows/acceptance.py`; the dotted relationship marks authority outside
+that evaluator. Receipt eligibility requires the policy’s accepted evidence kind
+and verification flag. A stale receipt is an input error, not missing coverage.
+The explicit design-review policy can waive as-built evidence; the disposition
+retains that policy choice rather than presenting it as verified construction.
+
+See the [diagram atlas](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/DIAGRAMS.md) for the wider system.
+
 ## Interoperability
 
 Integrations use the component's documented contract and an explicit adapter. They preserve source observations, ordered quantities, units, coordinate/frame meaning, time semantics, missingness and declared uncertainty where applicable. An unimplemented field or conversion must be reported as unsupported rather than silently inferred.

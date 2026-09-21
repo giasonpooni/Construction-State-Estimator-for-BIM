@@ -2,19 +2,29 @@
 
 Part of **Notation Systems' computational instrumentation and evidence infrastructure** for industrial and cyber-physical systems.
 
-[Stack map](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/STACK.md) · [Component role and interfaces](docs/STACK_ROLE.md)
+[Diagram atlas](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/DIAGRAMS.md) · [Stack map](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/STACK.md) · [Component role and interfaces](docs/STACK_ROLE.md)
 
 Portable **evidence-to-decision** runtime for BIM. CSE compiles IFC design
 intent into an auditable architectural belief, conditions that belief on
 physical evidence, and returns a fail-closed disposition:
 
-```text
-intent + evidence + criterion
-    → posterior belief
-    → SATISFIED / VIOLATED / UNRESOLVED
-    → ACCEPT / REJECT / REQUEST_EVIDENCE
-    → verified state (replayable)
+```mermaid
+flowchart TD
+  I["IFC intent and typed evidence"] --> B["Condition and propagate belief"]
+  B --> C["Assess declared criteria"]
+  P["Evidence and geometry policy"] --> G{"Case disposition gate"}
+  C --> G
+  G -->|"VIOLATED"| R["REJECT"]
+  G -->|"UNRESOLVED or evidence missing"| E["REQUEST_EVIDENCE"]
+  G -->|"SATISFIED and policy met"| A["ACCEPT recommendation"]
+  R --> D["Scoped disposition and replay"]
+  E --> D
+  A --> D
 ```
+
+The disposition records its assessed world and policy. `ACCEPT` is a
+recommendation, not construction approval; a safe BIM prior alone does not
+satisfy an as-built evidence requirement.
 
 Public name: **CSE**. Python package: `gat-bim`. Import and CLI: `gat`
 (historical engine namespace; not a learned neural Transformer). OpenUSD is
