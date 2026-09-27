@@ -1,12 +1,23 @@
-# Construction State Estimator (CSE)
+# State Estimator for BIM
 
-Part of **Notation Systems' computational instrumentation and evidence infrastructure** for industrial and cyber-physical systems.
+**A Notation Systems project.**
 
-[Diagram atlas](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/DIAGRAMS.md) · [Stack map](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/STACK.md) · [Component role and interfaces](docs/STACK_ROLE.md)
+[notations.io](https://notations.io) · [Notations Design Terminal](https://github.com/giasonpooni/Notations-Design-Terminal)
 
-Portable **evidence-to-decision** runtime for BIM. CSE compiles IFC design
-intent into an auditable architectural belief, conditions that belief on
-physical evidence, and returns a fail-closed disposition:
+[Diagram atlas](https://github.com/giasonpooni/Notations-Design-Terminal/blob/main/docs/DIAGRAMS.md) · [Stack map](https://github.com/giasonpooni/Notations-Design-Terminal/blob/main/docs/STACK.md) · [Component role and interfaces](docs/STACK_ROLE.md)
+
+**Evidence-backed building-state estimation, engineering assessment, and
+inspection planning.**
+
+**State Estimator for BIM** is developed as a **Notation Systems project**.
+Notation Systems builds scientific and industrial tooling that connects models,
+measurements, computation, and inspectable results. This project provides the
+BIM-specific instrument: it compiles supported IFC design intent into a versioned
+building-state belief, conditions that belief on supplied evidence, and evaluates
+explicit engineering criteria.
+
+The historical **CSE** engine name remains in use. CSE returns a fail-closed
+disposition:
 
 ```mermaid
 flowchart TD
@@ -26,7 +37,7 @@ The disposition records its assessed world and policy. `ACCEPT` is a
 recommendation, not construction approval; a safe BIM prior alone does not
 satisfy an as-built evidence requirement.
 
-Public name: **CSE**. Python package: `gat-bim`. Import and CLI: `gat`
+Project: **State Estimator for BIM**. Compatibility engine name: **CSE**. Python package: `gat-bim`. Import and CLI: `gat`
 (historical engine namespace; not a learned neural Transformer). OpenUSD is
 an optional signed restart carrier, not the product.
 
@@ -38,6 +49,27 @@ Status: experimental v0. License: MIT. Core dependency: `numpy`.
 Architecture, scope, and naming are documented in
 [`docs/treatise.md`](docs/treatise.md).
 Component relationships: [`docs/MAP.md`](docs/MAP.md).
+
+## Role in the Notation Systems stack
+
+This is an independently usable scientific instrument, not a second terminal.
+**Notations Design Terminal** is the investigation and operator environment;
+CSE retains responsibility for IFC identities, building-state calculations, and
+scoped engineering dispositions. Terminal integration must use explicit records
+and supported adapters, not replace this project's numerical or evidence rules.
+
+| Use case | What this project contributes | Boundary |
+|---|---|---|
+| Opening and prefabricated-part fit | Compare declared dimensions with uncertainty and explicit acceptance policy. | An as-built case still needs suitable evidence. |
+| Beam/material review | Evaluate supported beam checks and show the effect of a supplied material certificate. | Only the declared model and criterion are assessed. |
+| Design-change impact | Preview a change, propagate its effects, and retain a replayable explanation. | A preview is not an external action. |
+| Surface-inspection planning | Bind candidate path studies to a current BIM element and length quantity; inspect and explicitly replay a companion report. | A path plan does not measure the building or approve work. |
+
+The inspection addition is documented below. IFC semantics stay here;
+geodesic-path calculations stay in
+[Curved Surface Runtime](https://github.com/giasonpooni/Curved-Surface-Runtime).
+Evidence admission, execution permission, and cryptographic verification remain
+separate from either project's numerical output.
 
 ## Loop
 
@@ -68,8 +100,8 @@ the check.
 ## Install
 
 ```bash
-git clone https://github.com/giasonpooni/Construction-State-Estimator-for-BIM.git
-cd Construction-State-Estimator-for-BIM
+git clone https://github.com/giasonpooni/State-Estimator-for-BIM.git
+cd State-Estimator-for-BIM
 python -m pip install -e .
 python -m unittest discover
 python -m gat.demo.workflow
@@ -113,6 +145,49 @@ change Beam-B1. It does not call JSPT. It does not invoke SP1.
 JSPT remains the owner of A2–A5. Pin a git SHA and wrap types in domain
 code. Do not put `sensitivity` in the guest.
 
+## Surface-inspection interoperability
+
+The new **read-only inspection-planning extension** connects a BIM question to
+candidate path-sensitivity calculations without adding a mesh solver to CSE.
+It lives in [the inspection adapter](gat/adapters/surface_inspection.py), outside
+the existing state-update and acceptance kernels.
+
+```text
+CSE world + IFC element + length quantity + declared spatial mapping
+    → committed inspection request and candidate records
+    → Curved Surface Runtime sampled tolerance comparison
+    → retained report
+    → CSE identity/integrity inspection or explicit numerical replay
+```
+
+The request binds the current world digest, IFC class and GlobalId, quantity,
+spatial-frame identifier, a separately retained mapping declaration's digest,
+full candidate-record commitments, and explicit metre/radian limits. The native
+transfer frame is not silently equated with the BIM spatial frame.
+
+`prepare_request` does not run a solver. `inspect_report` checks the report's
+bindings and structure without importing the companion. `replay_report` explicitly
+uses the installed companion to recompute the retained record-based assessment.
+Stale worlds, changed candidate sets, inconsistent report bindings, and attempts
+to promote a plan into action or physical-validation authority are refused.
+
+With both inspection extensions installed, run:
+
+```bash
+python -m gat.demo.surface_inspection out/inspection
+```
+
+The shipped IFC and two plane-path **fixtures** produce one candidate within
+the sampled limits and one outside them. The report round-trips through JSON,
+explicit replay matches, and the as-built disposition stays `REQUEST_EVIDENCE`.
+The example writes a new output directory and refuses to overwrite an existing
+one. These are not IFC-derived surface paths, registered scans, or field trials.
+
+See [the interface and verification guide](docs/SURFACE_INSPECTION.md) and the
+[paired qualification workflow](.github/workflows/surface-inspection.yml).
+The extension is development code with its own integration gate; it does not
+register a Notations terminal operation automatically or claim SP1 qualification.
+
 ## One decision
 
 `python -m gat.demo.workflow` runs opening fit on the shipped demo IFC and
@@ -137,7 +212,7 @@ session.run(SetParameter(session.var("Level 1", "ClearHeight"), 3.4, design_sigm
 session.export_ifc("out/model_transformed.ifc")
 ```
 
-## Honesty (v0)
+## Scientific and operational boundaries (v0)
 
 - Covariance is first-order. Means of derived quantities are exact re-evaluations.
 - Dense `float64` covariance is the verified oracle. A sparse belief representation
@@ -190,6 +265,9 @@ Not Revit, Archicad, CAD, a renderer, an LLM, a generic Gaussian package,
 FEM, IFC, or a twin platform. It is a computational layer that can sit
 between those representations and a decision.
 
-Repository: [giasonpooni/Construction-State-Estimator-for-BIM](https://github.com/giasonpooni/Construction-State-Estimator-for-BIM).
-The previous URL `BIM-State-Transformer-Engine-WIP` redirects here.
+Repository: [giasonpooni/State-Estimator-for-BIM](https://github.com/giasonpooni/State-Estimator-for-BIM).
+Historical repository names: `Construction-State-Estimator-for-BIM` and
+`BIM-State-Transformer-Engine-WIP`. Existing package and schema identities remain unchanged.
 Engine name is CSE. Package is `gat-bim`. Import is `gat`.
+
+**Project stewardship: Notation Systems.** The existing MIT license and contributor notices remain unchanged.
