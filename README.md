@@ -1,8 +1,8 @@
-# Construction State Estimator (CSE)
+# State Estimator for BIM
 
 Part of **Notation Systems' computational instrumentation and evidence infrastructure** for industrial and cyber-physical systems.
 
-[Diagram atlas](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/DIAGRAMS.md) · [Stack map](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/STACK.md) · [Component role and interfaces](docs/STACK_ROLE.md)
+[Notations Engineering Terminal (CIW)](https://github.com/giasonpooni/Notations-Engineering-Terminal) · [Diagram atlas](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/main/docs/DIAGRAMS.md) · [Stack map](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/main/docs/STACK.md) · [Component role and interfaces](docs/STACK_ROLE.md)
 
 Portable **evidence-to-decision** runtime for BIM. CSE compiles IFC design
 intent into an auditable architectural belief, conditions that belief on
@@ -26,16 +26,19 @@ The disposition records its assessed world and policy. `ACCEPT` is a
 recommendation, not construction approval; a safe BIM prior alone does not
 satisfy an as-built evidence requirement.
 
-Public name: **CSE**. Python package: `gat-bim`. Import and CLI: `gat`
-(historical engine namespace; not a learned neural Transformer). OpenUSD is
-an optional signed restart carrier, not the product.
+Current project title: **State Estimator for BIM**. **Construction State
+Estimator (CSE)** remains the engine name and historical title. Python package:
+`gat-bim`. Import and CLI: `gat` (historical engine namespace; not a learned
+neural Transformer). OpenUSD is an optional signed restart carrier, not the
+product. Naming changes do not rewrite model, evidence, disposition, execution,
+verification, or retained runtime identities.
 
 It is **not** a learned model, a Revit replacement, an FEM solver, or a
 digital-twin platform.
 
 Status: experimental v0. License: MIT. Core dependency: `numpy`.
 
-Architecture, scope, and naming are documented in
+Architecture, scope, and historical naming are documented in
 [`docs/treatise.md`](docs/treatise.md).
 Component relationships: [`docs/MAP.md`](docs/MAP.md).
 
@@ -68,8 +71,8 @@ the check.
 ## Install
 
 ```bash
-git clone https://github.com/giasonpooni/Construction-State-Estimator-for-BIM.git
-cd Construction-State-Estimator-for-BIM
+git clone https://github.com/giasonpooni/State-Estimator-for-BIM.git
+cd State-Estimator-for-BIM
 python -m pip install -e .
 python -m unittest discover
 python -m gat.demo.workflow
@@ -173,7 +176,7 @@ satellite. See [`docs/kernel-v1.md`](docs/kernel-v1.md).
 
 ## Docs
 
-- [`docs/treatise.md`](docs/treatise.md) — public name, architecture, proof language
+- [`docs/treatise.md`](docs/treatise.md) — historical name, architecture, proof language
 - [`docs/MAP.md`](docs/MAP.md) — component relationships
 - [`docs/geometry-authority-v1.md`](docs/geometry-authority-v1.md)
 - [`docs/kernel-v1.md`](docs/kernel-v1.md)
@@ -190,6 +193,8 @@ Not Revit, Archicad, CAD, a renderer, an LLM, a generic Gaussian package,
 FEM, IFC, or a twin platform. It is a computational layer that can sit
 between those representations and a decision.
 
-Repository: [giasonpooni/Construction-State-Estimator-for-BIM](https://github.com/giasonpooni/Construction-State-Estimator-for-BIM).
-The previous URL `BIM-State-Transformer-Engine-WIP` redirects here.
-Engine name is CSE. Package is `gat-bim`. Import is `gat`.
+Repository: [giasonpooni/State-Estimator-for-BIM](https://github.com/giasonpooni/State-Estimator-for-BIM).
+Previous project locations include `Construction-State-Estimator-for-BIM` and
+`BIM-State-Transformer-Engine-WIP`. These remain historical references; use the
+current repository location for new links. Engine name remains CSE. Package is
+`gat-bim`. Import is `gat`.
