@@ -14,10 +14,12 @@ Python CSE World + actual Jacobian
   -> retained CIW result -> read-only GSC quantity inspection
 ```
 
-CIW is not a dependency of this package. Its companion implementation lives in
-`Notations-Engineering-Terminal/src/ciw/polyglot_linear_map.py`; the consumer
-contract and runtime provisioning are documented there in
-`docs/JULIA_PYTHON_RUST_CPP.md` and `docs/NATIVE_INTEROP.md`.
+CIW is not a dependency of this package. The
+[companion CIW adapter](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/a607122cb90507f98e7bcff39a3f488de4576bff/src/ciw/polyglot_linear_map.py),
+[shared architecture guide](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/a607122cb90507f98e7bcff39a3f488de4576bff/docs/JULIA_PYTHON_RUST_CPP.md),
+and [native-runtime provisioning guide](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/177b8f000df791d33ec612d80c1b81c4f681e306/docs/NATIVE_INTEROP.md)
+live in Notations-Engineering-Terminal, not in this repository. These links
+identify the reviewed companion implementations rather than local paths.
 
 ## Export an existing World
 
