@@ -19,7 +19,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          repository: giasonpooni/Curved-Surface-Geodesic-Sensitivity-Runtime
+          repository: giasonpooni/Curved-Surface-Runtime
           ref: bbc535af29c30997e56fd120320c570830676462
           path: csg
           persist-credentials: false
@@ -34,14 +34,25 @@ jobs:
           git -C cse rev-parse HEAD > evidence/cse-revision.txt
           git -C csg rev-parse HEAD > evidence/csg-revision.txt
           sha256sum evidence/*.tar.gz > evidence/SHA256SUMS
+      - name: Install baseline engines and build wheels
+        run: |
+          python -m pip install ./cse './csg[dev]' 'numpy==2.4.3' 'pytest==9.0.2'
+          python -m pip wheel --no-deps ./cse ./csg --wheel-dir evidence/dist
+          mkdir -p tooling
+          python -c "import shutil; shutil.copyfile(shutil.which('ruff'), 'tooling/ruff')"
+          sha256sum tooling/ruff > tooling/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: inspection-tooling
+          path: tooling
+          if-no-files-found: error
+          retention-days: 1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: inspection-sources
           path: evidence
           if-no-files-found: error
           retention-days: 14
-      - name: Install baseline engines
-        run: python -m pip install ./cse './csg[dev]' 'numpy==2.4.3' 'pytest==9.0.2'
       - name: CSE baseline suite
         working-directory: cse
         run: python -m unittest discover -q 2>&1 | tee ../evidence/cse-tests.txt
