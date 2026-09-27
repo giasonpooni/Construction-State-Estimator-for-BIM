@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: giasonpooni/Curved-Surface-Runtime
-          ref: 6e9afd18ce01130ea3c00f0fe7368d23d40fd269
+          ref: 3c031e39aec325e1fed5c2d839c9d16bf72f4d4b
           path: csg
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065

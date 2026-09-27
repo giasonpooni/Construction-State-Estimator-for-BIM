@@ -2,9 +2,9 @@
 
 **A Notation Systems project.**
 
-[notations.io](https://notations.io) · [Notations Design Terminal](https://github.com/giasonpooni/Notations-Design-Terminal)
+[notations.io](https://notations.io) · [Notations Engineering Terminal](https://github.com/giasonpooni/Notations-Engineering-Terminal)
 
-[Diagram atlas](https://github.com/giasonpooni/Notations-Design-Terminal/blob/main/docs/DIAGRAMS.md) · [Stack map](https://github.com/giasonpooni/Notations-Design-Terminal/blob/main/docs/STACK.md) · [Component role and interfaces](docs/STACK_ROLE.md)
+[Diagram atlas](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/main/docs/DIAGRAMS.md) · [Stack map](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/main/docs/STACK.md) · [Component role and interfaces](docs/STACK_ROLE.md)
 
 **Evidence-backed building-state estimation, engineering assessment, and
 inspection planning.**
@@ -37,23 +37,26 @@ The disposition records its assessed world and policy. `ACCEPT` is a
 recommendation, not construction approval; a safe BIM prior alone does not
 satisfy an as-built evidence requirement.
 
-Project: **State Estimator for BIM**. Compatibility engine name: **CSE**. Python package: `gat-bim`. Import and CLI: `gat`
-(historical engine namespace; not a learned neural Transformer). OpenUSD is
-an optional signed restart carrier, not the product.
+Current project title: **State Estimator for BIM**. **Construction State
+Estimator (CSE)** remains the engine name and historical title. Python package:
+`gat-bim`. Import and CLI: `gat` (historical engine namespace; not a learned
+neural Transformer). OpenUSD is an optional signed restart carrier, not the
+product. Naming changes do not rewrite model, evidence, disposition, execution,
+verification, or retained runtime identities.
 
 It is **not** a learned model, a Revit replacement, an FEM solver, or a
 digital-twin platform.
 
 Status: experimental v0. License: MIT. Core dependency: `numpy`.
 
-Architecture, scope, and naming are documented in
+Architecture, scope, and historical naming are documented in
 [`docs/treatise.md`](docs/treatise.md).
 Component relationships: [`docs/MAP.md`](docs/MAP.md).
 
 ## Role in the Notation Systems stack
 
 This is an independently usable scientific instrument, not a second terminal.
-**Notations Design Terminal** is the investigation and operator environment;
+**Notations Engineering Terminal** is the investigation and operator environment;
 CSE retains responsibility for IFC identities, building-state calculations, and
 scoped engineering dispositions. Terminal integration must use explicit records
 and supported adapters, not replace this project's numerical or evidence rules.
@@ -248,7 +251,7 @@ satellite. See [`docs/kernel-v1.md`](docs/kernel-v1.md).
 
 ## Docs
 
-- [`docs/treatise.md`](docs/treatise.md) — public name, architecture, proof language
+- [`docs/treatise.md`](docs/treatise.md) — historical name, architecture, proof language
 - [`docs/MAP.md`](docs/MAP.md) — component relationships
 - [`docs/geometry-authority-v1.md`](docs/geometry-authority-v1.md)
 - [`docs/kernel-v1.md`](docs/kernel-v1.md)
