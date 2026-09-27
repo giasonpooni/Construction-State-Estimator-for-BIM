@@ -11,7 +11,7 @@ concurrency:
 jobs:
   qualification:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -34,6 +34,12 @@ jobs:
           git -C cse rev-parse HEAD > evidence/cse-revision.txt
           git -C csg rev-parse HEAD > evidence/csg-revision.txt
           sha256sum evidence/*.tar.gz > evidence/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: inspection-sources
+          path: evidence
+          if-no-files-found: error
+          retention-days: 14
       - name: Install baseline engines
         run: python -m pip install ./cse './csg[dev]' 'numpy==2.4.3' 'pytest==9.0.2'
       - name: CSE baseline suite
