@@ -1,14 +1,57 @@
-# Construction State Estimator for BIM in the instrumentation stack
+# State Estimator for BIM in the Notation Systems stack
 
 Notation Systems develops computational instrumentation and evidence infrastructure for industrial and cyber-physical systems.
-This component owns **bim evidence-to-decision computation**. The [stack map](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/STACK.md) locates all public components and distinguishes implemented paths from specifications and scaffolds.
+This component owns **BIM evidence-to-decision computation**.
+[Notations Engineering Terminal (NET)](https://github.com/giasonpooni/Notations-Engineering-Terminal)
+is the programmable scientific controller when this instrument participates
+in a composed investigation. The existing NET Python package and session remain
+`ciw`; CSE does not become a second controller or move its kernel into NET.
+The [stack map](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/main/docs/STACK.md)
+locates components and distinguishes implemented paths from specifications.
+
+## Relationship to NET
+
+The [controller architecture decision](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/1f5d2e6a1e58ca40074598f889b53e149e03d83e/docs/NET_CONTROLLER_BOUNDARY.md)
+is an architecture/interface specification, not proof of an implemented
+end-to-end integration. This link pins the review revision.
+
+| NET owns | This repository owns |
+| --- | --- |
+| Investigation/session context, typed composition, operation selection and dispatch. | Supported IFC interpretation, world/model identity, evidence conditioning and Gaussian belief. |
+| Cross-project execution/result dependencies, comparison, inspection and explicit replay requests. | Geometry authority, domain criteria, covariance/diagnostics, disposition semantics and native ledger/replay behavior. |
+| References to exactly bound inputs, outputs, source revisions and runtimes. | The mathematical meaning and eligibility of the requested BIM operation. |
+
+NET knows that an estimation occurred; CSE defines what that BIM estimation
+means. Integration must use the existing headless/domain boundary and explicit
+pinned adapters rather than copying IFC or belief implementations. A runtime
+manifest or repository link does not by itself register an executable provider.
+
+The intended output handoff retains posterior/world identity, covariance or
+its explicit availability status, diagnostics, disposition, policy and ledger
+references where supplied by the operation. Unsupported fields are not
+fabricated. NET cannot turn `REQUEST_EVIDENCE` into `ACCEPT`, and `ACCEPT`
+remains a scoped recommendation rather than construction approval. ESM's
+separate evidence/state admission and release authority is not transferred to
+NET or CSE.
+
+A later BIM -> CSR -> GSC investigation needs an explicit supported geometry
+handoff. The documented v0 IFC adapter reads quantities and placements, not
+general solids; an entity-linked fixture or mapping digest does not establish
+an IFC-derived parametric surface or registered scan. Preserve geometry
+producer, units, frames, world bindings and registration evidence. Unsupported
+surface extraction or covariance conversion remains unsupported.
+
+This documentation change adds no headless action, NET provider, parser,
+geometry adapter or new numerical operation. Standalone/offline use remains
+supported within the repository's existing scope. `gat-bim`, `gat`, CSE engine
+identities, records and historical pins are unchanged.
 
 ## Current boundary
 
 | Property | Scope |
 | --- | --- |
 | Implementation | Executable experimental BIM runtime |
-| Workbench connection | Standalone; companion commitment and numerical adapters |
+| Workbench connection | Standalone; companion commitment and numerical adapters; composed NET paths require explicit integration qualification. |
 | Inputs | IFC design intent, typed observations, declared uncertainty and decision criteria. |
 | Outputs | Conditioned architectural state, dispositions, replay records and optional exports. |
 
@@ -38,7 +81,7 @@ and verification flag. A stale receipt is an input error, not missing coverage.
 The explicit design-review policy can waive as-built evidence; the disposition
 retains that policy choice rather than presenting it as verified construction.
 
-See the [diagram atlas](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/DIAGRAMS.md) for the wider system.
+See the [diagram atlas](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/main/docs/DIAGRAMS.md) for the wider system.
 
 ## Interoperability
 
