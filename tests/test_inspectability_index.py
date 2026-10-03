@@ -22,6 +22,36 @@ DEMO_IFC = Path(__file__).resolve().parents[1] / "gat" / "demo" / "model.ifc"
 EXAMPLE_BIND = Path(__file__).resolve().parents[1] / "validation" / "cse-point-bind-v1.json"
 
 
+def _valid_bind() -> dict:
+    """A bind that satisfies validation/cse-point-bind-v1.schema.json.
+
+    These tests used to inline a four-field object -- schema, point_id,
+    global_id, ifc_class -- because that is what the fold's old duck-type
+    accepted. The fold now delegates to gat.harness.point_bind.bind_point, which
+    is the same definition the schema file and the two demos already used, so a
+    bind here has to carry its frame, epoch and sigma like a real one.
+
+    The tests below want "a bind is present". That intent is unchanged; only the
+    bind is now one.
+    """
+    return {
+        "schema": "cse-point-bind-v1",
+        "claim_scope": "record-integrity-only",
+        "point_id": "P-Opening-1",
+        "global_id": OPENING_1,
+        "ifc_class": "IfcOpeningElement",
+        "payload": {
+            "point_id": "P-Opening-1",
+            "global_id": OPENING_1,
+            "ifc_class": "IfcOpeningElement",
+            "frame_id": "office-a-layout-v0",
+            "epoch": "design-declared",
+            "sigma": 0.005,
+            "sigma_unit": "m",
+            "sigma_reason": "Declared layout tolerance. Not a field resection.",
+        },
+    }
+
 class InspectabilityIndexTests(unittest.TestCase):
     def test_demo_fold_uses_office_a_guid_from_model(self) -> None:
         self.assertTrue(_DEMO_SPACE.is_file())
@@ -144,12 +174,7 @@ class InspectabilityIndexTests(unittest.TestCase):
                 "global_id": OFFICE_A,
             }
         }
-        bind = {
-            "schema": "cse-point-bind-v1",
-            "point_id": "P-Opening-1",
-            "global_id": OPENING_1,
-            "ifc_class": "IfcOpeningElement",
-        }
+        bind = _valid_bind()
         index = fold_inspectability(
             space=space,
             receipts=[
@@ -175,11 +200,7 @@ class InspectabilityIndexTests(unittest.TestCase):
                 "global_id": OFFICE_A,
             }
         }
-        bind = {
-            "schema": "cse-point-bind-v1",
-            "point_id": "P-Opening-1",
-            "global_id": OPENING_1,
-        }
+        bind = _valid_bind()
         index = fold_inspectability(
             space=space,
             receipts=[
@@ -218,11 +239,7 @@ class InspectabilityIndexTests(unittest.TestCase):
                 "global_id": OFFICE_A,
             }
         }
-        bind = {
-            "schema": "cse-point-bind-v1",
-            "point_id": "P-Opening-1",
-            "global_id": OPENING_1,
-        }
+        bind = _valid_bind()
         index = fold_inspectability(
             space=space,
             receipts=[

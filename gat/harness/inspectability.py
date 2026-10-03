@@ -134,16 +134,57 @@ def _case_row(document: Mapping[str, object], source: str | None) -> dict[str, o
 
 
 def _is_bind(document: Mapping[str, object]) -> bool:
-    if document.get("schema") != BIND_SCHEMA:
+    """Whether a document is a bind, by the one definition that exists.
+
+    This used to duck-type: schema, a non-empty point_id, a non-empty global_id.
+    Three fields. So ``{"schema": "cse-point-bind-v1", "point_id": "P-204",
+    "global_id": "GATOPN0000000000000200"}`` closed ``bind.point_to_guid`` with no
+    frame, no epoch and no sigma -- which is how every MCP client ends up
+    inventing its own bind shape and the fold accepting all of them.
+
+    Meanwhile ``gat.harness.point_bind.bind_point`` already required all of that
+    and more. Two definitions of "a bind" in one tree, and the fold used the weak
+    one. There is now one: this delegates, so the fold and
+    ``validation/cse-point-bind-v1.schema.json`` cannot disagree.
+
+    Returning False rather than raising is deliberate. The fold's job is to report
+    what is missing, so a malformed bind leaves ``bind.point_to_guid`` open with
+    the reason recorded by ``bind_refusals`` -- it does not abort the fold and
+    hide the other holes.
+    """
+    from gat.harness.point_bind import bind_point
+
+    try:
+        bind_point(document)
+    except ValueError:
         return False
-    point_id = document.get("point_id")
-    global_id = document.get("global_id")
-    return (
-        isinstance(point_id, str)
-        and bool(point_id.strip())
-        and isinstance(global_id, str)
-        and bool(global_id.strip())
-    )
+    return True
+
+
+def bind_refusals(
+    binds: Iterable[tuple[Mapping[str, object], str | None]],
+) -> list[dict[str, str]]:
+    """Why each rejected bind was rejected, for the fold's report.
+
+    A hole that stays open because somebody wrote a bind wrong is a different
+    situation from one that is open because nobody wrote a bind at all, and a
+    superintendent should not have to diff a schema to tell them apart.
+    """
+    from gat.harness.point_bind import bind_point
+
+    refusals: list[dict[str, str]] = []
+    for document, source in binds:
+        try:
+            bind_point(document)
+        except ValueError as exc:
+            refusals.append(
+                {
+                    "source": source or "<inline>",
+                    "schema": str(document.get("schema") or "<none>"),
+                    "refused": str(exc),
+                }
+            )
+    return refusals
 
 
 def _has_as_built(document: Mapping[str, object]) -> bool:
@@ -197,12 +238,18 @@ def fold_inspectability(
             }
         )
     if not bind_found:
-        requests.append(
-            {
-                "code": "bind.point_to_guid",
-                "asks_for": "layout point bound to an IfcGuid",
-            }
-        )
+        request = {
+            "code": "bind.point_to_guid",
+            "asks_for": "layout point bound to an IfcGuid",
+        }
+        # "nobody wrote a bind" and "somebody wrote one wrong" are different
+        # situations, and the second should not read like the first.
+        refused = bind_refusals(bind_list)
+        if refused:
+            request["refused"] = "; ".join(
+                f"{row['source']}: {row['refused']}" for row in refused
+            )
+        requests.append(request)
     if not as_built_found:
         requests.append(
             {

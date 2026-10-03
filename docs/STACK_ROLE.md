@@ -2,16 +2,16 @@
 
 Notation Systems develops computational instrumentation and evidence infrastructure for industrial and cyber-physical systems.
 This component owns **BIM evidence-to-decision computation**.
-[Notations Engineering Terminal (NET)](https://github.com/giasonpooni/Notations-Engineering-Terminal)
+[Notations Engineering Terminal (NET)](https://github.com/atomtrapping/Notations-Systems-Terminal)
 is the programmable scientific controller when this instrument participates
 in a composed investigation. The existing NET Python package and session remain
 `ciw`; CSE does not become a second controller or move its kernel into NET.
-The [stack map](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/main/docs/STACK.md)
+The [stack map](https://github.com/atomtrapping/Notations-Systems-Terminal/blob/main/docs/STACK.md)
 locates components and distinguishes implemented paths from specifications.
 
 ## Relationship to NET
 
-The [controller architecture decision](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/1f5d2e6a1e58ca40074598f889b53e149e03d83e/docs/NET_CONTROLLER_BOUNDARY.md)
+The [controller architecture decision](https://github.com/atomtrapping/Notations-Systems-Terminal/blob/1f5d2e6a1e58ca40074598f889b53e149e03d83e/docs/NET_CONTROLLER_BOUNDARY.md)
 is an architecture/interface specification, not proof of an implemented
 end-to-end integration. This link pins the review revision.
 
@@ -81,7 +81,7 @@ and verification flag. A stale receipt is an input error, not missing coverage.
 The explicit design-review policy can waive as-built evidence; the disposition
 retains that policy choice rather than presenting it as verified construction.
 
-See the [diagram atlas](https://github.com/giasonpooni/Notations-Engineering-Terminal/blob/main/docs/DIAGRAMS.md) for the wider system.
+See the [diagram atlas](https://github.com/atomtrapping/Notations-Systems-Terminal/blob/main/docs/DIAGRAMS.md) for the wider system.
 
 ## Interoperability
 
