@@ -30,15 +30,17 @@ this provider retains its BIM-specific assumptions and verification boundaries.
 
 ## Organization
 
-**Notation Systems Inc** is the parent organization.
+**Notation Systems Inc** is the parent organization: a scientific computing and systems engineering company developing computational instruments, software and interactive environments for understanding and building physical and virtual systems.
+
+The company's development direction connects measurement, state estimation and sensor fusion, scientific modelling, simulation and execution, from materials and machines to interactive worlds.
 
 | Division | Focus |
 | --- | --- |
-| **Notations Gaming** | Games, graphics and interactive worlds. |
-| **Notations Manufacturing** | Industrial design, materials and manufacturing systems. |
-| **Notations Laboratories** | Research, scientific computing, simulation and experimental validation. |
+| **Notations Gaming** | Games, graphics, world building, interactive environments and gameplay simulation. |
+| **Notations Manufacturing** | Design, machinery integration, process development, fabrication and production systems. |
+| **Notations Laboratories** | Research and experimental validation in scientific computing, measurement, physics and chemistry modelling, materials and simulation. |
 
-This repository contributes BIM state estimation and evidence workflows to **Notations Laboratories**, supporting industrial applications in **Notations Manufacturing**.
+**Repository role:** State Estimator contributes BIM evidence conditioning and estimation workflows to **Notations Laboratories**, with industrial applications in **Notations Manufacturing**. Its present implementation retains BIM assumptions and uncertainty boundaries; broader sensor fusion and machine integration are development directions requiring appropriate calibration, repeatable validation and operating envelopes.
 
 ## Role, contribution and status
 
