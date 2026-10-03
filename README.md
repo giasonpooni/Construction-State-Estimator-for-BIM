@@ -17,7 +17,7 @@
 | Current scope | BIM-specific evidence conditioning and evidence-to-decision workflows |
 
 The friendly name describes the reusable estimation capability to expose through
-[Notations Engineering Terminal (NET)](https://github.com/giasonpooni/Notations-Engineering-Terminal).
+[Notations Engineering Terminal (NET)](https://github.com/atomtrapping/Notations-Systems-Terminal).
 The NET operation name is an interface target, **not a newly implemented command
 or a claim that a general-purpose adapter is available**. Use the existing
 interfaces documented in the technical reference today.
@@ -81,8 +81,8 @@ The complete previous technical README is preserved **verbatim** in
 headless-request examples, workflow guidance and limitations. It remains at
 the repository root so relative links retain their original base.
 
-[NET](https://github.com/giasonpooni/Notations-Engineering-Terminal) and
-[Frame Mapper / Geospatial Systems Compiler](https://github.com/giasonpooni/Geospatial-Systems-Compiler)
+[NET](https://github.com/atomtrapping/Notations-Systems-Terminal) and
+[Frame Mapper / Geospatial Systems Compiler](https://github.com/atomtrapping/Notations-FrameMapper-RunTime)
 are related projects, not prerequisites for every standalone CSE workflow.
 
 ## Copyright and attribution
