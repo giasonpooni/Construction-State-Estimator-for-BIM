@@ -28,16 +28,17 @@ evidence remains explicit; a software disposition is not construction approval.
 Reusable estimation primitives may be extracted behind `state.estimate`, while
 this provider retains its BIM-specific assumptions and verification boundaries.
 
-## Notation Systems
+## Organization
 
-[notation.systems](https://notation.systems) is the portfolio umbrella for
-independent computational systems, simulation and interactive-software projects
-by **[Giason Pooni](https://github.com/giasonpooni)**. The website presents the
-work; each repository retains its own implementation, status and licence.
+**Notation Systems Inc** is the parent organization.
 
-Portfolio areas: **Games & Interactive · Simulation · Tools · Research · About**.
-Website publication and repository availability are separate; a project link
-does not imply that a hosted demo or released game exists.
+| Division | Focus |
+| --- | --- |
+| **Notations Gaming** | Games, graphics and interactive worlds. |
+| **Notations Manufacturing** | Industrial design, materials and manufacturing systems. |
+| **Notations Laboratories** | Research, scientific computing, simulation and experimental validation. |
+
+This repository contributes BIM state estimation and evidence workflows to **Notations Laboratories**, supporting industrial applications in **Notations Manufacturing**.
 
 ## Role, contribution and status
 
@@ -84,8 +85,8 @@ are related projects, not prerequisites for every standalone CSE workflow.
 
 ## Copyright and attribution
 
-**© 2026 Giason Pooni, for original contributions.** Notation Systems is the
-independent project umbrella, not a claim of ownership over third-party tools
+**© 2026 Giason Pooni, for original contributions.** Notation Systems Inc is the
+parent organization, not a claim of ownership over third-party tools
 or inherited code. Contributor and upstream copyright notices remain in force.
 
 The existing [LICENSE](LICENSE), source notices and third-party terms continue
