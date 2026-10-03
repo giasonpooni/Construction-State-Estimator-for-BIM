@@ -12,7 +12,7 @@
 | --- | --- |
 | User-facing name | **State Estimator** |
 | Proposed NET operation | `state.estimate` |
-| Implementation repository | `State-Estimator-for-BIM` |
+| Implementation repository | `Notations-Estimator-for-BIM` |
 | Existing runtime | Construction State Estimator / CSE; distribution `gat-bim`; imports and command `gat` |
 | Current scope | BIM-specific evidence conditioning and evidence-to-decision workflows |
 
@@ -53,6 +53,12 @@ The company's development direction connects measurement, state estimation and s
 | Status | Experimental software with declared assumptions and demonstration fixtures; general-purpose extraction and NET alias registration are separate implementation work. |
 
 ## Place in the workflow
+
+Domain experts supply design intent, investigation questions, observations and
+declared uncertainty. CSE applies its supported BIM model and evidence rules;
+NET can coordinate explicitly qualified work and retain its execution history.
+An expert's heuristic remains a declared assumption until the applicable
+measurements and verification support it.
 
 NET is the surrounding investigation workbench; CSE retains its BIM semantics
 and model assumptions. GSC may present explicitly supplied representations,
