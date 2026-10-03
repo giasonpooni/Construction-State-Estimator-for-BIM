@@ -76,6 +76,11 @@ execution, admission or release.
 
 ## Quickstart
 
+The optional [surface inspection exchange](docs/SURFACE_INSPECTION.md) binds
+declared candidate paths to a current BIM entity and length quantity. Integrity
+inspection and explicitly requested companion replay retain separate receipts;
+neither supplies as-built observations, changes the World or creates approval.
+
 Use the setup and runnable examples in
 [TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md). The existing `gat` imports,
 commands, optional-dependency boundaries and fail-closed contracts are unchanged.
