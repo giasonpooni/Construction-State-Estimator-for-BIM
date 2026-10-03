@@ -33,7 +33,7 @@ PYTHONPATH=src python examples/write_validation.py
 
 ## Instrument host contract
 
-https://github.com/giasonpooni/Retrofitted-Computational-Instrumentation
+https://github.com/atomtrapping/Notations-Metrology-Adapter
 
 ```bash
 PYTHONPATH=src python -m pytest
@@ -42,6 +42,6 @@ PYTHONPATH=src python examples/displacement_bench.py
 
 ## JSPT
 
-https://github.com/giasonpooni/Jacobian-Sensitivity-Propagation-Testbed
+https://github.com/atomtrapping/Notations-Sensitivity-Testbed
 
 Owns A2-A5. Pin SHA in [jspt-pin-v1.md](jspt-pin-v1.md).

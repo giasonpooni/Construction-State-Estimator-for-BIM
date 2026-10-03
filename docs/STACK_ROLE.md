@@ -1,7 +1,7 @@
 # Construction State Estimator for BIM in the instrumentation stack
 
 Notation Systems develops computational instrumentation and evidence infrastructure for industrial and cyber-physical systems.
-This component owns **bim evidence-to-decision computation**. The [stack map](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/STACK.md) locates all public components and distinguishes implemented paths from specifications and scaffolds.
+This component owns **bim evidence-to-decision computation**. The [stack map](https://github.com/atomtrapping/Notations-Systems-Terminal/blob/main/docs/STACK.md) locates all public components and distinguishes implemented paths from specifications and scaffolds.
 
 ## Current boundary
 
@@ -38,7 +38,7 @@ and verification flag. A stale receipt is an input error, not missing coverage.
 The explicit design-review policy can waive as-built evidence; the disposition
 retains that policy choice rather than presenting it as verified construction.
 
-See the [diagram atlas](https://github.com/giasonpooni/Computational-Instrumentation-Workbench/blob/main/docs/DIAGRAMS.md) for the wider system.
+See the [diagram atlas](https://github.com/atomtrapping/Notations-Systems-Terminal/blob/main/docs/DIAGRAMS.md) for the wider system.
 
 ## Interoperability
 
