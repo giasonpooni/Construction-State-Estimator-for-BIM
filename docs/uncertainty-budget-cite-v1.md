@@ -50,10 +50,18 @@ coverage still verifies against a record serialised at another.
 | a unit that is not the slot's unit | a `u_c` in millimetres is not a sigma on a metre-valued slot, and converting here would invent a conversion the budget never declared |
 | a measurand the bind does not name | `docs/cse-point-bind-v1.md`: an observation reaches the kernel only after a bind names the quantity |
 | a bind with no `quantity` | naming the entity is not naming the slot |
+| an invalid or altered `cse-point-bind-v1` record | the adapter applies the existing `bind_point` validator before constructing an observation; a schema label or bare quantity is insufficient |
+| a bind for another entity or conflicting header identity | both IFC class and GlobalId must match the target `VarId`; header point/class/GlobalId must agree with the validated payload |
 | `u_c` of zero | claims an exact measurement |
 | `u_c` NaN | an *absent* uncertainty, not a wide one |
 | `u_c` infinite | a refusal to state one; conditioning on it leaves the prior unchanged while recording that evidence arrived |
 | a non-finite number anywhere in the budget | including buried in a component, where no field check looks |
+
+The observation record retains the validated bind digest and IFC class alongside
+its point and GlobalId. This binds the declared record to the chosen target; it
+does not authenticate the issuer, check an optional World reference, establish
+spatial registration or convert the record into field evidence. The caller still
+retains the source World and chooses whether to execute the returned transform.
 
 That last row was found by a test rather than by reading. `canonical_digest` sets
 `allow_nan=False`, so a NaN inside a component surfaced as *"Out of range float

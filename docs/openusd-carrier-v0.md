@@ -90,9 +90,8 @@ source world digest and relationships back to authoritative entity prims. It
 may be recolored, hidden, replaced, layered over, or omitted entirely without
 changing reconstruction. No reader may infer belief values from this branch.
 
-Future Gaussian-splat, mesh, material, and simulation views belong under this
-same non-authoritative boundary unless a later carrier version explicitly
-promotes their semantics into GAT IR.
+Derived visualizations are non-authoritative; they cannot replace the state
+encoded by the carrier contract.
 
 ## Decode and acceptance
 

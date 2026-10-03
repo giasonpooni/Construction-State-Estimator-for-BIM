@@ -25,8 +25,7 @@ The tables below are compatibility measurements, not field validation.
 
 Status: implemented audit boundary, measured baseline, SI length-unit
 normalization, bounded beam geometry derivation, and strict material-certificate
-ingestion, and a bounded independently validated design-code calculation. The
-next phase is headless and Blender/Bonsai exposure of that validated chain.
+ingestion, and a bounded independently validated design-code calculation.
 
 ## Why this exists
 

@@ -27,16 +27,23 @@ coordinate system* it is fixed in. Across the portfolio that is not a detail:
 | Retrofitted-Computational-Instrumentation | `var.indicated` | `declared-calibration` | `chart.rci-indication` |
 | Jacobian-Sensitivity-Propagation-Testbed | `var.dx` | `declared-J` | `chart.jspt-tangent` |
 | Parameterized-Lyapunov-Stability-Runtime | `var.x` | `declared-A` | `chart.plsr-plant` |
-| State-Estimation-Testbed | `var.x` | `declared-H` | `chart.set-observation` |
+| [State Estimation Evaluation Testbed](https://github.com/giasonpooni/State-Estimation-Evaluation-Testbed) | `var.x` | `declared-H` | `chart.set-observation` |
 | Fluid-State-Reconstruction-Testbed | `var.storage` | `declared-balance`, `gauge` | `chart.fsrt-balance` |
 | Flat-Torus-Moduli-and-Geodesic-Explorer | `var.geodesic-point` | `declared-lattice` | `chart.ftmge-lattice` |
 | Geodesic-Flow-and-Jacobi-Field-Testbed | `var.jacobi` | `declared-flow` | `chart.gfjft-flow` |
 | CNC-Machine-MCP | `var.pose` | `observe` | `chart.cnc-axis` |
 | Atelier-MCP | `var.stock` | `observe` | `chart.atelier-stock` |
 | Geodesic-Telemetry-Engine | `var.state` | `observe` | `chart.gte-manifold` |
-| Lattice-Calibration-Module | `var.local-estimate` | `declared-constraint` | `chart.lcm-constraint` |
+| [Constraint-Based State Reconciliation](https://github.com/giasonpooni/Constraint-Based-State-Reconciliation) | `var.local-estimate` | `declared-constraint` | `chart.lcm-constraint` |
 
-PLSR and the State-Estimation-Testbed both declare `var.x` with quantity
+The table uses the current display names for those two renamed repositories.
+The retained corpus index still uses `State-Estimation-Testbed` and
+`Lattice-Calibration-Module` as member keys. Those keys, chart IDs, invariant
+IDs, and historical pins remain unchanged; a repository rename is not a
+corpus migration. When checking that retained index locally, provide sibling
+checkout directories under its recorded member keys.
+
+PLSR and State Estimation Evaluation Testbed both declare `var.x` with quantity
 `state`. One is fixed by a declared plant `A`, the other by a declared
 observation `H`. They are not the same coordinate, and a covariance on one may
 not be read as a covariance on the other. Under v1 nothing in the index could

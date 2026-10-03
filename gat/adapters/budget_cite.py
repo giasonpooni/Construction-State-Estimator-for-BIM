@@ -55,6 +55,7 @@ from gat.adapters.external_commitment import canonical_digest
 from gat.engine.transform import ObserveQuantity
 from gat.errors import GatError
 from gat.ids import VarId
+from gat.harness.point_bind import bind_point
 
 #: Mirrored from instrument_chain.uncertainty_budget.SCHEMA. Not imported.
 BUDGET_SCHEMA = "uncertainty-budget-v1"
@@ -253,14 +254,28 @@ def observe_from_budget(
     an ordinary :class:`ObserveQuantity`; nothing about it is special, which is
     the point -- the kernel sees a float.
 
-    ``bind`` is the ``cse-point-bind-v1`` payload. An observation reaches the
+    ``bind`` is a complete ``cse-point-bind-v1`` record. An observation reaches the
     kernel only after a bind names the quantity, so the bind is required here
     rather than checked by a caller who might forget.
     """
     admitted = check_cite(cite, budget) if cite is not None else read_budget(budget)
 
-    payload = bind.get("payload") if isinstance(bind.get("payload"), Mapping) else bind
-    quantity = payload.get("quantity")
+    if not isinstance(bind, Mapping):
+        raise BudgetCiteError("bind must be a cse-point-bind-v1 record")
+    try:
+        validated_bind = bind_point(bind)
+    except ValueError as exc:
+        raise BudgetCiteError(f"invalid observation bind: {exc}") from exc
+    for field in ("point_id", "global_id", "ifc_class"):
+        if field in bind and bind[field] != getattr(validated_bind, field):
+            raise BudgetCiteError(f"bind header {field} disagrees with its payload")
+    if (validated_bind.global_id != var.entity.global_id or
+            validated_bind.ifc_class != var.entity.ifc_class):
+        raise BudgetCiteError(
+            "the bind names another entity; its Ifc class and GlobalId must "
+            "match the observation target"
+        )
+    quantity = validated_bind.quantity
     if not isinstance(quantity, str) or not quantity.strip():
         raise BudgetCiteError(
             "the bind names no quantity, so there is no slot for this budget to "
@@ -296,7 +311,9 @@ def observe_from_budget(
         "var": str(var),
         "value": value,
         "noise_sigma": admitted.u_c,
-        "bind_point_id": payload.get("point_id"),
-        "bind_global_id": payload.get("global_id"),
+        "bind_point_id": validated_bind.point_id,
+        "bind_global_id": validated_bind.global_id,
+        "bind_ifc_class": validated_bind.ifc_class,
+        "bind_digest": validated_bind.digest,
     }
     return ObserveQuantity.single(var, value, admitted.u_c), record

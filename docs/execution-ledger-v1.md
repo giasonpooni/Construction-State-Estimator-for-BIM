@@ -134,6 +134,3 @@ resumed JSON snapshot currently starts a new ledger genesis at the restored
 state. OpenUSD carrier v3 embeds the inspectable
 event chain, binds its head into the optional Ed25519 signature, restores it,
 and extends the same chain after continuation.
-
-The next chronological milestone is explicit temporal/process dynamics for
-evidence that describes change through time rather than a static correction.

@@ -180,7 +180,6 @@ class DocReferenceTests(unittest.TestCase):
         expected = {
             ("gat/engine/executor.py", 136): "def digest",
             ("gat/state_snapshot.py", 259): "reconstructed world digest differs from source",
-            ("docs/sparse-belief-v1.md", 41): "stated tolerance",
             ("gat/workflows/acceptance.py", 436): "require_verified_evidence_for_accept",
         }
         for (target, line), fragment in expected.items():
