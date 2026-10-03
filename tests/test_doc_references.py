@@ -22,8 +22,31 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-#: `some/path.py` or `some/path.py:123` inside backticks.
-CITATION = re.compile(r"`([A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:py|json|md|ifc|yml|yaml|toml))(?::(\d+))?`")
+#: `some/path.py`, `some/path.py:123`, or `RCI:some/path.py` inside backticks.
+CITATION = re.compile(
+    r"`(?:(?P<repo>[A-Z][A-Za-z0-9-]*):)?"
+    r"(?P<target>[A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:py|json|md|ifc|yml|yaml|toml))"
+    r"(?::(?P<line>\d+))?`"
+)
+
+#: Companion repositories a doc may cite into. A citation prefixed with one of
+#: these names a file in another repository, which this test cannot open -- so
+#: existence is not checked. The prefix must still be a known companion, so a
+#: typo fails rather than silently exempting a local path from every check.
+#:
+#: Added because the seam doc legitimately cites RCI's half of the budget cite.
+#: A cross-repo path is neither a path into this tree nor a bare output name, and
+#: treating it as the former made a correct citation look broken.
+COMPANION_REPOS = frozenset(
+    {
+        "RCI",       # Retrofitted-Computational-Instrumentation
+        "JSPT",      # Jacobian-Sensitivity-Propagation-Testbed
+        "PLSR",      # Parameterized-Lyapunov-Stability-Runtime
+        "FSRT",      # Fluid-State-Reconstruction-Testbed
+        "GFJF",      # Geodesic-Flow-and-Jacobi-Field-Testbed
+        "FTMG",      # Flat-Torus-Moduli-and-Geodesic-Explorer
+    }
+)
 
 #: Directories a bare basename may name, so `verify.py` in a list whose first
 #: item is `gat/engine/propagate.py` still resolves for the line check.
@@ -80,16 +103,40 @@ class DocReferenceTests(unittest.TestCase):
         if extra.is_file():
             cls.docs.append(extra)
         cls.citations: list[tuple[Path, str, str | None]] = []
+        cls.foreign: list[tuple[Path, str, str]] = []
         for doc in cls.docs:
             body = doc.read_text(encoding="utf-8")
             for match in CITATION.finditer(body):
-                cls.citations.append((doc, match.group(1), match.group(2)))
+                repo = match.group("repo")
+                target = match.group("target")
+                line = match.group("line")
+                if repo is not None:
+                    cls.foreign.append((doc, repo, target))
+                    continue
+                cls.citations.append((doc, target, line))
 
     def test_there_are_citations_to_check(self) -> None:
         # Guard against the regex silently matching nothing, which would make
         # every other test in this class vacuous.
         self.assertGreater(len(self.docs), 10)
         self.assertGreater(len(self.citations), 50)
+
+    def test_a_cross_repo_citation_names_a_known_companion(self) -> None:
+        """A foreign path is not checked for existence, so the prefix is checked.
+
+        Otherwise `RCl:gat/does_not_exist.py` -- capital i for lowercase L -- would
+        exempt itself from every check in this file.
+        """
+        unknown = [
+            (doc.name, repo, target)
+            for doc, repo, target in self.foreign
+            if repo not in COMPANION_REPOS
+        ]
+        self.assertEqual(
+            unknown,
+            [],
+            f"unknown repository prefix; known companions are {sorted(COMPANION_REPOS)}",
+        )
 
     def test_every_cited_path_exists(self) -> None:
         missing = [

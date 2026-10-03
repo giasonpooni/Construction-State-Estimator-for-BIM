@@ -5,7 +5,7 @@ The public product is the **Construction State Estimator (CSE)**.
 | Surface | Name |
 |---|---|
 | Public name | Construction State Estimator (CSE) |
-| GitHub repository | `giasonpooni/Construction-State-Estimator-for-BIM` |
+| GitHub repository | `atomtrapping/Notations-Estimator-for-BIM` |
 | Python package | `gat-bim` |
 | Import / CLI | `gat` |
 | Historical engine acronym | GAT (Gaussian Architectural Transformer) |
